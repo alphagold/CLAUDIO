@@ -33,6 +33,7 @@ requests==2.32.3
 # Pydantic
 pydantic==2.10.3
 pydantic-settings==2.6.1
+email-validator==2.2.0
 
 # Sentence transformers for embeddings
 sentence-transformers==3.3.1
