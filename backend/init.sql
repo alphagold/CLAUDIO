@@ -177,7 +177,7 @@ CREATE TRIGGER update_collections_updated_at BEFORE UPDATE ON collections
 -- Create default test user (password: test123)
 -- Hash generato con bcrypt per "test123"
 INSERT INTO users (email, password_hash, full_name) VALUES
-    ('test@photomemory.local', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU7MvLRoQ9K2', 'Test User');
+    ('test@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU7MvLRoQ9K2', 'Test User');
 
 -- Done
 SELECT 'Database initialized successfully!' as message;

@@ -82,7 +82,7 @@ def get_current_user(
     """Get current authenticated user from JWT token"""
     # For now, return test user for simplicity
     # TODO: Implement proper JWT extraction from headers
-    test_user = db.query(User).filter(User.email == "test@photomemory.local").first()
+    test_user = db.query(User).filter(User.email == "test@example.com").first()
     if not test_user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return test_user
