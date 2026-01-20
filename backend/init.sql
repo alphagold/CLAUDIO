@@ -96,14 +96,14 @@ CREATE INDEX idx_analysis_objects ON photo_analysis USING GIN(detected_objects);
 CREATE INDEX idx_analysis_category ON photo_analysis(scene_category, scene_subcategory);
 CREATE INDEX idx_analysis_embedding ON photo_analysis USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
--- Full-text search index
-CREATE INDEX idx_analysis_text_search ON photo_analysis USING GIN(
-    to_tsvector('english',
-        COALESCE(description_full, '') || ' ' ||
-        COALESCE(extracted_text, '') || ' ' ||
-        COALESCE(array_to_string(tags, ' '), '')
-    )
-);
+-- Full-text search index (commented out - can be added later with generated column)
+-- CREATE INDEX idx_analysis_text_search ON photo_analysis USING GIN(
+--     to_tsvector('english',
+--         COALESCE(description_full, '') || ' ' ||
+--         COALESCE(extracted_text, '') || ' ' ||
+--         COALESCE(array_to_string(tags, ' '), '')
+--     )
+-- );
 
 -- Search history (for analytics and learning)
 CREATE TABLE search_history (
