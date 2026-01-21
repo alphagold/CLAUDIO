@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { authApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 import { Images, Mail, Lock, AlertCircle } from 'lucide-react';
@@ -18,7 +19,11 @@ export default function LoginPage() {
     mutationFn: authApi.login,
     onSuccess: (data) => {
       login(data.access_token, data.user);
+      toast.success(`Benvenuto ${data.user.full_name}! 👋`);
       navigate('/gallery');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Errore di accesso. Riprova.');
     },
   });
 
