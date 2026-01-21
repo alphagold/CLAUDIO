@@ -19,8 +19,8 @@ class Settings(BaseSettings):
 
     # Ollama Vision AI
     OLLAMA_HOST: str = "http://ollama:11434"
-    OLLAMA_MODEL_FAST: str = "moondream"  # 2B, veloce
-    OLLAMA_MODEL_DEEP: str = "llama3.2-vision:11b"  # 11B, accurato
+    OLLAMA_MODEL_FAST: str = "moondream"  # 2B, veloce (1.7GB)
+    OLLAMA_MODEL_DEEP: str = "llama3.2-vision"  # 11B, accurato (7.9GB) - use :11b tag if needed
 
     # MinIO Storage
     MINIO_ENDPOINT: str = "minio:9000"

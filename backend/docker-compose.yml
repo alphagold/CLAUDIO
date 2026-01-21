@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # FastAPI Backend
   api:
@@ -94,28 +92,29 @@ services:
     networks:
       - photomemory
 
-  # Celery Worker (async processing)
-  worker:
-    build: ./backend
-    container_name: photomemory-worker
-    restart: unless-stopped
-    command: celery -A app.worker worker --loglevel=info --concurrency=2
-    environment:
-      - DATABASE_URL=postgresql://photomemory:photomemory123@postgres:5432/photomemory
-      - REDIS_URL=redis://redis:6379/0
-      - OLLAMA_HOST=http://ollama:11434
-      - MINIO_ENDPOINT=minio:9000
-      - MINIO_ACCESS_KEY=minioadmin
-      - MINIO_SECRET_KEY=minioadmin
-    depends_on:
-      - postgres
-      - redis
-      - ollama
-      - minio
-    volumes:
-      - ./uploads:/app/uploads
-    networks:
-      - photomemory
+  # Celery Worker (async processing) - DISABLED FOR NOW
+  # TODO: Implement proper Celery worker
+  # worker:
+  #   build: ./backend
+  #   container_name: photomemory-worker
+  #   restart: unless-stopped
+  #   command: celery -A worker worker --loglevel=info --concurrency=2
+  #   environment:
+  #     - DATABASE_URL=postgresql://photomemory:photomemory123@postgres:5432/photomemory
+  #     - REDIS_URL=redis://redis:6379/0
+  #     - OLLAMA_HOST=http://ollama:11434
+  #     - MINIO_ENDPOINT=minio:9000
+  #     - MINIO_ACCESS_KEY=minioadmin
+  #     - MINIO_SECRET_KEY=minioadmin
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #     - ollama
+  #     - minio
+  #   volumes:
+  #     - ./uploads:/app/uploads
+  #   networks:
+  #     - photomemory
 
 volumes:
   postgres_data:
