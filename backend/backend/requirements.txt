@@ -6,14 +6,15 @@ python-multipart==0.0.12
 # Database
 sqlalchemy==2.0.35
 psycopg2-binary==2.9.10
-alembic==1.13.3
+# alembic==1.13.3  # Not needed for MVP, using init.sql
 
 # Vector database
 pgvector==0.3.5
 
 # Redis & Celery
 redis==5.2.0
-celery==5.4.0
+# Celery disabled for MVP (worker not needed, analysis runs synchronously)
+# celery==5.4.0
 
 # Authentication
 python-jose[cryptography]==3.3.0
@@ -24,20 +25,21 @@ python-dotenv==1.0.1
 # Image processing
 Pillow==11.0.0
 
-# MinIO (S3 compatible)
-minio==7.2.10
+# MinIO (S3 compatible) - Not used in MVP, storing locally
+# minio==7.2.10
 
 # HTTP client
 httpx==0.28.1
-requests==2.32.3
+# requests==2.32.3  # Not used, httpx is sufficient
 
 # Pydantic
 pydantic==2.10.3
 pydantic-settings==2.6.1
 email-validator==2.2.0
 
-# Sentence transformers for embeddings
-sentence-transformers==3.3.1
+# Sentence transformers for embeddings (disabled for MVP - 2GB+ with CUDA deps)
+# TODO: Re-enable when implementing semantic search
+# sentence-transformers==3.3.1
 
 # OCR (optional, lighter alternative)
 # paddleocr==2.9.1
