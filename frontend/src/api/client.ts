@@ -28,16 +28,38 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log('Request config:', {
+    url: config.url,
+    method: config.method,
+    headers: config.headers,
+    data: config.data,
+  });
   return config;
 });
+
+// Log response errors
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      config: error.config,
+    });
+    return Promise.reject(error);
+  }
+);
 
 // Auth API
 export const authApi = {
   login: async (data: LoginRequest): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>('/api/auth/login', {
+    console.log('Login request data:', data);
+    const payload = {
       email: data.email,
       password: data.password,
-    });
+    };
+    console.log('Sending payload:', payload);
+    const response = await apiClient.post<AuthResponse>('/api/auth/login', payload);
     return response.data;
   },
 
