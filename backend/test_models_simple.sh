@@ -57,19 +57,24 @@ for MODEL_INFO in "${MODELS[@]}"; do
     echo "🔍 Analizzando..." | tee -a $RESULTS_FILE
     START_TIME=$(date +%s)
 
+    # Crea file JSON temporaneo (l'immagine base64 è troppo grande per command line)
+    cat > /tmp/request.json <<EOF
+{
+    "model": "$MODEL_NAME",
+    "prompt": "$PROMPT",
+    "images": ["$IMAGE_B64"],
+    "stream": false,
+    "keep_alive": "5m",
+    "options": {
+        "temperature": 0.3,
+        "num_predict": 500
+    }
+}
+EOF
+
     RESPONSE=$(curl -s --max-time 300 -X POST http://192.168.200.4:11434/api/generate \
         -H "Content-Type: application/json" \
-        -d "{
-            \"model\": \"$MODEL_NAME\",
-            \"prompt\": \"$PROMPT\",
-            \"images\": [\"$IMAGE_B64\"],
-            \"stream\": false,
-            \"keep_alive\": \"5m\",
-            \"options\": {
-                \"temperature\": 0.3,
-                \"num_predict\": 500
-            }
-        }")
+        -d @/tmp/request.json)
 
     END_TIME=$(date +%s)
     ELAPSED=$((END_TIME - START_TIME))
