@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Images, Album, Search, LogOut, User } from 'lucide-react';
+import { Images, Album, Search, LogOut, User, Shield } from 'lucide-react';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -61,6 +61,21 @@ export default function Navbar() {
               <Search className="w-5 h-5" />
               <span className="font-medium">Search</span>
             </Link>
+
+            {/* Admin Link - Only for admins */}
+            {user?.is_admin && (
+              <Link
+                to="/admin"
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                  isActive('/admin')
+                    ? 'bg-purple-50 text-purple-600'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Shield className="w-5 h-5" />
+                <span className="font-medium">Admin</span>
+              </Link>
+            )}
           </div>
 
           {/* User Menu */}

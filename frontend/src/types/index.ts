@@ -25,28 +25,37 @@ export interface AuthResponse {
 }
 
 // Photo types
-export interface Photo {
-  id: string;
-  user_id: string;
-  file_path: string;
-  file_size: number;
-  mime_type: string;
-  width: number | null;
-  height: number | null;
-  taken_at: string | null;
-  uploaded_at: string;
-  description_full: string | null;
+export interface PhotoAnalysis {
+  description_full: string;
   description_short: string | null;
   extracted_text: string | null;
-  detected_objects: string[];
+  detected_objects: string[] | null;
   detected_faces: number;
   scene_category: string | null;
   scene_subcategory: string | null;
-  tags: string[];
-  confidence_score: number;
-  analyzed_at: string | null;
-  processing_time_ms: number | null;
+  tags: string[] | null;
   model_version: string | null;
+  processing_time_ms: number | null;
+  confidence_score: number | null;
+}
+
+export interface Photo {
+  id: string;
+  user_id: string;
+  original_path: string;
+  thumbnail_128_path: string | null;
+  thumbnail_512_path: string | null;
+  file_size: number | null;
+  width: number | null;
+  height: number | null;
+  taken_at: string;
+  uploaded_at: string;
+  analyzed_at: string | null;
+  has_text: boolean;
+  has_faces: boolean;
+  is_food: boolean;
+  is_document: boolean;
+  analysis: PhotoAnalysis | null;
 }
 
 export interface PhotoUploadResponse {

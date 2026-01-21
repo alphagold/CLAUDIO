@@ -97,7 +97,7 @@ export default function GalleryPage() {
                 <div className="aspect-square bg-gray-100 overflow-hidden">
                   <img
                     src={photosApi.getThumbnailUrl(photo.id, 512)}
-                    alt={photo.description_short || 'Photo'}
+                    alt={photo.analysis?.description_short || 'Photo'}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                     loading="lazy"
                   />
@@ -106,9 +106,9 @@ export default function GalleryPage() {
                 {/* Overlay with Info */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                    {photo.description_short && (
+                    {photo.analysis?.description_short && (
                       <p className="text-sm font-medium mb-2 line-clamp-2">
-                        {photo.description_short}
+                        {photo.analysis.description_short}
                       </p>
                     )}
                     <div className="flex items-center justify-between text-xs">
@@ -137,9 +137,9 @@ export default function GalleryPage() {
                 )}
 
                 {/* Tags Preview */}
-                {photo.tags && photo.tags.length > 0 && (
+                {photo.analysis?.tags && photo.analysis.tags.length > 0 && (
                   <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-                    {photo.tags.slice(0, 2).map((tag, idx) => (
+                    {photo.analysis.tags.slice(0, 2).map((tag, idx) => (
                       <span
                         key={idx}
                         className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full"
