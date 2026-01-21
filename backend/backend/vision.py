@@ -84,6 +84,7 @@ class OllamaVisionClient:
                 return analysis_data
 
             except httpx.HTTPError as e:
+                processing_time = int((time.time() - start_time) * 1000)
                 print(f"Ollama API error: {e}")
                 return self._get_fallback_analysis(processing_time)
 
