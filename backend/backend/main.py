@@ -220,7 +220,8 @@ async def upload_photo(
     # Trigger analysis (async - in real implementation use Celery)
     # For now, analyze synchronously
     try:
-        analysis_result = await vision_client.analyze_photo(str(file_path), detailed=False)
+        # Use detailed model (llama3.2-vision) for better JSON adherence and Italian descriptions
+        analysis_result = await vision_client.analyze_photo(str(file_path), detailed=True)
 
         # Save analysis
         analysis = PhotoAnalysis(
