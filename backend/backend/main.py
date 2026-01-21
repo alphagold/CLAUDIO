@@ -4,6 +4,7 @@ Self-hosted AI-powered photo memory system
 """
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -45,6 +46,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# OAuth2 scheme for JWT token extraction
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
 # Include admin routes (will be registered after get_current_user is defined)
 
 # Password hashing
@@ -79,17 +83,28 @@ def create_access_token(user_id: str) -> str:
     return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
+def decode_token(token: str) -> str:
+    """Decode JWT token and return user_id"""
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
 def get_current_user(
-    token: str = Depends(lambda: None),  # Get from Authorization header
+    token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ) -> User:
     """Get current authenticated user from JWT token"""
-    # For now, return test user for simplicity
-    # TODO: Implement proper JWT extraction from headers
-    test_user = db.query(User).filter(User.email == "test@example.com").first()
-    if not test_user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return test_user
+    user_id = decode_token(token)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
 
 
 # ============================================================================

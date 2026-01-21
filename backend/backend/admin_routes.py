@@ -2,6 +2,7 @@
 Admin-only routes for system monitoring and logs
 """
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User
@@ -10,21 +11,34 @@ import os
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
+# OAuth2 scheme for token extraction (matches main.py)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
 # This will be set by main.py after get_current_user is defined
 get_current_user_dependency = None
 
 
-def require_admin(current_user: User = Depends(lambda: get_current_user_dependency)) -> User:
-    """Verify user is admin"""
-    if not current_user or not current_user.is_admin:
+def require_admin(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> User:
+    """Get current admin user and verify admin status"""
+    if get_current_user_dependency is None:
+        raise HTTPException(status_code=500, detail="Authentication not initialized")
+
+    # Call get_current_user with the injected dependencies
+    user = get_current_user_dependency(token=token, db=db)
+
+    # Verify admin status
+    if not user or not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
-    return current_user
+    return user
 
 
 @router.get("/logs/backend")
 async def get_backend_logs(
     lines: int = 100,
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(require_admin)
 ):
     """Get backend container logs (last N lines)"""
     try:
@@ -45,7 +59,7 @@ async def get_backend_logs(
 @router.get("/logs/ollama")
 async def get_ollama_logs(
     lines: int = 100,
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(require_admin)
 ):
     """Get Ollama container logs (last N lines)"""
     try:
@@ -65,7 +79,7 @@ async def get_ollama_logs(
 
 @router.get("/status")
 async def get_system_status(
-    current_user: User = Depends(get_admin_user),
+    current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """Get system status and statistics"""
