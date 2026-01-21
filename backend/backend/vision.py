@@ -63,9 +63,11 @@ class OllamaVisionClient:
                         "prompt": prompt,
                         "images": [image_b64],
                         "stream": False,
+                        "keep_alive": "5m",  # Keep model loaded for 5 minutes
                         "options": {
                             "temperature": 0.3,  # More deterministic
                             "top_p": 0.9,
+                            "num_predict": 500,  # Limit tokens to speed up
                         }
                     }
                 )
