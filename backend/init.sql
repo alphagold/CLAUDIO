@@ -175,9 +175,9 @@ CREATE TRIGGER update_collections_updated_at BEFORE UPDATE ON collections
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Create default test user (password: test123)
--- Hash generato con bcrypt per "test123"
+-- Hash generato con bcrypt 4.0.1 per "test123"
 INSERT INTO users (email, password_hash, full_name) VALUES
-    ('test@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5NU7MvLRoQ9K2', 'Test User');
+    ('test@example.com', '$2b$12$RKmqZ/A1kcJC5dZuIsYVeO6.Pnbkq1zGO1TZzPUa3BxF7XQPp/bya', 'Test User');
 
 -- Done
 SELECT 'Database initialized successfully!' as message;
