@@ -1,8 +1,5 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@antml:parameter>
-<parameter name="content">import { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { albumsApi, photosApi } from '../api/client';
 import Layout from '../components/Layout';
