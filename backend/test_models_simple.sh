@@ -25,14 +25,7 @@ MODELS=(
     "llama3.2-vision:Llama 3.2 Vision 11B (attuale)"
 )
 
-PROMPT='Analizza questa foto e rispondi SOLO con un oggetto JSON valido.
-{
-  "description_full": "Descrizione dettagliata in italiano (3-5 frasi)",
-  "description_short": "Riassunto in italiano (max 100 caratteri)",
-  "detected_objects": ["oggetto1", "oggetto2"],
-  "scene_category": "food/document/outdoor/indoor/people/other",
-  "tags": ["tag1", "tag2"]
-}'
+PROMPT='Analizza questa foto in italiano e rispondi con JSON: {"description_full":"Descrizione dettagliata (3-5 frasi)","description_short":"Riassunto breve","detected_objects":["obj1","obj2"],"scene_category":"food/outdoor/indoor/other","tags":["tag1","tag2"]}'
 
 # File risultati
 RESULTS_FILE="/tmp/vision_test_results.txt"
@@ -57,20 +50,22 @@ for MODEL_INFO in "${MODELS[@]}"; do
     echo "🔍 Analizzando..." | tee -a $RESULTS_FILE
     START_TIME=$(date +%s)
 
-    # Crea file JSON temporaneo (l'immagine base64 è troppo grande per command line)
-    cat > /tmp/request.json <<EOF
-{
-    "model": "$MODEL_NAME",
-    "prompt": "$PROMPT",
-    "images": ["$IMAGE_B64"],
-    "stream": false,
-    "keep_alive": "5m",
-    "options": {
-        "temperature": 0.3,
-        "num_predict": 500
-    }
-}
-EOF
+    # Crea file JSON con jq per escape corretto
+    jq -n \
+        --arg model "$MODEL_NAME" \
+        --arg prompt "$PROMPT" \
+        --arg img "$IMAGE_B64" \
+        '{
+            model: $model,
+            prompt: $prompt,
+            images: [$img],
+            stream: false,
+            keep_alive: "5m",
+            options: {
+                temperature: 0.3,
+                num_predict: 500
+            }
+        }' > /tmp/request.json
 
     RESPONSE=$(curl -s --max-time 300 -X POST http://192.168.200.4:11434/api/generate \
         -H "Content-Type: application/json" \
