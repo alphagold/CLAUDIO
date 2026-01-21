@@ -5,7 +5,6 @@ Self-hosted AI-powered photo memory system
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -153,11 +152,10 @@ async def register(user_data: schemas.UserCreate, db: Session = Depends(get_db))
 
 
 @app.post("/api/auth/login", response_model=schemas.Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Login and get access token (OAuth2 compatible)"""
-    # OAuth2 uses 'username' field, but we use it for email
-    user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.password_hash):
+async def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
+    """Login and get access token"""
+    user = db.query(User).filter(User.email == credentials.email).first()
+    if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token(user.id)
