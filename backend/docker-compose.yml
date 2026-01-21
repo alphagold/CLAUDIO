@@ -15,10 +15,14 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - JWT_SECRET=change-this-secret-key-in-production
     depends_on:
-      - postgres
-      - redis
-      - ollama
-      - minio
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      ollama:
+        condition: service_started
+      minio:
+        condition: service_started
     volumes:
       - ./uploads:/app/uploads
     networks:
@@ -62,6 +66,11 @@ services:
       - "5432:5432"
     networks:
       - photomemory
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U photomemory -d photomemory"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   # Redis Cache & Queue
   redis:
