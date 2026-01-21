@@ -10,6 +10,7 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255),
+    is_admin BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -174,10 +175,10 @@ CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
 CREATE TRIGGER update_collections_updated_at BEFORE UPDATE ON collections
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Create default test user (password: test123)
+-- Create default test user (password: test123) as admin
 -- Hash generato con bcrypt 4.0.1 per "test123"
-INSERT INTO users (email, password_hash, full_name) VALUES
-    ('test@example.com', '$2b$12$RKmqZ/A1kcJC5dZuIsYVeO6.Pnbkq1zGO1TZzPUa3BxF7XQPp/bya', 'Test User');
+INSERT INTO users (email, password_hash, full_name, is_admin) VALUES
+    ('test@example.com', '$2b$12$RKmqZ/A1kcJC5dZuIsYVeO6.Pnbkq1zGO1TZzPUa3BxF7XQPp/bya', 'Test User', TRUE);
 
 -- Done
 SELECT 'Database initialized successfully!' as message;

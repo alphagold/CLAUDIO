@@ -20,6 +20,7 @@ from database import get_db, engine, Base, SessionLocal
 from models import User, Photo, PhotoAnalysis, SearchHistory
 import schemas
 from vision import vision_client
+import admin_routes
 
 # Security
 from passlib.context import CryptContext
@@ -43,6 +44,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include admin routes (will be registered after get_current_user is defined)
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -159,7 +162,11 @@ async def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     token = create_access_token(user.id)
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user
+    }
 
 
 @app.get("/api/auth/me", response_model=schemas.UserResponse)
@@ -422,6 +429,15 @@ async def search_photos(
         "search_time_ms": search_time_ms,
         "answer": None  # TODO: generate natural language answer
     }
+
+
+# ============================================================================
+# ADMIN ROUTES
+# ============================================================================
+
+# Update admin_routes to use our get_current_user
+admin_routes.get_current_user_dependency = get_current_user
+app.include_router(admin_routes.router)
 
 
 # ============================================================================

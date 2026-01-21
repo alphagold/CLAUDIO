@@ -24,6 +24,7 @@ class UserLogin(BaseModel):
 
 class UserResponse(UserBase):
     id: UUID
+    is_admin: bool = False
     created_at: datetime
 
     class Config:
@@ -33,6 +34,7 @@ class UserResponse(UserBase):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: UserResponse
 
 
 # Photo schemas
