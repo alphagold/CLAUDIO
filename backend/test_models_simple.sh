@@ -11,8 +11,9 @@ if [ ! -f /tmp/test.jpg ]; then
     curl -s -o /tmp/test.jpg "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800"
 fi
 
-# Converti immagine in base64
-IMAGE_B64=$(base64 -w 0 /tmp/test.jpg)
+# Converti immagine in base64 e scrivi su file (evita ARG_MAX limit)
+echo "📝 Convertendo immagine in base64..."
+base64 -w 0 /tmp/test.jpg > /tmp/image_b64.txt
 
 # Modelli da testare
 MODELS=(
@@ -50,11 +51,11 @@ for MODEL_INFO in "${MODELS[@]}"; do
     echo "🔍 Analizzando..." | tee -a $RESULTS_FILE
     START_TIME=$(date +%s)
 
-    # Crea file JSON con jq per escape corretto
+    # Crea file JSON con jq usando --rawfile per leggere base64 da file (evita ARG_MAX)
     jq -n \
         --arg model "$MODEL_NAME" \
         --arg prompt "$PROMPT" \
-        --arg img "$IMAGE_B64" \
+        --rawfile img /tmp/image_b64.txt \
         '{
             model: $model,
             prompt: $prompt,
