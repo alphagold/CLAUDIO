@@ -117,7 +117,6 @@ Respond with ONLY the JSON object, nothing else."""
         """Parse Vision AI response into structured data"""
         try:
             # Try to parse as JSON
-            # Remove markdown code blocks if present
             clean_text = response_text.strip()
             if clean_text.startswith("```"):
                 # Extract JSON from markdown
@@ -140,20 +139,46 @@ Respond with ONLY the JSON object, nothing else."""
             }
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            print(f"Failed to parse Vision AI response: {e}")
-            print(f"Response: {response_text[:200]}")
-            # Return basic analysis from raw text
-            return {
-                "description_full": response_text[:500] if response_text else "Immagine caricata",
-                "description_short": response_text[:200] if response_text else "Foto",
-                "extracted_text": None,
-                "detected_objects": [],
-                "detected_faces": 0,
-                "scene_category": "other",
-                "scene_subcategory": None,
-                "tags": [],
-                "confidence_score": 0.5,
-            }
+            print(f"JSON parsing failed, extracting info from text: {e}")
+            # Fallback: extract useful info from malformed response
+            return self._extract_from_text(response_text)
+
+    def _extract_from_text(self, text: str) -> Dict:
+        """Extract structured data from free-form text response"""
+        import re
+
+        text_lower = text.lower()
+
+        # Detect food-related keywords
+        food_keywords = ["food", "plate", "dish", "meal", "restaurant", "cooking", "eat"]
+        is_food = any(keyword in text_lower for keyword in food_keywords)
+
+        # Detect document keywords
+        doc_keywords = ["document", "receipt", "paper", "text", "invoice"]
+        is_document = any(keyword in text_lower for keyword in doc_keywords)
+
+        # Extract simple description (first 200 chars of text)
+        description = text[:500].strip() if text else "Immagine analizzata"
+        short_desc = text[:150].strip() if text else "Foto"
+
+        # Try to extract objects from text (words between quotes or common nouns)
+        objects = []
+        if "plate" in text_lower or "dish" in text_lower:
+            objects.append("plate")
+        if "food" in text_lower:
+            objects.append("food")
+
+        return {
+            "description_full": description,
+            "description_short": short_desc,
+            "extracted_text": None,
+            "detected_objects": objects,
+            "detected_faces": 0,
+            "scene_category": "food" if is_food else ("document" if is_document else "other"),
+            "scene_subcategory": None,
+            "tags": objects,
+            "confidence_score": 0.6,
+        }
 
     def _get_fallback_analysis(self, processing_time: int) -> Dict:
         """Fallback analysis if Vision AI fails"""

@@ -220,8 +220,8 @@ async def upload_photo(
     # Trigger analysis (async - in real implementation use Celery)
     # For now, analyze synchronously
     try:
-        # Use llama3.2-vision for better quality (Italian, structured JSON)
-        analysis_result = await vision_client.analyze_photo(str(file_path), detailed=True)
+        # Use moondream (fast, 6s vs 120s+ for llama on CPU)
+        analysis_result = await vision_client.analyze_photo(str(file_path), detailed=False)
 
         # Save analysis
         analysis = PhotoAnalysis(
