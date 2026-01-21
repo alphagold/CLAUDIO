@@ -90,28 +90,30 @@ class OllamaVisionClient:
 
     def _get_analysis_prompt(self) -> str:
         """Get analysis prompt for Vision AI"""
-        return """Analyze this photo and respond with ONLY valid JSON (no markdown, no extra text).
+        return """Analizza questa foto e rispondi SOLO con un oggetto JSON valido (no markdown, no testo extra).
 
-Required JSON structure:
+Struttura JSON richiesta:
 {
-  "description_full": "Detailed description in Italian (2-3 sentences)",
-  "description_short": "One sentence summary in Italian (max 100 chars)",
-  "extracted_text": "Any visible text in the image (empty string if none)",
-  "detected_objects": ["object1", "object2", "object3"],
+  "description_full": "Descrizione dettagliata in italiano di tutto ciò che vedi (3-5 frasi complete)",
+  "description_short": "Riassunto in italiano in una frase (max 100 caratteri)",
+  "extracted_text": "Qualsiasi testo visibile nell'immagine (stringa vuota se non c'è testo)",
+  "detected_objects": ["oggetto1", "oggetto2", "oggetto3"],
   "scene_category": "food/document/receipt/outdoor/indoor/people/other",
-  "scene_subcategory": "restaurant/home/office/street/etc",
+  "scene_subcategory": "restaurant/home/office/street/nature/etc",
   "tags": ["tag1", "tag2", "tag3"],
   "confidence_score": 0.85
 }
 
-Important:
-- description_full and description_short must be in Italian
-- extracted_text: copy exactly any text visible in the image
-- detected_objects: list main objects/items visible
-- tags: relevant keywords for search (in Italian)
-- confidence_score: 0.0 to 1.0 based on image clarity
+Istruzioni importanti:
+- description_full: Descrivi dettagliatamente cosa vedi, i colori, le azioni, l'ambiente, gli oggetti principali
+- description_short: Un riassunto breve e conciso
+- extracted_text: Copia esattamente qualsiasi testo/scritta visibile (lascia vuoto "" se non c'è testo)
+- detected_objects: Lista degli oggetti principali visibili (in italiano)
+- scene_category: Scegli la categoria più appropriata tra: food, document, receipt, outdoor, indoor, people, other
+- tags: Parole chiave rilevanti per la ricerca (in italiano)
+- confidence_score: Quanto sei sicuro dell'analisi (0.0-1.0)
 
-Respond with ONLY the JSON object, nothing else."""
+Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
 
     def _parse_analysis_response(self, response_text: str) -> Dict:
         """Parse Vision AI response into structured data"""

@@ -12,10 +12,11 @@ import shutil
 import uuid
 from pathlib import Path
 import time
+import asyncio
 
 # Local imports
 from config import settings
-from database import get_db, engine, Base
+from database import get_db, engine, Base, SessionLocal
 from models import User, Photo, PhotoAnalysis, SearchHistory
 import schemas
 from vision import vision_client
@@ -168,6 +169,60 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 # ============================================================================
+# BACKGROUND TASKS
+# ============================================================================
+
+async def analyze_photo_background(photo_id: uuid.UUID, file_path: str):
+    """Analyze photo in background with Llama 3.2 Vision"""
+    try:
+        print(f"Starting background analysis for photo {photo_id} with Llama 3.2 Vision...")
+
+        # Use detailed model (llama3.2-vision) for high-quality Italian descriptions
+        analysis_result = await vision_client.analyze_photo(file_path, detailed=True)
+
+        # Create new DB session for background task
+        db = SessionLocal()
+        try:
+            # Get photo
+            photo = db.query(Photo).filter(Photo.id == photo_id).first()
+            if not photo:
+                print(f"Photo {photo_id} not found")
+                return
+
+            # Save analysis
+            analysis = PhotoAnalysis(
+                photo_id=photo.id,
+                description_full=analysis_result["description_full"],
+                description_short=analysis_result["description_short"],
+                extracted_text=analysis_result.get("extracted_text"),
+                detected_objects=analysis_result.get("detected_objects", []),
+                detected_faces=analysis_result.get("detected_faces", 0),
+                scene_category=analysis_result.get("scene_category"),
+                scene_subcategory=analysis_result.get("scene_subcategory"),
+                tags=analysis_result.get("tags", []),
+                model_version=analysis_result.get("model_version"),
+                processing_time_ms=analysis_result.get("processing_time_ms"),
+                confidence_score=analysis_result.get("confidence_score"),
+            )
+            db.add(analysis)
+
+            # Update photo flags
+            photo.has_text = bool(analysis_result.get("extracted_text"))
+            photo.is_food = analysis_result.get("scene_category") == "food"
+            photo.is_document = analysis_result.get("scene_category") in ["document", "receipt"]
+            photo.analyzed_at = datetime.utcnow()
+
+            db.commit()
+            print(f"Analysis completed for photo {photo_id}")
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        print(f"Background analysis failed for photo {photo_id}: {e}")
+
+
+# ============================================================================
 # ROUTES - PHOTOS
 # ============================================================================
 
@@ -217,41 +272,9 @@ async def upload_photo(
     db.commit()
     db.refresh(photo)
 
-    # Trigger analysis (async - in real implementation use Celery)
-    # For now, analyze synchronously
-    try:
-        # Use moondream (fast, 6s vs 120s+ for llama on CPU)
-        analysis_result = await vision_client.analyze_photo(str(file_path), detailed=False)
-
-        # Save analysis
-        analysis = PhotoAnalysis(
-            photo_id=photo.id,
-            description_full=analysis_result["description_full"],
-            description_short=analysis_result["description_short"],
-            extracted_text=analysis_result.get("extracted_text"),
-            detected_objects=analysis_result.get("detected_objects", []),
-            detected_faces=analysis_result.get("detected_faces", 0),
-            scene_category=analysis_result.get("scene_category"),
-            scene_subcategory=analysis_result.get("scene_subcategory"),
-            tags=analysis_result.get("tags", []),
-            model_version=analysis_result.get("model_version"),
-            processing_time_ms=analysis_result.get("processing_time_ms"),
-            confidence_score=analysis_result.get("confidence_score"),
-        )
-        db.add(analysis)
-
-        # Update photo flags
-        photo.has_text = bool(analysis_result.get("extracted_text"))
-        photo.is_food = analysis_result.get("scene_category") == "food"
-        photo.is_document = analysis_result.get("scene_category") in ["document", "receipt"]
-        photo.analyzed_at = datetime.utcnow()
-
-        db.commit()
-        db.refresh(photo)
-
-    except Exception as e:
-        print(f"Analysis failed: {e}")
-        # Photo uploaded but not analyzed yet
+    # Start background analysis with Llama 3.2 Vision (non-blocking)
+    # User gets immediate response, analysis happens in background
+    asyncio.create_task(analyze_photo_background(photo.id, str(file_path)))
 
     return photo
 
