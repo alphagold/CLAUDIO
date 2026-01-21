@@ -301,7 +301,7 @@ async def upload_photo(
     return photo
 
 
-@app.get("/api/photos", response_model=List[schemas.PhotoResponse])
+@app.get("/api/photos", response_model=schemas.PhotosListResponse)
 async def list_photos(
     limit: int = 50,
     offset: int = 0,
@@ -309,6 +309,14 @@ async def list_photos(
     db: Session = Depends(get_db)
 ):
     """List user's photos"""
+    # Get total count
+    total = (
+        db.query(Photo)
+        .filter(Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
+        .count()
+    )
+
+    # Get photos
     photos = (
         db.query(Photo)
         .filter(Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
@@ -317,7 +325,13 @@ async def list_photos(
         .offset(offset)
         .all()
     )
-    return photos
+
+    return {
+        "photos": photos,
+        "total": total,
+        "skip": offset,
+        "limit": limit
+    }
 
 
 @app.get("/api/photos/{photo_id}", response_model=schemas.PhotoResponse)

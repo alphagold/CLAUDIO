@@ -87,6 +87,13 @@ class PhotoResponse(PhotoBase):
         from_attributes = True
 
 
+class PhotosListResponse(BaseModel):
+    photos: List[PhotoResponse]
+    total: int
+    skip: int
+    limit: int
+
+
 # Search schemas
 class SearchQuery(BaseModel):
     query: str = Field(..., min_length=1, max_length=500)
