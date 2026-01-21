@@ -97,7 +97,7 @@ export default function PhotoDetailPage() {
           <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
             <img
               src={photosApi.getPhotoUrl(photo.id)}
-              alt={photo.description_short || 'Photo'}
+              alt={photo.analysis?.description_short || 'Photo'}
               className="w-full h-auto"
             />
           </div>
@@ -124,7 +124,7 @@ export default function PhotoDetailPage() {
                   <div>
                     <h3 className="font-semibold text-green-900">Analisi completata</h3>
                     <p className="text-sm text-green-700">
-                      Modello: {photo.model_version} • {photo.processing_time_ms}ms
+                      Modello: {photo.analysis?.model_version} • {photo.analysis?.processing_time_ms}ms
                     </p>
                   </div>
                 </div>
@@ -132,31 +132,31 @@ export default function PhotoDetailPage() {
             )}
 
             {/* Description */}
-            {photo.description_full && (
+            {photo.analysis?.description_full && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center space-x-2 mb-3">
                   <FileText className="w-5 h-5 text-blue-600" />
                   <h3 className="font-semibold text-gray-900">Descrizione AI</h3>
                 </div>
-                <p className="text-gray-700 leading-relaxed">{photo.description_full}</p>
-                {photo.confidence_score && (
+                <p className="text-gray-700 leading-relaxed">{photo.analysis?.description_full}</p>
+                {photo.analysis?.confidence_score && (
                   <div className="mt-4 flex items-center space-x-2 text-sm text-gray-600">
                     <Eye className="w-4 h-4" />
-                    <span>Confidence: {(photo.confidence_score * 100).toFixed(0)}%</span>
+                    <span>Confidence: {(photo.analysis?.confidence_score * 100).toFixed(0)}%</span>
                   </div>
                 )}
               </div>
             )}
 
             {/* Detected Objects */}
-            {photo.detected_objects && photo.detected_objects.length > 0 && (
+            {photo.analysis?.detected_objects && photo.analysis?.detected_objects.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center space-x-2 mb-3">
                   <Eye className="w-5 h-5 text-purple-600" />
                   <h3 className="font-semibold text-gray-900">Oggetti Rilevati</h3>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {photo.detected_objects.map((obj, idx) => (
+                  {photo.analysis?.detected_objects.map((obj, idx) => (
                     <span
                       key={idx}
                       className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium"
@@ -169,14 +169,14 @@ export default function PhotoDetailPage() {
             )}
 
             {/* Tags */}
-            {photo.tags && photo.tags.length > 0 && (
+            {photo.analysis?.tags && photo.analysis?.tags.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center space-x-2 mb-3">
                   <Tag className="w-5 h-5 text-blue-600" />
                   <h3 className="font-semibold text-gray-900">Tags</h3>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {photo.tags.map((tag, idx) => (
+                  {photo.analysis?.tags.map((tag, idx) => (
                     <span
                       key={idx}
                       className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium"
@@ -189,20 +189,20 @@ export default function PhotoDetailPage() {
             )}
 
             {/* Extracted Text */}
-            {photo.extracted_text && (
+            {photo.analysis?.extracted_text && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center space-x-2 mb-3">
                   <FileText className="w-5 h-5 text-orange-600" />
                   <h3 className="font-semibold text-gray-900">Testo Estratto</h3>
                 </div>
                 <p className="text-gray-700 font-mono text-sm bg-gray-50 p-4 rounded-lg">
-                  {photo.extracted_text}
+                  {photo.analysis?.extracted_text}
                 </p>
               </div>
             )}
 
             {/* Scene Category */}
-            {photo.scene_category && (
+            {photo.analysis?.scene_category && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center space-x-2 mb-3">
                   <Sparkles className="w-5 h-5 text-indigo-600" />
@@ -210,11 +210,11 @@ export default function PhotoDetailPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium">
-                    {photo.scene_category}
+                    {photo.analysis?.scene_category}
                   </span>
-                  {photo.scene_subcategory && (
+                  {photo.analysis?.scene_subcategory && (
                     <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-sm">
-                      {photo.scene_subcategory}
+                      {photo.analysis?.scene_subcategory}
                     </span>
                   )}
                 </div>
