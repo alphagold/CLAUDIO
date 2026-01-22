@@ -9,9 +9,16 @@ interface User {
   email: string;
   full_name: string;
   is_admin: boolean;
+  role: 'admin' | 'editor' | 'viewer';
   created_at: string;
   photo_count: number;
 }
+
+const ROLES = {
+  admin: { label: 'Admin', description: 'Accesso completo al sistema', color: 'purple' },
+  editor: { label: 'Editor', description: 'Può gestire le proprie foto', color: 'blue' },
+  viewer: { label: 'Viewer', description: 'Solo visualizzazione', color: 'gray' },
+};
 
 export default function UserManagement() {
   const queryClient = useQueryClient();
@@ -26,7 +33,7 @@ export default function UserManagement() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { email: string; password: string; full_name: string; is_admin: boolean }) => {
+    mutationFn: async (data: { email: string; password: string; full_name: string; role: string }) => {
       return apiClient.post('/api/admin/users', null, { params: data });
     },
     onSuccess: () => {
@@ -63,7 +70,7 @@ export default function UserManagement() {
       email: '',
       password: '',
       full_name: '',
-      is_admin: false,
+      role: 'editor' as 'admin' | 'editor' | 'viewer',
     });
 
     return (
@@ -115,17 +122,19 @@ export default function UserManagement() {
               />
             </div>
 
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="is_admin"
-                checked={formData.is_admin}
-                onChange={(e) => setFormData({ ...formData, is_admin: e.target.checked })}
-                className="mr-2"
-              />
-              <label htmlFor="is_admin" className="text-sm font-medium">
-                Amministratore
-              </label>
+            <div>
+              <label className="block text-sm font-medium mb-1">Ruolo</label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'editor' | 'viewer' })}
+                className="w-full px-3 py-2 border rounded-lg"
+              >
+                {Object.entries(ROLES).map(([key, role]) => (
+                  <option key={key} value={key}>
+                    {role.label} - {role.description}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex space-x-2">
@@ -194,16 +203,20 @@ export default function UserManagement() {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
                   <td className="px-4 py-3">
-                    {user.is_admin ? (
-                      <span className="inline-flex items-center space-x-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                        <Shield className="w-3 h-3" />
-                        <span>Admin</span>
-                      </span>
-                    ) : (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                        User
-                      </span>
-                    )}
+                    {(() => {
+                      const roleInfo = ROLES[user.role];
+                      const colorClasses = {
+                        purple: 'bg-purple-100 text-purple-700',
+                        blue: 'bg-blue-100 text-blue-700',
+                        gray: 'bg-gray-100 text-gray-700',
+                      };
+                      return (
+                        <span className={`inline-flex items-center space-x-1 px-2 py-1 ${colorClasses[roleInfo.color]} rounded-full text-xs font-medium`}>
+                          {user.role === 'admin' && <Shield className="w-3 h-3" />}
+                          <span>{roleInfo.label}</span>
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{user.photo_count}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">
