@@ -11,7 +11,7 @@ export default function SearchPage() {
   const [activeQuery, setActiveQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
 
-  const { data: photos, isLoading, refetch } = useQuery({
+  const { data: photos, isLoading } = useQuery({
     queryKey: ['search', activeQuery, selectedCategory],
     queryFn: async () => {
       if (!activeQuery && !selectedCategory) return [];

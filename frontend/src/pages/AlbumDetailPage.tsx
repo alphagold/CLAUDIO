@@ -201,7 +201,7 @@ export default function AlbumDetailPage() {
                   <div className="aspect-square bg-gray-100 overflow-hidden">
                     <img
                       src={photosApi.getThumbnailUrl(photo.id, 512)}
-                      alt={photo.description_short || 'Photo'}
+                      alt={photo.analysis?.description_short || 'Photo'}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       loading="lazy"
                     />
@@ -220,9 +220,9 @@ export default function AlbumDetailPage() {
                 <Link to={`/photos/${photo.id}`}>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                     <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                      {photo.description_short && (
+                      {photo.analysis?.description_short && (
                         <p className="text-sm font-medium mb-2 line-clamp-2">
-                          {photo.description_short}
+                          {photo.analysis?.description_short}
                         </p>
                       )}
                       <div className="text-xs">

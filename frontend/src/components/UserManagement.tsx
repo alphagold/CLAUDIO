@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Users, UserPlus, Edit2, Trash2, Shield, User as UserIcon, X } from 'lucide-react';
+import { Users, UserPlus, Trash2, Shield, User as UserIcon, X } from 'lucide-react';
 import apiClient from '../api/client';
 
 interface User {
@@ -16,7 +16,6 @@ interface User {
 export default function UserManagement() {
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -37,20 +36,6 @@ export default function UserManagement() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Errore nella creazione utente');
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      return apiClient.patch(`/api/admin/users/${id}`, null, { params: data });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      toast.success('Utente aggiornato');
-      setEditingUser(null);
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Errore nell\'aggiornamento');
     },
   });
 
@@ -226,13 +211,6 @@ export default function UserManagement() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end space-x-2">
-                      <button
-                        onClick={() => setEditingUser(user)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                        title="Modifica"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
                       <button
                         onClick={() => handleDelete(user)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg"

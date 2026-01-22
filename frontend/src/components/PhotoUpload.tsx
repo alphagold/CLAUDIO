@@ -75,7 +75,7 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
 
     const uploadPromises = files
       .filter(f => f.uploadStatus === 'pending')
-      .map(async (file, originalIndex) => {
+      .map(async (file, _originalIndex) => {
         const fileIndex = files.findIndex(f => f === file);
 
         try {

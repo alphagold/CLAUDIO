@@ -237,10 +237,11 @@ export default function PhotoDetailPage() {
                     Dimensioni: {photo.width} × {photo.height} px
                   </div>
                 )}
-                <div>
-                  Dimensione: {(photo.file_size / 1024 / 1024).toFixed(2)} MB
-                </div>
-                <div>Tipo: {photo.mime_type}</div>
+                {photo.file_size && (
+                  <div>
+                    Dimensione: {(photo.file_size / 1024 / 1024).toFixed(2)} MB
+                  </div>
+                )}
               </div>
             </div>
           </div>
