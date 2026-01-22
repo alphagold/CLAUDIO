@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Layout from '../components/Layout';
+import UserManagement from '../components/UserManagement';
 import {
   Server,
   Activity,
@@ -246,6 +247,11 @@ export default function AdminPage() {
               </pre>
             </div>
           )}
+        </div>
+
+        {/* User Management Section */}
+        <div className="mt-8">
+          <UserManagement />
         </div>
       </div>
     </Layout>
