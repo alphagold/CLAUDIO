@@ -19,6 +19,7 @@ import {
   Camera,
   Edit3,
   MapPin,
+  CheckCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -159,95 +160,139 @@ export default function PhotoDetailPage() {
 
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg max-w-md w-full p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold">Modifica Foto</h3>
-            <button onClick={() => setShowEditDialog(false)}>
-              <X className="w-5 h-5" />
-            </button>
+        <div className="bg-white rounded-xl max-w-2xl w-full shadow-2xl">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 rounded-t-xl">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-3">
+                <Edit3 className="w-6 h-6 text-white" />
+                <h3 className="text-xl font-bold text-white">Modifica Metadati Foto</h3>
+              </div>
+              <button
+                onClick={() => setShowEditDialog(false)}
+                className="text-white hover:bg-white/20 rounded-lg p-1 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const updateData: any = {};
-              if (formData.taken_at) updateData.taken_at = new Date(formData.taken_at).toISOString();
-              if (formData.latitude) updateData.latitude = parseFloat(formData.latitude);
-              if (formData.longitude) updateData.longitude = parseFloat(formData.longitude);
-              if (formData.location_name) updateData.location_name = formData.location_name;
-              updateMutation.mutate(updateData);
-            }}
-            className="space-y-4"
-          >
-            <div>
-              <label className="block text-sm font-medium mb-1 flex items-center space-x-2">
-                <Clock className="w-4 h-4" />
-                <span>Data e Ora Scatto</span>
-              </label>
-              <input
-                type="datetime-local"
-                value={formData.taken_at}
-                onChange={(e) => setFormData({ ...formData, taken_at: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1 flex items-center space-x-2">
-                <MapPin className="w-4 h-4" />
-                <span>Nome Località</span>
-              </label>
-              <input
-                type="text"
-                value={formData.location_name}
-                onChange={(e) => setFormData({ ...formData, location_name: e.target.value })}
-                placeholder="Es: Roma, Italia"
-                className="w-full px-3 py-2 border rounded-lg"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Latitudine</label>
+          {/* Body */}
+          <div className="p-6">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const updateData: any = {};
+                if (formData.taken_at) updateData.taken_at = new Date(formData.taken_at).toISOString();
+                if (formData.latitude) updateData.latitude = parseFloat(formData.latitude);
+                if (formData.longitude) updateData.longitude = parseFloat(formData.longitude);
+                if (formData.location_name) updateData.location_name = formData.location_name;
+                updateMutation.mutate(updateData);
+              }}
+              className="space-y-5"
+            >
+              {/* Date and Time */}
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <label className="block text-sm font-semibold mb-3 flex items-center space-x-2 text-gray-700">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  <span>Data e Ora Scatto</span>
+                </label>
                 <input
-                  type="number"
-                  step="any"
-                  value={formData.latitude}
-                  onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                  placeholder="41.9028"
-                  className="w-full px-3 py-2 border rounded-lg"
+                  type="datetime-local"
+                  value={formData.taken_at}
+                  onChange={(e) => setFormData({ ...formData, taken_at: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
                 />
+                <p className="mt-2 text-xs text-gray-500">
+                  Modifica la data e l'ora in cui è stata scattata la foto
+                </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Longitudine</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={formData.longitude}
-                  onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                  placeholder="12.4964"
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
-              </div>
-            </div>
 
-            <div className="flex space-x-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowEditDialog(false)}
-                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
-              >
-                Annulla
-              </button>
-              <button
-                type="submit"
-                disabled={updateMutation.isPending}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {updateMutation.isPending ? 'Salvataggio...' : 'Salva'}
-              </button>
-            </div>
-          </form>
+              {/* Location */}
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <label className="block text-sm font-semibold mb-3 flex items-center space-x-2 text-gray-700">
+                  <MapPin className="w-5 h-5 text-green-600" />
+                  <span>Località</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.location_name}
+                  onChange={(e) => setFormData({ ...formData, location_name: e.target.value })}
+                  placeholder="Es: Roma, Colosseo, Italia"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Nome del luogo dove è stata scattata la foto
+                </p>
+              </div>
+
+              {/* GPS Coordinates */}
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <label className="block text-sm font-semibold mb-3 flex items-center space-x-2 text-gray-700">
+                  <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>Coordinate GPS</span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">Latitudine</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.latitude}
+                      onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                      placeholder="41.9028"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-2">Longitudine</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.longitude}
+                      onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                      placeholder="12.4964"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                    />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">
+                  Coordinate geografiche precise del luogo (formato decimale)
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowEditDialog(false)}
+                  className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-50 font-semibold text-gray-700 transition-colors"
+                >
+                  Annulla
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateMutation.isPending}
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2"
+                >
+                  {updateMutation.isPending ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span>Salvataggio...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      <span>Salva Modifiche</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     );
@@ -361,18 +406,20 @@ export default function PhotoDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           {/* Photo */}
-          <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
-            <img
-              src={photosApi.getPhotoUrl(photo.id)}
-              alt={photo.analysis?.description_short || 'Photo'}
-              className="w-full h-auto"
-            />
+          <div className="lg:col-span-3 bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
+            <div className="relative w-full">
+              <img
+                src={photosApi.getPhotoUrl(photo.id)}
+                alt={photo.analysis?.description_short || 'Photo'}
+                className="w-full h-auto object-contain max-h-[80vh]"
+              />
+            </div>
           </div>
 
           {/* Details */}
-          <div className="space-y-6">
+          <div className="lg:col-span-2 space-y-6">
             {/* Analysis Status */}
             {!photo.analyzed_at ? (
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
@@ -510,22 +557,117 @@ export default function PhotoDetailPage() {
             )}
 
             {/* EXIF Metadata */}
-            {photo.exif_data && Object.keys(photo.exif_data).length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center space-x-2 mb-3">
-                  <Camera className="w-5 h-5 text-gray-600" />
-                  <h3 className="font-semibold text-gray-900">Dati EXIF</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  {Object.entries(photo.exif_data).map(([key, value]) => (
-                    <div key={key} className="flex flex-col">
-                      <span className="text-gray-500 text-xs font-medium uppercase">{key.replace(/_/g, ' ')}</span>
-                      <span className="text-gray-900 font-mono">{String(value)}</span>
+            {photo.exif_data && Object.keys(photo.exif_data).length > 0 && (() => {
+              // Organize EXIF data into categories
+              const cameraData: [string, any][] = [];
+              const exposureData: [string, any][] = [];
+              const imageData: [string, any][] = [];
+              const otherData: [string, any][] = [];
+
+              const cameraKeys = ['Make', 'Model', 'LensModel', 'LensMake'];
+              const exposureKeys = ['ExposureTime', 'FNumber', 'ISO', 'ISOSpeedRatings', 'FocalLength',
+                                   'ExposureMode', 'WhiteBalance', 'Flash', 'MeteringMode', 'ExposureProgram'];
+              const imageKeys = ['Width', 'Height', 'Orientation', 'ColorSpace', 'ResolutionUnit',
+                                'XResolution', 'YResolution'];
+
+              Object.entries(photo.exif_data).forEach(([key, value]) => {
+                if (cameraKeys.includes(key)) {
+                  cameraData.push([key, value]);
+                } else if (exposureKeys.includes(key)) {
+                  exposureData.push([key, value]);
+                } else if (imageKeys.includes(key)) {
+                  imageData.push([key, value]);
+                } else {
+                  otherData.push([key, value]);
+                }
+              });
+
+              return (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <Camera className="w-5 h-5 text-gray-600" />
+                      <h3 className="font-semibold text-gray-900">Metadati Fotocamera</h3>
                     </div>
-                  ))}
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                      {Object.keys(photo.exif_data).length} campi
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Camera Info */}
+                    {cameraData.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                          📷 Fotocamera
+                        </h4>
+                        <div className="grid grid-cols-1 gap-2">
+                          {cameraData.map(([key, value]) => (
+                            <div key={key} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+                              <span className="text-xs text-gray-600">{key}</span>
+                              <span className="text-sm font-medium text-gray-900">{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Exposure Info */}
+                    {exposureData.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                          ⚙️ Esposizione
+                        </h4>
+                        <div className="grid grid-cols-1 gap-2">
+                          {exposureData.map(([key, value]) => (
+                            <div key={key} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+                              <span className="text-xs text-gray-600">{key}</span>
+                              <span className="text-sm font-medium text-gray-900 font-mono">{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Image Info */}
+                    {imageData.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                          🖼️ Immagine
+                        </h4>
+                        <div className="grid grid-cols-1 gap-2">
+                          {imageData.map(([key, value]) => (
+                            <div key={key} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+                              <span className="text-xs text-gray-600">{key}</span>
+                              <span className="text-sm font-medium text-gray-900">{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Other Info */}
+                    {otherData.length > 0 && (
+                      <details className="group">
+                        <summary className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide cursor-pointer hover:text-blue-600 transition-colors">
+                          ⚡ Altri Dati ({otherData.length})
+                        </summary>
+                        <div className="grid grid-cols-1 gap-2 mt-2">
+                          {otherData.map(([key, value]) => (
+                            <div key={key} className="flex justify-between items-center py-1 border-b border-gray-100 last:border-0">
+                              <span className="text-xs text-gray-600">{key}</span>
+                              <span className="text-xs text-gray-900 font-mono max-w-[60%] truncate" title={String(value)}>
+                                {String(value)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Metadata */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
