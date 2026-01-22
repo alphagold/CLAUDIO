@@ -12,7 +12,9 @@ import {
   Trash2,
   Clock,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function PhotoDetailPage() {
   const { photoId } = useParams<{ photoId: string }>();
@@ -33,9 +35,28 @@ export default function PhotoDetailPage() {
     },
   });
 
+  const reanalyzeMutation = useMutation({
+    mutationFn: (detailed: boolean) => photosApi.reanalyzePhoto(photoId!, detailed),
+    onSuccess: () => {
+      toast.success('Rianalisi avviata! Aggiorna tra qualche secondo.');
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
+      }, 3000);
+    },
+    onError: () => {
+      toast.error('Errore nell\'avvio della rianalisi');
+    },
+  });
+
   const handleDelete = () => {
     if (window.confirm('Sei sicuro di voler eliminare questa foto?')) {
       deleteMutation.mutate();
+    }
+  };
+
+  const handleReanalyze = () => {
+    if (window.confirm('Rianalizzare questa foto con il modello AI dettagliato?')) {
+      reanalyzeMutation.mutate(true);
     }
   };
 
@@ -119,14 +140,25 @@ export default function PhotoDetailPage() {
               </div>
             ) : (
               <div className="bg-green-50 border border-green-200 rounded-xl p-6">
-                <div className="flex items-center space-x-3">
-                  <Sparkles className="w-6 h-6 text-green-600" />
-                  <div>
-                    <h3 className="font-semibold text-green-900">Analisi completata</h3>
-                    <p className="text-sm text-green-700">
-                      Modello: {photo.analysis?.model_version} • {photo.analysis?.processing_time_ms}ms
-                    </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Sparkles className="w-6 h-6 text-green-600" />
+                    <div>
+                      <h3 className="font-semibold text-green-900">Analisi completata</h3>
+                      <p className="text-sm text-green-700">
+                        Modello: {photo.analysis?.model_version} • {photo.analysis?.processing_time_ms}ms
+                      </p>
+                    </div>
                   </div>
+                  <button
+                    onClick={handleReanalyze}
+                    disabled={reanalyzeMutation.isPending}
+                    className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    title="Rianalizza con AI dettagliata"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${reanalyzeMutation.isPending ? 'animate-spin' : ''}`} />
+                    <span>{reanalyzeMutation.isPending ? 'Avviando...' : 'Rianalizza'}</span>
+                  </button>
                 </div>
               </div>
             )}

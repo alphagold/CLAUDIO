@@ -100,6 +100,13 @@ export const photosApi = {
     await apiClient.delete(`/api/photos/${photoId}`);
   },
 
+  reanalyzePhoto: async (photoId: string, detailed: boolean = true): Promise<any> => {
+    const response = await apiClient.post(`/api/photos/${photoId}/reanalyze`, null, {
+      params: { detailed },
+    });
+    return response.data;
+  },
+
   searchPhotos: async (query: string, limit = 100): Promise<Photo[]> => {
     const response = await apiClient.get<PhotosResponse>('/api/photos', {
       params: { q: query, limit },
