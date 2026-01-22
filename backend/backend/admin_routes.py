@@ -41,12 +41,22 @@ async def get_backend_logs(
     current_user: User = Depends(require_admin)
 ):
     """Get backend container logs (last N lines)"""
-    # Note: Docker commands don't work from inside container
-    # Use 'docker compose logs api' on the host instead
-    return {
-        "logs": "Logs not available from within container.\nUse 'docker compose logs -f api' on the host server.",
-        "lines": 0
-    }
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "photomemory-api", "--tail", str(lines)],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        return {
+            "logs": result.stdout + result.stderr,
+            "lines": lines
+        }
+    except Exception as e:
+        return {
+            "logs": f"Failed to fetch logs: {str(e)}\nMake sure Docker socket is mounted.",
+            "lines": 0
+        }
 
 
 @router.get("/logs/ollama")
@@ -55,12 +65,22 @@ async def get_ollama_logs(
     current_user: User = Depends(require_admin)
 ):
     """Get Ollama container logs (last N lines)"""
-    # Note: Docker commands don't work from inside container
-    # Use 'docker compose logs ollama' on the host instead
-    return {
-        "logs": "Logs not available from within container.\nUse 'docker compose logs -f ollama' on the host server.",
-        "lines": 0
-    }
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "photomemory-ollama", "--tail", str(lines)],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        return {
+            "logs": result.stdout + result.stderr,
+            "lines": lines
+        }
+    except Exception as e:
+        return {
+            "logs": f"Failed to fetch logs: {str(e)}\nMake sure Docker socket is mounted.",
+            "lines": 0
+        }
 
 
 @router.get("/status")
@@ -72,14 +92,20 @@ async def get_system_status(
     from models import Photo
     from sqlalchemy import func
 
-    # Get container status (simplified - docker commands don't work from inside container)
-    containers = [
-        {"name": "photomemory-api", "status": "running"},  # If we're responding, API is running
-        {"name": "photomemory-postgres", "status": "running"},  # If DB query works, it's running
-        {"name": "photomemory-redis", "status": "unknown"},
-        {"name": "photomemory-minio", "status": "unknown"},
-        {"name": "photomemory-ollama", "status": "unknown"}
-    ]
+    # Get container status
+    containers = []
+    for container in ["photomemory-api", "photomemory-postgres", "photomemory-redis", "photomemory-minio", "photomemory-ollama"]:
+        try:
+            result = subprocess.run(
+                ["docker", "inspect", container, "--format", "{{.State.Status}}"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            status = result.stdout.strip() if result.returncode == 0 else "unknown"
+            containers.append({"name": container, "status": status})
+        except:
+            containers.append({"name": container, "status": "unknown"})
 
     # Get database stats
     total_photos = db.query(func.count(Photo.id)).scalar()
@@ -112,3 +138,137 @@ async def get_system_status(
             "disk_usage_mb": round(disk_usage_mb, 2)
         }
     }
+
+
+# ============================================================================
+# USER MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@router.get("/users")
+async def list_users(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """List all users (admin only)"""
+    users = db.query(User).all()
+    return [{
+        "id": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "is_admin": user.is_admin,
+        "created_at": user.created_at.isoformat(),
+        "photo_count": db.query(func.count(Photo.id)).filter(Photo.user_id == user.id).scalar()
+    } for user in users]
+
+
+@router.post("/users")
+async def create_user(
+    email: str,
+    password: str,
+    full_name: str = "",
+    is_admin: bool = False,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Create new user (admin only)"""
+    from passlib.context import CryptContext
+
+    # Check if user exists
+    existing = db.query(User).filter(User.email == email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Hash password
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    password_hash = pwd_context.hash(password)
+
+    # Create user
+    new_user = User(
+        email=email,
+        password_hash=password_hash,
+        full_name=full_name,
+        is_admin=is_admin
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {
+        "id": str(new_user.id),
+        "email": new_user.email,
+        "full_name": new_user.full_name,
+        "is_admin": new_user.is_admin,
+        "created_at": new_user.created_at.isoformat()
+    }
+
+
+@router.patch("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    email: str = None,
+    full_name: str = None,
+    is_admin: bool = None,
+    new_password: str = None,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Update user (admin only)"""
+    from uuid import UUID
+    from passlib.context import CryptContext
+
+    user = db.query(User).filter(User.id == UUID(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Update fields
+    if email is not None:
+        # Check if email is already taken
+        existing = db.query(User).filter(User.email == email, User.id != UUID(user_id)).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        user.email = email
+
+    if full_name is not None:
+        user.full_name = full_name
+
+    if is_admin is not None:
+        user.is_admin = is_admin
+
+    if new_password is not None:
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        user.password_hash = pwd_context.hash(new_password)
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "full_name": user.full_name,
+        "is_admin": user.is_admin,
+        "created_at": user.created_at.isoformat()
+    }
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Delete user (admin only)"""
+    from uuid import UUID
+
+    # Don't allow deleting yourself
+    if str(current_user.id) == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+
+    user = db.query(User).filter(User.id == UUID(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Delete user (cascade will delete photos)
+    db.delete(user)
+    db.commit()
+
+    return {"message": "User deleted successfully"}
