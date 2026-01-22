@@ -13,6 +13,9 @@ import {
   Clock,
   Sparkles,
   RefreshCw,
+  X,
+  Zap,
+  Camera,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -20,6 +23,7 @@ export default function PhotoDetailPage() {
   const { photoId } = useParams<{ photoId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [showModelDialog, setShowModelDialog] = useState(false);
 
   const { data: photo, isLoading } = useQuery({
     queryKey: ['photo', photoId],
@@ -31,20 +35,24 @@ export default function PhotoDetailPage() {
     mutationFn: () => photosApi.deletePhoto(photoId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['photos'] });
+      queryClient.invalidateQueries({ queryKey: ['admin', 'status'] });
+      toast.success('Foto eliminata con successo');
       navigate('/gallery');
     },
   });
 
   const reanalyzeMutation = useMutation({
-    mutationFn: (detailed: boolean) => photosApi.reanalyzePhoto(photoId!, detailed),
+    mutationFn: (model: string) => photosApi.reanalyzePhoto(photoId!, model),
     onSuccess: () => {
       toast.success('Rianalisi avviata! Aggiorna tra qualche secondo.');
+      setShowModelDialog(false);
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
       }, 3000);
     },
     onError: () => {
       toast.error('Errore nell\'avvio della rianalisi');
+      setShowModelDialog(false);
     },
   });
 
@@ -55,9 +63,7 @@ export default function PhotoDetailPage() {
   };
 
   const handleReanalyze = () => {
-    if (window.confirm('Rianalizzare questa foto con il modello AI dettagliato?')) {
-      reanalyzeMutation.mutate(true);
-    }
+    setShowModelDialog(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -69,6 +75,62 @@ export default function PhotoDetailPage() {
       minute: '2-digit',
     });
   };
+
+  const ModelSelectionDialog = () => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold">Scegli Modello AI</h3>
+          <button onClick={() => setShowModelDialog(false)}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <p className="text-gray-600 mb-6">
+          Seleziona il modello da utilizzare per rianalizzare questa foto
+        </p>
+
+        <div className="space-y-3">
+          <button
+            onClick={() => reanalyzeMutation.mutate('llava-phi3')}
+            disabled={reanalyzeMutation.isPending}
+            className="w-full p-4 text-left border-2 border-blue-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Zap className="w-5 h-5 text-blue-600" />
+                <span className="font-semibold text-gray-900">LLaVA-Phi3</span>
+              </div>
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Veloce</span>
+            </div>
+            <p className="text-sm text-gray-600">Modello veloce (3.8B) - Analisi in ~30 secondi</p>
+          </button>
+
+          <button
+            onClick={() => reanalyzeMutation.mutate('llama3.2-vision')}
+            disabled={reanalyzeMutation.isPending}
+            className="w-full p-4 text-left border-2 border-purple-200 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors disabled:opacity-50"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+                <span className="font-semibold text-gray-900">Llama 3.2 Vision</span>
+              </div>
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Dettagliato</span>
+            </div>
+            <p className="text-sm text-gray-600">Modello avanzato (11B) - Analisi in ~3 minuti, massima qualità</p>
+          </button>
+        </div>
+
+        {reanalyzeMutation.isPending && (
+          <div className="mt-4 flex items-center justify-center space-x-2 text-blue-600">
+            <Loader className="w-5 h-5 animate-spin" />
+            <span className="text-sm">Avvio rianalisi...</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -253,6 +315,24 @@ export default function PhotoDetailPage() {
               </div>
             )}
 
+            {/* EXIF Metadata */}
+            {photo.exif_data && Object.keys(photo.exif_data).length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center space-x-2 mb-3">
+                  <Camera className="w-5 h-5 text-gray-600" />
+                  <h3 className="font-semibold text-gray-900">Dati EXIF</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  {Object.entries(photo.exif_data).map(([key, value]) => (
+                    <div key={key} className="flex flex-col">
+                      <span className="text-gray-500 text-xs font-medium uppercase">{key.replace(/_/g, ' ')}</span>
+                      <span className="text-gray-900 font-mono">{String(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Metadata */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center space-x-2 mb-3">
@@ -278,6 +358,9 @@ export default function PhotoDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Model Selection Dialog */}
+        {showModelDialog && <ModelSelectionDialog />}
       </div>
     </Layout>
   );

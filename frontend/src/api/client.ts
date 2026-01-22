@@ -100,9 +100,9 @@ export const photosApi = {
     await apiClient.delete(`/api/photos/${photoId}`);
   },
 
-  reanalyzePhoto: async (photoId: string, detailed: boolean = true): Promise<any> => {
+  reanalyzePhoto: async (photoId: string, model: string = 'llama3.2-vision'): Promise<any> => {
     const response = await apiClient.post(`/api/photos/${photoId}/reanalyze`, null, {
-      params: { detailed },
+      params: { model },
     });
     return response.data;
   },

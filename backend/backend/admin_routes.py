@@ -43,7 +43,7 @@ async def get_backend_logs(
     """Get backend container logs (last N lines)"""
     try:
         result = subprocess.run(
-            ["docker", "logs", "photomemory-api", "--tail", str(lines)],
+            ["docker", "logs", "photomemory-api", "--tail", str(lines), "--timestamps"],
             capture_output=True,
             text=True,
             timeout=10
@@ -67,7 +67,7 @@ async def get_ollama_logs(
     """Get Ollama container logs (last N lines)"""
     try:
         result = subprocess.run(
-            ["docker", "logs", "photomemory-ollama", "--tail", str(lines)],
+            ["docker", "logs", "photomemory-ollama", "--tail", str(lines), "--timestamps"],
             capture_output=True,
             text=True,
             timeout=10

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
-import UserManagement from '../components/UserManagement';
 import {
   Server,
   Activity,
@@ -12,7 +12,9 @@ import {
   HardDrive,
   Image as ImageIcon,
   Eye,
-  Loader
+  Loader,
+  Users,
+  ChevronRight
 } from 'lucide-react';
 import apiClient from '../api/client';
 
@@ -32,6 +34,7 @@ interface LogResponse {
 }
 
 export default function AdminPage() {
+  const navigate = useNavigate();
   const [logType, setLogType] = useState<'backend' | 'ollama'>('backend');
   const [logLines, setLogLines] = useState(100);
 
@@ -249,9 +252,28 @@ export default function AdminPage() {
           )}
         </div>
 
-        {/* User Management Section */}
+        {/* Quick Links Section */}
         <div className="mt-8">
-          <UserManagement />
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Gestione Sistema</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                onClick={() => navigate('/admin/users')}
+                className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Users className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-gray-900">Gestione Utenti</p>
+                    <p className="text-sm text-gray-600">Crea e gestisci gli utenti</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </Layout>

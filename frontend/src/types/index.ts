@@ -55,6 +55,7 @@ export interface Photo {
   has_faces: boolean;
   is_food: boolean;
   is_document: boolean;
+  exif_data: Record<string, any> | null;
   analysis: PhotoAnalysis | null;
 }
 

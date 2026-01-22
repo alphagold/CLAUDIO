@@ -12,6 +12,7 @@ import AlbumsPage from './pages/AlbumsPage';
 import AlbumDetailPage from './pages/AlbumDetailPage';
 import SearchPage from './pages/SearchPage';
 import AdminPage from './pages/AdminPage';
+import AdminUsersPage from './pages/AdminUsersPage';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -129,6 +130,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute>
+                <AdminUsersPage />
               </ProtectedRoute>
             }
           />

@@ -194,13 +194,14 @@ async def get_me(current_user: User = Depends(get_current_user)):
 # BACKGROUND TASKS
 # ============================================================================
 
-async def analyze_photo_background(photo_id: uuid.UUID, file_path: str):
-    """Analyze photo in background with Llama 3.2 Vision"""
+async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: str = None):
+    """Analyze photo in background with Vision AI"""
     try:
-        print(f"Starting background analysis for photo {photo_id} with Llama 3.2 Vision...")
+        model_name = model or "llama3.2-vision"
+        print(f"Starting background analysis for photo {photo_id} with {model_name}...")
 
-        # Use detailed model (llama3.2-vision) for high-quality Italian descriptions
-        analysis_result = await vision_client.analyze_photo(file_path, detailed=True)
+        # Analyze with specified model
+        analysis_result = await vision_client.analyze_photo(file_path, model=model)
 
         # Create new DB session for background task
         db = SessionLocal()
@@ -442,11 +443,16 @@ async def get_photo_thumbnail(
 @app.post("/api/photos/{photo_id}/reanalyze")
 async def reanalyze_photo(
     photo_id: uuid.UUID,
-    detailed: bool = True,
+    model: str = "llama3.2-vision",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Reanalyze photo with vision AI (optionally with detailed model)"""
+    """Reanalyze photo with vision AI (choose model: llava-phi3 or llama3.2-vision)"""
+    # Validate model
+    valid_models = ["llava-phi3", "llama3.2-vision"]
+    if model not in valid_models:
+        raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
+
     photo = (
         db.query(Photo)
         .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
@@ -459,13 +465,13 @@ async def reanalyze_photo(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Photo file not found")
 
-    # Trigger reanalysis in background
-    asyncio.create_task(analyze_photo_background(photo.id, str(file_path)))
+    # Trigger reanalysis in background with specified model
+    asyncio.create_task(analyze_photo_background(photo.id, str(file_path), model))
 
     return {
         "message": "Reanalysis started",
         "photo_id": str(photo.id),
-        "detailed": detailed
+        "model": model
     }
 
 
