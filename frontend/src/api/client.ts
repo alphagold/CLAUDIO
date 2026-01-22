@@ -107,6 +107,13 @@ export const photosApi = {
     return response.data;
   },
 
+  updatePhoto: async (photoId: string, data: { taken_at?: string; latitude?: number; longitude?: number; location_name?: string }): Promise<Photo> => {
+    const response = await apiClient.patch(`/api/photos/${photoId}`, null, {
+      params: data,
+    });
+    return response.data;
+  },
+
   searchPhotos: async (query: string, limit = 100): Promise<Photo[]> => {
     const response = await apiClient.get<PhotosResponse>('/api/photos', {
       params: { q: query, limit },

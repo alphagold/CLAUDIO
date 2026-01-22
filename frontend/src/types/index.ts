@@ -51,6 +51,9 @@ export interface Photo {
   taken_at: string;
   uploaded_at: string;
   analyzed_at: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  location_name: string | null;
   has_text: boolean;
   has_faces: boolean;
   is_food: boolean;

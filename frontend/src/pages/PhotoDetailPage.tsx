@@ -17,6 +17,8 @@ import {
   X,
   Zap,
   Camera,
+  Edit3,
+  MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -25,6 +27,7 @@ export default function PhotoDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showModelDialog, setShowModelDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
 
@@ -40,15 +43,29 @@ export default function PhotoDetailPage() {
 
   // Track analysis time
   useEffect(() => {
-    if (photo && !photo.analyzed_at && !analysisStartTime) {
-      // Analysis started
-      setAnalysisStartTime(Date.now());
-    } else if (photo && photo.analyzed_at && analysisStartTime) {
-      // Analysis completed
+    if (!photo || !photoId) return;
+
+    const storageKey = `analysis_start_${photoId}`;
+
+    if (!photo.analyzed_at) {
+      // Analysis in progress
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        // Resume from saved time
+        setAnalysisStartTime(parseInt(saved));
+      } else if (!analysisStartTime) {
+        // Start new tracking
+        const now = Date.now();
+        localStorage.setItem(storageKey, now.toString());
+        setAnalysisStartTime(now);
+      }
+    } else {
+      // Analysis completed - clean up
+      localStorage.removeItem(storageKey);
       setAnalysisStartTime(null);
       setElapsedTime(0);
     }
-  }, [photo?.analyzed_at]);
+  }, [photo?.analyzed_at, photoId]);
 
   // Update elapsed time every second during analysis
   useEffect(() => {
@@ -99,6 +116,19 @@ export default function PhotoDetailPage() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: (data: { taken_at?: string; latitude?: number; longitude?: number; location_name?: string }) =>
+      photosApi.updatePhoto(photoId!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
+      toast.success('Foto aggiornata con successo');
+      setShowEditDialog(false);
+    },
+    onError: () => {
+      toast.error('Errore nell\'aggiornamento della foto');
+    },
+  });
+
   const handleDelete = () => {
     if (window.confirm('Sei sicuro di voler eliminare questa foto?')) {
       deleteMutation.mutate();
@@ -117,6 +147,110 @@ export default function PhotoDetailPage() {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const EditPhotoDialog = () => {
+    const [formData, setFormData] = useState({
+      taken_at: photo?.taken_at ? new Date(photo.taken_at).toISOString().slice(0, 16) : '',
+      latitude: photo?.latitude?.toString() || '',
+      longitude: photo?.longitude?.toString() || '',
+      location_name: photo?.location_name || '',
+    });
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold">Modifica Foto</h3>
+            <button onClick={() => setShowEditDialog(false)}>
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const updateData: any = {};
+              if (formData.taken_at) updateData.taken_at = new Date(formData.taken_at).toISOString();
+              if (formData.latitude) updateData.latitude = parseFloat(formData.latitude);
+              if (formData.longitude) updateData.longitude = parseFloat(formData.longitude);
+              if (formData.location_name) updateData.location_name = formData.location_name;
+              updateMutation.mutate(updateData);
+            }}
+            className="space-y-4"
+          >
+            <div>
+              <label className="block text-sm font-medium mb-1 flex items-center space-x-2">
+                <Clock className="w-4 h-4" />
+                <span>Data e Ora Scatto</span>
+              </label>
+              <input
+                type="datetime-local"
+                value={formData.taken_at}
+                onChange={(e) => setFormData({ ...formData, taken_at: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1 flex items-center space-x-2">
+                <MapPin className="w-4 h-4" />
+                <span>Nome Località</span>
+              </label>
+              <input
+                type="text"
+                value={formData.location_name}
+                onChange={(e) => setFormData({ ...formData, location_name: e.target.value })}
+                placeholder="Es: Roma, Italia"
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Latitudine</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={formData.latitude}
+                  onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                  placeholder="41.9028"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Longitudine</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={formData.longitude}
+                  onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                  placeholder="12.4964"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+            </div>
+
+            <div className="flex space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEditDialog(false)}
+                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                Annulla
+              </button>
+              <button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {updateMutation.isPending ? 'Salvataggio...' : 'Salva'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
   };
 
   const ModelSelectionDialog = () => (
@@ -208,14 +342,23 @@ export default function PhotoDetailPage() {
             <span className="font-medium">Torna alla Galleria</span>
           </button>
 
-          <button
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-            className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <Trash2 className="w-5 h-5" />
-            <span className="font-medium">Elimina</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setShowEditDialog(true)}
+              className="flex items-center space-x-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              <Edit3 className="w-5 h-5" />
+              <span className="font-medium">Modifica</span>
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            >
+              <Trash2 className="w-5 h-5" />
+              <span className="font-medium">Elimina</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -393,8 +536,23 @@ export default function PhotoDetailPage() {
               <div className="space-y-2 text-sm text-gray-600">
                 <div className="flex items-center space-x-2">
                   <Clock className="w-4 h-4" />
+                  <span>Scattata: {formatDate(photo.taken_at || photo.uploaded_at)}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Clock className="w-4 h-4" />
                   <span>Caricata: {formatDate(photo.uploaded_at)}</span>
                 </div>
+                {photo.location_name && (
+                  <div className="flex items-center space-x-2">
+                    <MapPin className="w-4 h-4" />
+                    <span>{photo.location_name}</span>
+                  </div>
+                )}
+                {photo.latitude && photo.longitude && (
+                  <div className="text-xs text-gray-500">
+                    GPS: {photo.latitude.toFixed(6)}, {photo.longitude.toFixed(6)}
+                  </div>
+                )}
                 {photo.width && photo.height && (
                   <div>
                     Dimensioni: {photo.width} × {photo.height} px
@@ -410,8 +568,9 @@ export default function PhotoDetailPage() {
           </div>
         </div>
 
-        {/* Model Selection Dialog */}
+        {/* Dialogs */}
         {showModelDialog && <ModelSelectionDialog />}
+        {showEditDialog && <EditPhotoDialog />}
       </div>
     </Layout>
   );

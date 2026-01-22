@@ -14,6 +14,8 @@ import uuid
 from pathlib import Path
 import time
 import asyncio
+from PIL import Image
+from PIL.ExifTags import TAGS
 
 # Local imports
 from config import settings
@@ -191,6 +193,41 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def extract_exif_data(file_path: str) -> dict:
+    """Extract EXIF metadata from image"""
+    try:
+        image = Image.open(file_path)
+        exif_data = {}
+
+        if hasattr(image, '_getexif') and image._getexif():
+            exif = image._getexif()
+            for tag_id, value in exif.items():
+                tag = TAGS.get(tag_id, tag_id)
+                # Convert bytes to string
+                if isinstance(value, bytes):
+                    try:
+                        value = value.decode()
+                    except:
+                        value = str(value)
+                # Skip complex objects
+                if not isinstance(value, (str, int, float, bool)):
+                    continue
+                exif_data[str(tag)] = value
+
+        # Get image dimensions
+        exif_data['Width'] = image.width
+        exif_data['Height'] = image.height
+
+        return exif_data
+    except Exception as e:
+        print(f"Failed to extract EXIF: {e}")
+        return {}
+
+
+# ============================================================================
 # BACKGROUND TASKS
 # ============================================================================
 
@@ -279,6 +316,9 @@ async def upload_photo(
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # Extract EXIF metadata
+    exif_data = extract_exif_data(str(file_path))
+
     # Parse timestamp
     if taken_at:
         try:
@@ -286,7 +326,15 @@ async def upload_photo(
         except:
             taken_at_dt = datetime.utcnow()
     else:
-        taken_at_dt = datetime.utcnow()
+        # Try to get date from EXIF
+        date_taken = exif_data.get('DateTimeOriginal') or exif_data.get('DateTime')
+        if date_taken:
+            try:
+                taken_at_dt = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
+            except:
+                taken_at_dt = datetime.utcnow()
+        else:
+            taken_at_dt = datetime.utcnow()
 
     # Create photo record
     photo = Photo(
@@ -297,6 +345,9 @@ async def upload_photo(
         latitude=latitude,
         longitude=longitude,
         file_size=file_path.stat().st_size,
+        width=exif_data.get('Width'),
+        height=exif_data.get('Height'),
+        exif_data=exif_data if exif_data else None,
     )
     db.add(photo)
     db.commit()
@@ -484,6 +535,45 @@ async def reanalyze_photo(
         "photo_id": str(photo.id),
         "model": model
     }
+
+
+@app.patch("/api/photos/{photo_id}")
+async def update_photo(
+    photo_id: uuid.UUID,
+    taken_at: Optional[str] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    location_name: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update photo metadata"""
+    photo = (
+        db.query(Photo)
+        .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
+        .first()
+    )
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    # Update fields
+    if taken_at is not None:
+        try:
+            photo.taken_at = datetime.fromisoformat(taken_at.replace('Z', '+00:00'))
+        except:
+            raise HTTPException(status_code=400, detail="Invalid date format")
+
+    if latitude is not None:
+        photo.latitude = latitude
+    if longitude is not None:
+        photo.longitude = longitude
+    if location_name is not None:
+        photo.location_name = location_name
+
+    db.commit()
+    db.refresh(photo)
+
+    return photo
 
 
 @app.delete("/api/photos/{photo_id}")

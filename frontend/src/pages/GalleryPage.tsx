@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { photosApi } from '../api/client';
@@ -9,16 +9,72 @@ import type { Photo } from '../types';
 
 type SortOption = 'date' | 'year' | 'month' | 'day';
 
+// Helper to get elapsed time for a photo
+const getElapsedTime = (photoId: string): number => {
+  const key = `analysis_start_${photoId}`;
+  const startTime = localStorage.getItem(key);
+  if (!startTime) return 0;
+  return Math.floor((Date.now() - parseInt(startTime)) / 1000);
+};
+
+// Helper to track analysis start
+const trackAnalysisStart = (photoId: string) => {
+  const key = `analysis_start_${photoId}`;
+  if (!localStorage.getItem(key)) {
+    localStorage.setItem(key, Date.now().toString());
+  }
+};
+
+// Helper to clear analysis tracking
+const clearAnalysisTracking = (photoId: string) => {
+  const key = `analysis_start_${photoId}`;
+  localStorage.removeItem(key);
+};
+
 export default function GalleryPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('date');
+  const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({});
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['photos'],
     queryFn: () => photosApi.getPhotos({ limit: 100 }),
+    refetchInterval: (query) => {
+      // Auto-refresh if any photo is being analyzed
+      const photos = query.state.data?.photos || [];
+      const hasAnalyzing = photos.some(p => !p.analyzed_at);
+      return hasAnalyzing ? 3000 : false; // Refresh every 3s if analyzing
+    },
   });
 
   const photos = data?.photos || [];
+
+  // Track analysis times
+  useEffect(() => {
+    if (photos.length === 0) return;
+
+    // Mark photos being analyzed
+    photos.forEach(photo => {
+      if (!photo.analyzed_at) {
+        trackAnalysisStart(photo.id);
+      } else {
+        clearAnalysisTracking(photo.id);
+      }
+    });
+
+    // Update elapsed times every second
+    const interval = setInterval(() => {
+      const times: Record<string, number> = {};
+      photos.forEach(photo => {
+        if (!photo.analyzed_at) {
+          times[photo.id] = getElapsedTime(photo.id);
+        }
+      });
+      setElapsedTimes(times);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [photos]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('it-IT', {
@@ -262,7 +318,11 @@ export default function GalleryPage() {
                         <div className="absolute top-2 right-2">
                           <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
                             <Loader className="w-3 h-3 animate-spin" />
-                            <span>Analisi...</span>
+                            <span>
+                              {elapsedTimes[photo.id] > 0
+                                ? `${Math.floor(elapsedTimes[photo.id] / 60)}:${String(elapsedTimes[photo.id] % 60).padStart(2, '0')}`
+                                : 'Analisi...'}
+                            </span>
                           </div>
                         </div>
                       )}
