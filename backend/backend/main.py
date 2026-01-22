@@ -305,26 +305,38 @@ async def upload_photo(
 async def list_photos(
     limit: int = 50,
     offset: int = 0,
+    q: Optional[str] = None,  # Search query
+    scene_category: Optional[str] = None,  # Category filter
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List user's photos"""
-    # Get total count
-    total = (
-        db.query(Photo)
-        .filter(Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
-        .count()
+    """List user's photos with optional search and filters"""
+    # Base query
+    query = db.query(Photo).filter(
+        Photo.user_id == current_user.id,
+        Photo.deleted_at.is_(None)
     )
 
+    # Apply search filter
+    if q:
+        search_text = f"%{q}%"
+        query = query.join(PhotoAnalysis).filter(
+            (PhotoAnalysis.description_full.ilike(search_text)) |
+            (PhotoAnalysis.description_short.ilike(search_text)) |
+            (PhotoAnalysis.extracted_text.ilike(search_text))
+        )
+
+    # Apply category filter
+    if scene_category:
+        query = query.join(PhotoAnalysis).filter(
+            PhotoAnalysis.scene_category == scene_category
+        )
+
+    # Get total count
+    total = query.count()
+
     # Get photos
-    photos = (
-        db.query(Photo)
-        .filter(Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
-        .order_by(Photo.taken_at.desc())
-        .limit(limit)
-        .offset(offset)
-        .all()
-    )
+    photos = query.order_by(Photo.taken_at.desc()).limit(limit).offset(offset).all()
 
     return {
         "photos": photos,
@@ -425,6 +437,36 @@ async def get_photo_thumbnail(
         raise HTTPException(status_code=404, detail="Photo file not found")
 
     return FileResponse(file_path)
+
+
+@app.post("/api/photos/{photo_id}/reanalyze")
+async def reanalyze_photo(
+    photo_id: uuid.UUID,
+    detailed: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Reanalyze photo with vision AI (optionally with detailed model)"""
+    photo = (
+        db.query(Photo)
+        .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
+        .first()
+    )
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    file_path = Path(photo.original_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Photo file not found")
+
+    # Trigger reanalysis in background
+    asyncio.create_task(analyze_photo_background(photo.id, str(file_path)))
+
+    return {
+        "message": "Reanalysis started",
+        "photo_id": str(photo.id),
+        "detailed": detailed
+    }
 
 
 @app.delete("/api/photos/{photo_id}")
