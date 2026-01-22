@@ -32,9 +32,9 @@ export default function PhotoDetailPage() {
     queryKey: ['photo', photoId],
     queryFn: () => photosApi.getPhoto(photoId!),
     enabled: !!photoId,
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Auto-refresh while analysis is in progress
-      return data && !data.analyzed_at ? 2000 : false;
+      return query.state.data && !query.state.data.analyzed_at ? 2000 : false;
     },
   });
 
