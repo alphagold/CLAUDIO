@@ -373,6 +373,62 @@ async def download_photo(
     return FileResponse(file_path)
 
 
+@app.get("/api/photos/{photo_id}/file")
+async def get_photo_file(
+    photo_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get photo file for display (same as download but different endpoint name for frontend)"""
+    photo = (
+        db.query(Photo)
+        .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
+        .first()
+    )
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    file_path = Path(photo.original_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Photo file not found")
+
+    return FileResponse(file_path)
+
+
+@app.get("/api/photos/{photo_id}/thumbnail")
+async def get_photo_thumbnail(
+    photo_id: uuid.UUID,
+    size: int = 512,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get photo thumbnail (returns original if thumbnail doesn't exist)"""
+    photo = (
+        db.query(Photo)
+        .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
+        .first()
+    )
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    # Try to get thumbnail, fallback to original
+    thumbnail_path = None
+    if size <= 128 and photo.thumbnail_128_path:
+        thumbnail_path = Path(photo.thumbnail_128_path)
+    elif photo.thumbnail_512_path:
+        thumbnail_path = Path(photo.thumbnail_512_path)
+
+    # Use thumbnail if exists, otherwise use original
+    if thumbnail_path and thumbnail_path.exists():
+        return FileResponse(thumbnail_path)
+
+    file_path = Path(photo.original_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Photo file not found")
+
+    return FileResponse(file_path)
+
+
 @app.delete("/api/photos/{photo_id}")
 async def delete_photo(
     photo_id: uuid.UUID,
