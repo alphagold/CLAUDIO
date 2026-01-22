@@ -205,7 +205,7 @@ export default function UserManagement() {
                   <td className="px-4 py-3">
                     {(() => {
                       const roleInfo = ROLES[user.role];
-                      const colorClasses = {
+                      const colorClasses: Record<string, string> = {
                         purple: 'bg-purple-100 text-purple-700',
                         blue: 'bg-blue-100 text-blue-700',
                         gray: 'bg-gray-100 text-gray-700',
