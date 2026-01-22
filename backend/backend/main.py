@@ -376,13 +376,12 @@ async def download_photo(
 @app.get("/api/photos/{photo_id}/file")
 async def get_photo_file(
     photo_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get photo file for display (same as download but different endpoint name for frontend)"""
+    """Get photo file for display (no auth required for self-hosted use)"""
     photo = (
         db.query(Photo)
-        .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
+        .filter(Photo.id == photo_id, Photo.deleted_at.is_(None))
         .first()
     )
     if not photo:
@@ -399,13 +398,12 @@ async def get_photo_file(
 async def get_photo_thumbnail(
     photo_id: uuid.UUID,
     size: int = 512,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get photo thumbnail (returns original if thumbnail doesn't exist)"""
+    """Get photo thumbnail (no auth required for self-hosted use)"""
     photo = (
         db.query(Photo)
-        .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
+        .filter(Photo.id == photo_id, Photo.deleted_at.is_(None))
         .first()
     )
     if not photo:
