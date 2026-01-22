@@ -198,33 +198,53 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 def extract_exif_data(file_path: str) -> dict:
     """Extract EXIF metadata from image"""
+    exif_data = {}
+
     try:
         image = Image.open(file_path)
-        exif_data = {}
 
-        if hasattr(image, '_getexif') and image._getexif():
-            exif = image._getexif()
-            for tag_id, value in exif.items():
-                tag = TAGS.get(tag_id, tag_id)
-                # Convert bytes to string
-                if isinstance(value, bytes):
+        # Always get dimensions
+        try:
+            exif_data['Width'] = image.width
+            exif_data['Height'] = image.height
+        except:
+            pass
+
+        # Try to extract EXIF
+        try:
+            exif = image.getexif()
+            if exif:
+                for tag_id, value in exif.items():
                     try:
-                        value = value.decode()
-                    except:
-                        value = str(value)
-                # Skip complex objects
-                if not isinstance(value, (str, int, float, bool)):
-                    continue
-                exif_data[str(tag)] = value
+                        tag_name = TAGS.get(tag_id, f"Tag{tag_id}")
 
-        # Get image dimensions
-        exif_data['Width'] = image.width
-        exif_data['Height'] = image.height
+                        # Convert bytes to string
+                        if isinstance(value, bytes):
+                            try:
+                                value = value.decode('utf-8', errors='ignore')
+                            except:
+                                continue
 
-        return exif_data
+                        # Only keep simple types that JSON can handle
+                        if isinstance(value, (str, int, float, bool)):
+                            exif_data[str(tag_name)] = value
+                        elif isinstance(value, tuple) and len(value) <= 2:
+                            # Handle simple tuples (like rational numbers)
+                            exif_data[str(tag_name)] = f"{value[0]}/{value[1]}" if len(value) == 2 else str(value[0])
+                    except Exception as tag_error:
+                        # Skip problematic tags
+                        continue
+        except Exception as exif_error:
+            print(f"EXIF extraction warning: {exif_error}")
+            # Continue without EXIF, we at least have dimensions
+
+        image.close()
+
     except Exception as e:
-        print(f"Failed to extract EXIF: {e}")
-        return {}
+        print(f"Image processing error: {e}")
+        # Return empty dict, upload can still continue
+
+    return exif_data
 
 
 # ============================================================================
@@ -316,8 +336,12 @@ async def upload_photo(
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Extract EXIF metadata
-    exif_data = extract_exif_data(str(file_path))
+    # Extract EXIF metadata (safe - never fails)
+    try:
+        exif_data = extract_exif_data(str(file_path))
+    except Exception as e:
+        print(f"EXIF extraction failed completely: {e}")
+        exif_data = {}
 
     # Parse timestamp
     if taken_at:
@@ -327,14 +351,18 @@ async def upload_photo(
             taken_at_dt = datetime.utcnow()
     else:
         # Try to get date from EXIF
-        date_taken = exif_data.get('DateTimeOriginal') or exif_data.get('DateTime')
-        if date_taken:
-            try:
-                taken_at_dt = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
-            except:
-                taken_at_dt = datetime.utcnow()
-        else:
-            taken_at_dt = datetime.utcnow()
+        taken_at_dt = datetime.utcnow()
+        if exif_data:
+            date_taken = exif_data.get('DateTimeOriginal') or exif_data.get('DateTime')
+            if date_taken:
+                try:
+                    taken_at_dt = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
+                except:
+                    pass  # Keep default utcnow
+
+    # Get image dimensions
+    width = exif_data.get('Width') if exif_data else None
+    height = exif_data.get('Height') if exif_data else None
 
     # Create photo record
     photo = Photo(
@@ -345,8 +373,8 @@ async def upload_photo(
         latitude=latitude,
         longitude=longitude,
         file_size=file_path.stat().st_size,
-        width=exif_data.get('Width'),
-        height=exif_data.get('Height'),
+        width=width,
+        height=height,
         exif_data=exif_data if exif_data else None,
     )
     db.add(photo)
