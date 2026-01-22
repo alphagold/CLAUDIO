@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { photosApi } from '../api/client';
@@ -25,12 +25,54 @@ export default function PhotoDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showModelDialog, setShowModelDialog] = useState(false);
+  const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
   const { data: photo, isLoading } = useQuery({
     queryKey: ['photo', photoId],
     queryFn: () => photosApi.getPhoto(photoId!),
     enabled: !!photoId,
+    refetchInterval: (data) => {
+      // Auto-refresh while analysis is in progress
+      return data && !data.analyzed_at ? 2000 : false;
+    },
   });
+
+  // Track analysis time
+  useEffect(() => {
+    if (photo && !photo.analyzed_at && !analysisStartTime) {
+      // Analysis started
+      setAnalysisStartTime(Date.now());
+    } else if (photo && photo.analyzed_at && analysisStartTime) {
+      // Analysis completed
+      setAnalysisStartTime(null);
+      setElapsedTime(0);
+    }
+  }, [photo?.analyzed_at]);
+
+  // Update elapsed time every second during analysis
+  useEffect(() => {
+    if (!analysisStartTime) {
+      setElapsedTime(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - analysisStartTime) / 1000);
+      setElapsedTime(elapsed);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [analysisStartTime]);
+
+  const formatElapsedTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0) {
+      return `${mins}m ${secs}s`;
+    }
+    return `${secs}s`;
+  };
 
   const deleteMutation = useMutation({
     mutationFn: () => photosApi.deletePhoto(photoId!),
@@ -191,14 +233,22 @@ export default function PhotoDetailPage() {
             {/* Analysis Status */}
             {!photo.analyzed_at ? (
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
-                <div className="flex items-center space-x-3">
-                  <Loader className="w-6 h-6 text-yellow-600 animate-spin" />
-                  <div>
-                    <h3 className="font-semibold text-yellow-900">Analisi in corso</h3>
-                    <p className="text-sm text-yellow-700">
-                      L'AI sta analizzando questa foto...
-                    </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Loader className="w-6 h-6 text-yellow-600 animate-spin" />
+                    <div>
+                      <h3 className="font-semibold text-yellow-900">Analisi in corso</h3>
+                      <p className="text-sm text-yellow-700">
+                        L'AI sta analizzando questa foto...
+                      </p>
+                    </div>
                   </div>
+                  {elapsedTime > 0 && (
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-yellow-900">{formatElapsedTime(elapsedTime)}</div>
+                      <div className="text-xs text-yellow-700">tempo trascorso</div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (

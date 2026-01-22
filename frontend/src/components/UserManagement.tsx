@@ -24,20 +24,23 @@ export default function UserManagement() {
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const { data: users, isLoading } = useQuery({
+  const { data: users, isLoading, refetch } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
       const response = await apiClient.get<User[]>('/api/admin/users');
       return response.data;
     },
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: { email: string; password: string; full_name: string; role: string }) => {
       return apiClient.post('/api/admin/users', null, { params: data });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      await refetch();
       toast.success('Utente creato con successo');
       setShowCreateModal(false);
     },

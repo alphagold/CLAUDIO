@@ -212,7 +212,14 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 print(f"Photo {photo_id} not found")
                 return
 
-            # Save analysis
+            # Delete existing analysis if present
+            existing_analysis = db.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == photo.id).first()
+            if existing_analysis:
+                db.delete(existing_analysis)
+                db.flush()
+                print(f"Deleted existing analysis for photo {photo_id}")
+
+            # Save new analysis
             analysis = PhotoAnalysis(
                 photo_id=photo.id,
                 description_full=analysis_result["description_full"],
@@ -464,6 +471,10 @@ async def reanalyze_photo(
     file_path = Path(photo.original_path)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Photo file not found")
+
+    # Reset analyzed_at to show analysis is in progress
+    photo.analyzed_at = None
+    db.commit()
 
     # Trigger reanalysis in background with specified model
     asyncio.create_task(analyze_photo_background(photo.id, str(file_path), model))

@@ -4,8 +4,9 @@ Admin-only routes for system monitoring and logs
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from database import get_db
-from models import User
+from models import User, Photo
 import subprocess
 import os
 
@@ -107,9 +108,12 @@ async def get_system_status(
         except:
             containers.append({"name": container, "status": "unknown"})
 
-    # Get database stats
-    total_photos = db.query(func.count(Photo.id)).scalar()
-    analyzed_photos = db.query(func.count(Photo.id)).filter(Photo.analyzed_at.isnot(None)).scalar()
+    # Get database stats (exclude soft-deleted photos)
+    total_photos = db.query(func.count(Photo.id)).filter(Photo.deleted_at.is_(None)).scalar()
+    analyzed_photos = db.query(func.count(Photo.id)).filter(
+        Photo.analyzed_at.isnot(None),
+        Photo.deleted_at.is_(None)
+    ).scalar()
     pending_photos = total_photos - analyzed_photos
 
     # Get disk usage
