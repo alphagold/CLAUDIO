@@ -41,19 +41,12 @@ async def get_backend_logs(
     current_user: User = Depends(require_admin)
 ):
     """Get backend container logs (last N lines)"""
-    try:
-        result = subprocess.run(
-            ["docker", "logs", "photomemory-api", "--tail", str(lines)],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        return {
-            "logs": result.stdout + result.stderr,
-            "lines": lines
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch logs: {str(e)}")
+    # Note: Docker commands don't work from inside container
+    # Use 'docker compose logs api' on the host instead
+    return {
+        "logs": "Logs not available from within container.\nUse 'docker compose logs -f api' on the host server.",
+        "lines": 0
+    }
 
 
 @router.get("/logs/ollama")
@@ -62,19 +55,12 @@ async def get_ollama_logs(
     current_user: User = Depends(require_admin)
 ):
     """Get Ollama container logs (last N lines)"""
-    try:
-        result = subprocess.run(
-            ["docker", "logs", "photomemory-ollama", "--tail", str(lines)],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        return {
-            "logs": result.stdout + result.stderr,
-            "lines": lines
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch logs: {str(e)}")
+    # Note: Docker commands don't work from inside container
+    # Use 'docker compose logs ollama' on the host instead
+    return {
+        "logs": "Logs not available from within container.\nUse 'docker compose logs -f ollama' on the host server.",
+        "lines": 0
+    }
 
 
 @router.get("/status")
@@ -86,20 +72,14 @@ async def get_system_status(
     from models import Photo
     from sqlalchemy import func
 
-    # Get container status
-    containers = []
-    for container in ["photomemory-api", "photomemory-postgres", "photomemory-redis", "photomemory-minio", "photomemory-ollama"]:
-        try:
-            result = subprocess.run(
-                ["docker", "inspect", container, "--format", "{{.State.Status}}"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            status = result.stdout.strip()
-            containers.append({"name": container, "status": status})
-        except:
-            containers.append({"name": container, "status": "unknown"})
+    # Get container status (simplified - docker commands don't work from inside container)
+    containers = [
+        {"name": "photomemory-api", "status": "running"},  # If we're responding, API is running
+        {"name": "photomemory-postgres", "status": "running"},  # If DB query works, it's running
+        {"name": "photomemory-redis", "status": "unknown"},
+        {"name": "photomemory-minio", "status": "unknown"},
+        {"name": "photomemory-ollama", "status": "unknown"}
+    ]
 
     # Get database stats
     total_photos = db.query(func.count(Photo.id)).scalar()
