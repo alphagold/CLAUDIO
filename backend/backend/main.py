@@ -337,9 +337,24 @@ def extract_exif_data(file_path: str) -> dict:
                             """Convert GPS DMS (degrees, minutes, seconds) to decimal"""
                             try:
                                 print(f"Converting DMS to decimal: {dms_tuple}, ref={ref}")
-                                degrees = float(dms_tuple[0][0]) / float(dms_tuple[0][1])
-                                minutes = float(dms_tuple[1][0]) / float(dms_tuple[1][1])
-                                seconds = float(dms_tuple[2][0]) / float(dms_tuple[2][1])
+
+                                # Handle IFDRational objects or plain floats
+                                if hasattr(dms_tuple[0], 'numerator'):
+                                    # IFDRational object with fractions
+                                    degrees = float(dms_tuple[0].numerator) / float(dms_tuple[0].denominator)
+                                    minutes = float(dms_tuple[1].numerator) / float(dms_tuple[1].denominator)
+                                    seconds = float(dms_tuple[2].numerator) / float(dms_tuple[2].denominator)
+                                elif isinstance(dms_tuple[0], tuple):
+                                    # Tuple of (numerator, denominator)
+                                    degrees = float(dms_tuple[0][0]) / float(dms_tuple[0][1])
+                                    minutes = float(dms_tuple[1][0]) / float(dms_tuple[1][1])
+                                    seconds = float(dms_tuple[2][0]) / float(dms_tuple[2][1])
+                                else:
+                                    # Already decimal values
+                                    degrees = float(dms_tuple[0])
+                                    minutes = float(dms_tuple[1])
+                                    seconds = float(dms_tuple[2])
+
                                 decimal = degrees + (minutes / 60) + (seconds / 3600)
                                 if ref in ['S', 'W']:
                                     decimal = -decimal
@@ -607,6 +622,31 @@ async def list_photos(
         "skip": offset,
         "limit": limit
     }
+
+
+@app.get("/api/photos/tags/all")
+async def get_all_tags(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all unique tags from user's analyzed photos"""
+    # Get all photo analyses for user
+    analyses = db.query(PhotoAnalysis).join(Photo).filter(
+        Photo.user_id == current_user.id,
+        Photo.deleted_at.is_(None),
+        PhotoAnalysis.tags.isnot(None)
+    ).all()
+
+    # Collect all unique tags
+    tags_set = set()
+    for analysis in analyses:
+        if analysis.tags:
+            tags_set.update(analysis.tags)
+
+    # Sort alphabetically
+    tags_list = sorted(list(tags_set))
+
+    return {"tags": tags_list, "count": len(tags_list)}
 
 
 @app.get("/api/photos/{photo_id}", response_model=schemas.PhotoResponse)

@@ -132,6 +132,11 @@ export const photosApi = {
   getThumbnailUrl: (photoId: string, size: number = 512): string => {
     return `${API_BASE_URL}/api/photos/${photoId}/thumbnail?size=${size}`;
   },
+
+  getAllTags: async (): Promise<{ tags: string[]; count: number }> => {
+    const response = await apiClient.get('/api/photos/tags/all');
+    return response.data;
+  },
 };
 
 // Albums API

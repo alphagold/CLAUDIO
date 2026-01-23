@@ -43,19 +43,20 @@ export default function GalleryPage() {
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedTag, setSelectedTag] = useState<string>('');
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['photos', activeQuery, selectedCategory],
+    queryKey: ['photos', activeQuery, selectedTag],
     queryFn: async () => {
+      // If tag filter, search by tag
+      if (selectedTag) {
+        const searchResults = await photosApi.searchPhotos(selectedTag, 100);
+        return { photos: searchResults, total: searchResults.length, skip: 0, limit: 100 };
+      }
       // If searching, use search functionality
       if (activeQuery) {
         const searchResults = await photosApi.searchPhotos(activeQuery, 100);
         return { photos: searchResults, total: searchResults.length, skip: 0, limit: 100 };
-      }
-      // If category filter, use category filter
-      if (selectedCategory) {
-        return photosApi.getPhotos({ scene_category: selectedCategory, limit: 100 });
       }
       // Otherwise get all photos
       return photosApi.getPhotos({ limit: 100 });
@@ -70,15 +71,13 @@ export default function GalleryPage() {
 
   const photos = data?.photos || [];
 
-  // Categories for search
-  const categories = [
-    { value: 'food', label: 'Cibo', icon: '🍕' },
-    { value: 'outdoor', label: 'All\'aperto', icon: '🏞️' },
-    { value: 'indoor', label: 'Interni', icon: '🏠' },
-    { value: 'people', label: 'Persone', icon: '👥' },
-    { value: 'document', label: 'Documenti', icon: '📄' },
-    { value: 'receipt', label: 'Scontrini', icon: '🧾' },
-  ];
+  // Fetch all available tags
+  const { data: tagsData } = useQuery({
+    queryKey: ['tags'],
+    queryFn: () => photosApi.getAllTags(),
+  });
+
+  const availableTags = tagsData?.tags || [];
 
   // Track analysis times
   useEffect(() => {
@@ -138,18 +137,18 @@ export default function GalleryPage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setActiveQuery(searchQuery);
-    setSelectedCategory('');
+    setSelectedTag('');
   };
 
-  const handleCategoryFilter = (category: string) => {
-    setSelectedCategory(category);
+  const handleTagFilter = (tag: string) => {
+    setSelectedTag(tag);
     setActiveQuery('');
     setSearchQuery('');
   };
 
   const clearSearch = () => {
     setActiveQuery('');
-    setSelectedCategory('');
+    setSelectedTag('');
     setSearchQuery('');
   };
 
@@ -253,7 +252,7 @@ export default function GalleryPage() {
             <h1 className="text-3xl font-bold text-gray-900">La tua Galleria</h1>
             <p className="text-gray-600 mt-1">
               {photos.length} {photos.length === 1 ? 'foto' : 'foto'}
-              {(activeQuery || selectedCategory) && ' (filtrate)'}
+              {(activeQuery || selectedTag) && ' (filtrate)'}
             </p>
           </div>
           <div className="flex items-center space-x-3">
@@ -333,7 +332,7 @@ export default function GalleryPage() {
               placeholder="Cerca 'cibo italiano', 'vacanza in montagna', 'foto con amici'..."
               className="w-full pl-12 pr-24 py-3 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
             />
-            {(activeQuery || selectedCategory) && (
+            {(activeQuery || selectedTag) && (
               <button
                 type="button"
                 onClick={clearSearch}
@@ -345,29 +344,30 @@ export default function GalleryPage() {
           </form>
         </div>
 
-        {/* Category Filters */}
-        <div className="mb-6">
-          <div className="flex items-center space-x-2 mb-3">
-            <Filter className="w-4 h-4 text-gray-600" />
-            <h2 className="text-sm font-semibold text-gray-700">Filtra per Categoria</h2>
+        {/* Tag Filters */}
+        {availableTags.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center space-x-2 mb-3">
+              <Filter className="w-4 h-4 text-gray-600" />
+              <h2 className="text-sm font-semibold text-gray-700">Filtra per Tag ({availableTags.length})</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {availableTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => handleTagFilter(tag)}
+                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    selectedTag === tag
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                  }`}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {categories.map((category) => (
-              <button
-                key={category.value}
-                onClick={() => handleCategoryFilter(category.value)}
-                className={`p-3 rounded-lg border-2 transition-all ${
-                  selectedCategory === category.value
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300 bg-white'
-                }`}
-              >
-                <div className="text-2xl mb-1">{category.icon}</div>
-                <div className="text-xs font-medium text-gray-900">{category.label}</div>
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* Bulk Action Toolbar */}
         {selectMode && (
