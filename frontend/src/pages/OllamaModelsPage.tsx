@@ -22,7 +22,6 @@ interface OllamaStatus {
 
 export default function OllamaModelsPage() {
   const queryClient = useQueryClient();
-  const [showPullDialog, setShowPullDialog] = useState(false);
   const [modelToPull, setModelToPull] = useState('');
 
   // Fetch models list
