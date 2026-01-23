@@ -162,7 +162,10 @@ async def list_users(
         "is_admin": user.is_admin,
         "role": user.role,
         "created_at": user.created_at.isoformat(),
-        "photo_count": db.query(func.count(Photo.id)).filter(Photo.user_id == user.id).scalar()
+        "photo_count": db.query(func.count(Photo.id)).filter(
+            Photo.user_id == user.id,
+            Photo.deleted_at.is_(None)
+        ).scalar()
     } for user in users]
 
 

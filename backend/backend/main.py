@@ -193,6 +193,45 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 # ============================================================================
+# ANALYSIS QUEUE
+# ============================================================================
+
+# Global queue for photo analysis tasks
+analysis_queue = asyncio.Queue()
+analysis_worker_started = False
+
+async def analysis_worker():
+    """Worker that processes analysis tasks one at a time"""
+    print("Analysis worker started")
+    while True:
+        try:
+            photo_id, file_path, model = await analysis_queue.get()
+            print(f"Processing analysis for photo {photo_id} (queue size: {analysis_queue.qsize()})")
+            await analyze_photo_background(photo_id, file_path, model)
+            analysis_queue.task_done()
+        except Exception as e:
+            print(f"Analysis worker error: {e}")
+            # Continue processing next item
+            analysis_queue.task_done()
+
+def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None):
+    """Add photo to analysis queue"""
+    global analysis_worker_started
+
+    # Start worker if not already running
+    if not analysis_worker_started:
+        asyncio.create_task(analysis_worker())
+        analysis_worker_started = True
+
+    # Add to queue (non-blocking)
+    try:
+        analysis_queue.put_nowait((photo_id, file_path, model))
+        print(f"Added photo {photo_id} to analysis queue (position: {analysis_queue.qsize()})")
+    except asyncio.QueueFull:
+        print(f"Analysis queue full! Skipping photo {photo_id}")
+
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -432,11 +471,22 @@ async def upload_photo(
     db.commit()
     db.refresh(photo)
 
-    # Start background analysis with Llama 3.2 Vision (non-blocking)
+    # Add to analysis queue (processed one at a time)
     # User gets immediate response, analysis happens in background
-    asyncio.create_task(analyze_photo_background(photo.id, str(file_path)))
+    enqueue_analysis(photo.id, str(file_path))
 
     return photo
+
+
+@app.get("/api/photos/queue-status")
+async def get_queue_status(
+    current_user: User = Depends(get_current_user)
+):
+    """Get analysis queue status"""
+    return {
+        "queue_size": analysis_queue.qsize(),
+        "worker_running": analysis_worker_started
+    }
 
 
 @app.get("/api/photos", response_model=schemas.PhotosListResponse)
@@ -606,13 +656,14 @@ async def reanalyze_photo(
     photo.analyzed_at = None
     db.commit()
 
-    # Trigger reanalysis in background with specified model
-    asyncio.create_task(analyze_photo_background(photo.id, str(file_path), model))
+    # Add to analysis queue with specified model
+    enqueue_analysis(photo.id, str(file_path), model)
 
     return {
         "message": "Reanalysis started",
         "photo_id": str(photo.id),
-        "model": model
+        "model": model,
+        "queue_position": analysis_queue.qsize()
     }
 
 
