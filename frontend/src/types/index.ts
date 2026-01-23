@@ -50,7 +50,9 @@ export interface Photo {
   height: number | null;
   taken_at: string;
   uploaded_at: string;
+  analysis_started_at: string | null;
   analyzed_at: string | null;
+  analysis_duration_seconds: number | null;
   latitude: number | null;
   longitude: number | null;
   location_name: string | null;

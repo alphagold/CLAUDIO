@@ -11,26 +11,11 @@ import PhotoSkeleton from '../components/PhotoSkeleton';
 type SortOption = 'date' | 'year' | 'month' | 'day';
 type ViewMode = 'grid-small' | 'grid-large' | 'list' | 'details';
 
-// Helper to get elapsed time for a photo
-const getElapsedTime = (photoId: string): number => {
-  const key = `analysis_start_${photoId}`;
-  const startTime = localStorage.getItem(key);
-  if (!startTime) return 0;
-  return Math.floor((Date.now() - parseInt(startTime)) / 1000);
-};
-
-// Helper to track analysis start
-const trackAnalysisStart = (photoId: string) => {
-  const key = `analysis_start_${photoId}`;
-  if (!localStorage.getItem(key)) {
-    localStorage.setItem(key, Date.now().toString());
-  }
-};
-
-// Helper to clear analysis tracking
-const clearAnalysisTracking = (photoId: string) => {
-  const key = `analysis_start_${photoId}`;
-  localStorage.removeItem(key);
+// Helper to get elapsed time for a photo from analysis_started_at
+const getElapsedTime = (photo: Photo): number => {
+  if (!photo.analysis_started_at) return 0;
+  const startTime = new Date(photo.analysis_started_at).getTime();
+  return Math.floor((Date.now() - startTime) / 1000);
 };
 
 export default function GalleryPage() {
@@ -87,25 +72,16 @@ export default function GalleryPage() {
 
   const availableTags = tagsData?.tags || [];
 
-  // Track analysis times
+  // Track analysis times using server timestamps
   useEffect(() => {
     if (photos.length === 0) return;
 
-    // Mark photos being analyzed
-    photos.forEach(photo => {
-      if (!photo.analyzed_at) {
-        trackAnalysisStart(photo.id);
-      } else {
-        clearAnalysisTracking(photo.id);
-      }
-    });
-
-    // Update elapsed times every second
+    // Update elapsed times every second for analyzing photos
     const interval = setInterval(() => {
       const times: Record<string, number> = {};
       photos.forEach(photo => {
-        if (!photo.analyzed_at) {
-          times[photo.id] = getElapsedTime(photo.id);
+        if (!photo.analyzed_at && photo.analysis_started_at) {
+          times[photo.id] = getElapsedTime(photo);
         }
       });
       setElapsedTimes(times);

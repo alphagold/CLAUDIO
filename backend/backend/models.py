@@ -40,7 +40,9 @@ class Photo(Base):
     # Timestamps
     taken_at = Column(TIMESTAMP(timezone=True), nullable=False)
     uploaded_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    analysis_started_at = Column(TIMESTAMP(timezone=True))
     analyzed_at = Column(TIMESTAMP(timezone=True))
+    analysis_duration_seconds = Column(Integer)  # Total time to complete analysis
 
     # Location
     latitude = Column(DECIMAL(10, 8))

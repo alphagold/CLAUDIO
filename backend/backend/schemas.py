@@ -73,7 +73,9 @@ class PhotoResponse(PhotoBase):
     thumbnail_128_path: Optional[str]
     thumbnail_512_path: Optional[str]
     uploaded_at: datetime
+    analysis_started_at: Optional[datetime]
     analyzed_at: Optional[datetime]
+    analysis_duration_seconds: Optional[int]
     has_text: bool
     has_faces: bool
     is_food: bool

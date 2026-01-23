@@ -460,6 +460,23 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
         model_name = model or "llama3.2-vision"
         print(f"Starting background analysis for photo {photo_id} with {model_name}...")
 
+        # Mark analysis start time immediately
+        db = SessionLocal()
+        try:
+            photo = db.query(Photo).filter(Photo.id == photo_id).first()
+            if not photo:
+                print(f"Photo {photo_id} not found")
+                return
+
+            # Save analysis start timestamp
+            photo.analysis_started_at = datetime.utcnow()
+            db.commit()
+            print(f"Analysis started at {photo.analysis_started_at} for photo {photo_id}")
+        except Exception as e:
+            print(f"Failed to mark analysis start: {e}")
+        finally:
+            db.close()
+
         # Analyze with specified model
         analysis_result = await vision_client.analyze_photo(file_path, model=model)
 
@@ -500,7 +517,16 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             photo.has_text = bool(analysis_result.get("extracted_text"))
             photo.is_food = analysis_result.get("scene_category") == "food"
             photo.is_document = analysis_result.get("scene_category") in ["document", "receipt"]
-            photo.analyzed_at = datetime.utcnow()
+
+            # Mark completion time and calculate duration
+            analysis_end_time = datetime.utcnow()
+            photo.analyzed_at = analysis_end_time
+
+            # Calculate analysis duration if start time exists
+            if photo.analysis_started_at:
+                duration = (analysis_end_time - photo.analysis_started_at).total_seconds()
+                photo.analysis_duration_seconds = int(duration)
+                print(f"Analysis took {duration:.1f} seconds for photo {photo_id}")
 
             db.commit()
             print(f"Analysis completed for photo {photo_id}")
