@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { authApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import { Images, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Images, Mail, Lock, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
 import type { LoginRequest } from '../types';
 
 export default function LoginPage() {
@@ -33,17 +33,29 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-pink-500 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-300/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+      </div>
+
+      <div className="max-w-md w-full bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 relative z-10 border border-white/20 animate-fade-in">
         {/* Logo and Title */}
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="bg-blue-600 p-3 rounded-xl">
-              <Images className="w-10 h-10 text-white" />
+          <div className="flex justify-center mb-4 relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur-lg opacity-50 animate-pulse"></div>
+            <div className="relative bg-gradient-to-r from-blue-600 to-purple-600 p-4 rounded-2xl shadow-lg transform hover:scale-110 transition-transform duration-300">
+              <Images className="w-12 h-12 text-white" />
+              <div className="absolute -top-1 -right-1">
+                <Sparkles className="w-6 h-6 text-yellow-300 animate-pulse" />
+              </div>
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Photo Memory</h1>
-          <p className="text-gray-600 mt-2">Accedi al tuo account</p>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-2">
+            Photo Memory
+          </h1>
+          <p className="text-gray-600 text-lg">Benvenuto! Accedi al tuo account</p>
         </div>
 
         {/* Error Message */}
@@ -98,9 +110,12 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loginMutation.isPending}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+            className="group w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold hover:from-blue-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center space-x-2"
           >
-            {loginMutation.isPending ? 'Accesso in corso...' : 'Accedi'}
+            <span>{loginMutation.isPending ? 'Accesso in corso...' : 'Accedi'}</span>
+            {!loginMutation.isPending && (
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            )}
           </button>
         </form>
 

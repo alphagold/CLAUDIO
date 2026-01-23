@@ -95,32 +95,42 @@ export default function SystemMetricsMonitor() {
       </div>
 
       {/* Current Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border border-blue-200">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-blue-900">CPU Usage</span>
-            <Cpu className="w-5 h-5 text-blue-600" />
-          </div>
-          <p className="text-3xl font-bold text-blue-900">{currentCpu}%</p>
-          <div className="w-full bg-blue-200 rounded-full h-2 mt-2">
-            <div
-              className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-              style={{ width: `${currentCpu}%` }}
-            ></div>
+      <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="group relative bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 border border-blue-200/50 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-blue-900">CPU Usage</span>
+              <div className="p-2 bg-blue-600/10 rounded-lg">
+                <Cpu className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
+            <p className="text-4xl font-bold text-blue-900 mb-3">{currentCpu}<span className="text-2xl">%</span></p>
+            <div className="w-full bg-blue-200 rounded-full h-3 shadow-inner">
+              <div
+                className="bg-gradient-to-r from-blue-600 to-blue-500 h-3 rounded-full transition-all duration-500 shadow-sm"
+                style={{ width: `${currentCpu}%` }}
+              ></div>
+            </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-4 border border-pink-200">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-pink-900">RAM Usage</span>
-            <MemoryStick className="w-5 h-5 text-pink-600" />
-          </div>
-          <p className="text-3xl font-bold text-pink-900">{currentRam}%</p>
-          <div className="w-full bg-pink-200 rounded-full h-2 mt-2">
-            <div
-              className="bg-pink-600 h-2 rounded-full transition-all duration-500"
-              style={{ width: `${currentRam}%` }}
-            ></div>
+        <div className="group relative bg-gradient-to-br from-pink-50 to-pink-100 rounded-2xl p-6 border border-pink-200/50 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-pink-600/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-pink-900">RAM Usage</span>
+              <div className="p-2 bg-pink-600/10 rounded-lg">
+                <MemoryStick className="w-5 h-5 text-pink-600" />
+              </div>
+            </div>
+            <p className="text-4xl font-bold text-pink-900 mb-3">{currentRam}<span className="text-2xl">%</span></p>
+            <div className="w-full bg-pink-200 rounded-full h-3 shadow-inner">
+              <div
+                className="bg-gradient-to-r from-pink-600 to-pink-500 h-3 rounded-full transition-all duration-500 shadow-sm"
+                style={{ width: `${currentRam}%` }}
+              ></div>
+            </div>
           </div>
         </div>
       </div>
