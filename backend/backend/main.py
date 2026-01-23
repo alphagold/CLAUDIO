@@ -378,6 +378,19 @@ def extract_exif_data(file_path: str) -> dict:
         print(f"Image processing error: {e}")
         # Return empty dict, upload can still continue
 
+    # Sanitize EXIF data: remove null bytes that PostgreSQL can't handle
+    def sanitize_value(value):
+        """Remove null bytes from strings"""
+        if isinstance(value, str):
+            return value.replace('\x00', '').replace('\u0000', '')
+        elif isinstance(value, dict):
+            return {k: sanitize_value(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [sanitize_value(item) for item in value]
+        return value
+
+    exif_data = sanitize_value(exif_data)
+
     return exif_data
 
 

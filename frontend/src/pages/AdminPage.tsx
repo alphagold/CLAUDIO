@@ -45,7 +45,6 @@ export default function AdminPage() {
       const response = await apiClient.get('/api/admin/status');
       return response.data;
     },
-    refetchInterval: 10000, // Auto-refresh every 10 seconds
   });
 
   // Fetch logs
@@ -55,7 +54,6 @@ export default function AdminPage() {
       const response = await apiClient.get(`/api/admin/logs/${logType}?lines=${logLines}`);
       return response.data;
     },
-    refetchInterval: 5000, // Auto-refresh every 5 seconds
   });
 
   const getStatusColor = (status: string) => {
@@ -235,6 +233,15 @@ export default function AdminPage() {
                 <option value={200}>200 lines</option>
                 <option value={500}>500 lines</option>
               </select>
+
+              {/* Refresh Logs Button */}
+              <button
+                onClick={() => refetchLogs()}
+                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                title="Aggiorna logs"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
