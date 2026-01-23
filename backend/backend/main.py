@@ -197,7 +197,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 # ============================================================================
 
 def extract_exif_data(file_path: str) -> dict:
-    """Extract EXIF metadata from image"""
+    """Extract EXIF metadata from image - comprehensive extraction"""
     exif_data = {}
 
     try:
@@ -218,22 +218,73 @@ def extract_exif_data(file_path: str) -> dict:
                     try:
                         tag_name = TAGS.get(tag_id, f"Tag{tag_id}")
 
-                        # Convert bytes to string
-                        if isinstance(value, bytes):
+                        # Convert value to JSON-serializable format
+                        if value is None:
+                            continue
+                        elif isinstance(value, bytes):
+                            # Try to decode as string
                             try:
-                                value = value.decode('utf-8', errors='ignore')
+                                exif_data[str(tag_name)] = value.decode('utf-8', errors='ignore').strip('\x00')
                             except:
-                                continue
-
-                        # Only keep simple types that JSON can handle
-                        if isinstance(value, (str, int, float, bool)):
+                                # If fails, store as hex
+                                exif_data[str(tag_name)] = value.hex()
+                        elif isinstance(value, (str, int, float, bool)):
                             exif_data[str(tag_name)] = value
-                        elif isinstance(value, tuple) and len(value) <= 2:
-                            # Handle simple tuples (like rational numbers)
-                            exif_data[str(tag_name)] = f"{value[0]}/{value[1]}" if len(value) == 2 else str(value[0])
+                        elif isinstance(value, tuple):
+                            # Handle tuples (rational numbers, coordinates, etc.)
+                            if len(value) == 2 and all(isinstance(x, int) for x in value):
+                                # Rational number (e.g., 1/100 for exposure)
+                                if value[1] != 0:
+                                    exif_data[str(tag_name)] = f"{value[0]}/{value[1]}"
+                                else:
+                                    exif_data[str(tag_name)] = str(value[0])
+                            else:
+                                # Other tuples, convert to string
+                                exif_data[str(tag_name)] = str(value)
+                        elif isinstance(value, list):
+                            # Convert list to string representation
+                            exif_data[str(tag_name)] = str(value)
+                        elif isinstance(value, dict):
+                            # GPS data or other nested dicts - flatten
+                            for sub_key, sub_value in value.items():
+                                try:
+                                    sub_tag_name = f"{tag_name}_{sub_key}"
+                                    if isinstance(sub_value, (str, int, float)):
+                                        exif_data[sub_tag_name] = sub_value
+                                    elif isinstance(sub_value, tuple) and len(sub_value) == 2:
+                                        exif_data[sub_tag_name] = f"{sub_value[0]}/{sub_value[1]}"
+                                    else:
+                                        exif_data[sub_tag_name] = str(sub_value)
+                                except:
+                                    pass
+                        else:
+                            # Last resort - convert to string
+                            exif_data[str(tag_name)] = str(value)
+
                     except Exception as tag_error:
-                        # Skip problematic tags
+                        # Log but continue
+                        print(f"Error processing tag {tag_name}: {tag_error}")
                         continue
+
+                # Extract GPS info separately if available
+                try:
+                    gps_info = exif.get_ifd(0x8825)  # GPS IFD
+                    if gps_info:
+                        from PIL.ExifTags import GPSTAGS
+                        for tag_id, value in gps_info.items():
+                            tag_name = GPSTAGS.get(tag_id, f"GPS_{tag_id}")
+                            try:
+                                if isinstance(value, bytes):
+                                    exif_data[tag_name] = value.decode('utf-8', errors='ignore')
+                                elif isinstance(value, tuple) and len(value) == 2:
+                                    exif_data[tag_name] = f"{value[0]}/{value[1]}"
+                                else:
+                                    exif_data[tag_name] = str(value)
+                            except:
+                                pass
+                except:
+                    pass
+
         except Exception as exif_error:
             print(f"EXIF extraction warning: {exif_error}")
             # Continue without EXIF, we at least have dimensions
