@@ -256,6 +256,27 @@ Questo è un progetto self-hosted personale. Fork, modifiche e suggerimenti sono
 
 ## 📝 Changelog
 
+### v1.1.0 (2026-01-23) - Latest
+- ⏱️ **Timing Analisi AI**: Tracciamento preciso tempo di analisi server-side
+  - Nuovo campo `analysis_started_at` per timestamp inizio analisi
+  - Nuovo campo `analysis_duration_seconds` per durata totale
+  - Timer preciso basato su timestamp server (non localStorage client)
+- 🎨 **UI/UX Modernizzata**: Design aggiornato su tutte le pagine
+  - RegisterPage: Gradient animati, glassmorphism, pulsanti moderni
+  - MapPage: Marker custom animati con pulse, popup migliorati
+  - Animazioni fade-in su tutte le card della galleria e dettagli
+  - PhotoUpload: Effetti gradient e drop zone animata
+- ⚡ **Performance Ottimizzate**:
+  - Code splitting con React.lazy() su tutte le pagine
+  - Suspense con loading fallback moderno
+  - React.memo per componenti skeleton
+  - Bundle size ridotto con lazy loading
+- 🎨 **Stili Custom**: Marker e popup Leaflet personalizzati con animazioni
+- 🐛 **Fix**: Correzione TypeScript per accesso PhotoUploadResponse
+- 📚 **Documentazione**: CHANGELOG.md e guide migrazione database
+
+⚠️ **Breaking Change**: Schema database aggiornato. Vedi [CHANGELOG.md](CHANGELOG.md) per istruzioni migrazione.
+
 ### v1.0.3 (2026-01-23)
 - 📊 Aggiunto monitoraggio CPU e RAM nel pannello admin
 - 🗑️ Fix cancellazione fisica file al delete (prima solo soft delete)
