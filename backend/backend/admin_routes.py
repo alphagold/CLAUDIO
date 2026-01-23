@@ -402,3 +402,147 @@ async def record_current_metrics(
             raise HTTPException(status_code=500, detail=f"Error recording metrics: {str(e)}")
     else:
         raise HTTPException(status_code=503, detail="psutil not available")
+
+
+# ==========================================
+# Ollama Model Management Endpoints
+# ==========================================
+
+@router.get("/ollama/models")
+async def list_ollama_models(
+    current_user: User = Depends(require_admin)
+):
+    """List all downloaded Ollama models"""
+    import httpx
+    from config import settings
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{settings.OLLAMA_HOST}/api/tags", timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+
+            models = []
+            for model in data.get("models", []):
+                models.append({
+                    "name": model.get("name"),
+                    "size": model.get("size", 0),
+                    "modified_at": model.get("modified_at"),
+                    "digest": model.get("digest", "")[:12]  # Short digest
+                })
+
+            return {
+                "models": models,
+                "count": len(models)
+            }
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Cannot connect to Ollama: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing models: {str(e)}")
+
+
+@router.post("/ollama/models/pull")
+async def pull_ollama_model(
+    model_name: str,
+    current_user: User = Depends(require_admin)
+):
+    """Download an Ollama model (runs in background)"""
+    import httpx
+    from config import settings
+
+    try:
+        # Start pull in background (non-blocking)
+        async with httpx.AsyncClient() as client:
+            # Just trigger the pull, don't wait for completion
+            response = await client.post(
+                f"{settings.OLLAMA_HOST}/api/pull",
+                json={"name": model_name},
+                timeout=5.0  # Quick timeout, download continues in background
+            )
+
+            if response.status_code == 200:
+                return {
+                    "message": f"Started downloading {model_name}",
+                    "model": model_name,
+                    "status": "downloading"
+                }
+            else:
+                raise HTTPException(status_code=response.status_code, detail="Failed to start download")
+
+    except httpx.TimeoutException:
+        # Timeout is expected - download continues in background
+        return {
+            "message": f"Download started for {model_name} (running in background)",
+            "model": model_name,
+            "status": "downloading"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error pulling model: {str(e)}")
+
+
+@router.delete("/ollama/models/{model_name}")
+async def delete_ollama_model(
+    model_name: str,
+    current_user: User = Depends(require_admin)
+):
+    """Delete an Ollama model"""
+    import httpx
+    from config import settings
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                f"{settings.OLLAMA_HOST}/api/delete",
+                json={"name": model_name},
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                return {
+                    "message": f"Model {model_name} deleted successfully",
+                    "model": model_name
+                }
+            else:
+                raise HTTPException(status_code=response.status_code, detail="Failed to delete model")
+
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=503, detail=f"Cannot connect to Ollama: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting model: {str(e)}")
+
+
+@router.get("/ollama/status")
+async def get_ollama_status(
+    current_user: User = Depends(require_admin)
+):
+    """Get Ollama service status and available models"""
+    import httpx
+    from config import settings
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Check if Ollama is running
+            response = await client.get(f"{settings.OLLAMA_HOST}/api/tags", timeout=5.0)
+            response.raise_for_status()
+            data = response.json()
+
+            models = data.get("models", [])
+            total_size = sum(model.get("size", 0) for model in models)
+
+            return {
+                "status": "online",
+                "host": settings.OLLAMA_HOST,
+                "models_count": len(models),
+                "total_size": total_size,
+                "total_size_gb": round(total_size / (1024**3), 2)
+            }
+    except httpx.RequestError:
+        return {
+            "status": "offline",
+            "host": settings.OLLAMA_HOST,
+            "models_count": 0,
+            "total_size": 0,
+            "total_size_gb": 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error checking Ollama status: {str(e)}")

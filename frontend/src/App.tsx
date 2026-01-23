@@ -16,6 +16,7 @@ const MapPage = lazy(() => import('./pages/MapPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'));
 const SystemMonitoringPage = lazy(() => import('./pages/SystemMonitoringPage'));
+const OllamaModelsPage = lazy(() => import('./pages/OllamaModelsPage'));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -166,6 +167,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <SystemMonitoringPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/models"
+            element={
+              <ProtectedRoute>
+                <OllamaModelsPage />
               </ProtectedRoute>
             }
           />
