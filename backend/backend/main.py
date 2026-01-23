@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import shutil
 import uuid
@@ -79,7 +79,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(user_id: str) -> str:
     """Create JWT access token"""
-    expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRATION_MINUTES)
     to_encode = {
         "sub": str(user_id),
         "exp": expire
@@ -143,7 +143,7 @@ async def health_check(db: Session = Depends(get_db)):
     return {
         "status": "ok",
         "version": settings.VERSION,
-        "timestamp": datetime.utcnow(),
+        "timestamp": datetime.now(timezone.utc),
         "services": services
     }
 
@@ -469,7 +469,7 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 return
 
             # Save analysis start timestamp
-            photo.analysis_started_at = datetime.utcnow()
+            photo.analysis_started_at = datetime.now(timezone.utc)
             db.commit()
             print(f"Analysis started at {photo.analysis_started_at} for photo {photo_id}")
         except Exception as e:
@@ -519,7 +519,7 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             photo.is_document = analysis_result.get("scene_category") in ["document", "receipt"]
 
             # Mark completion time and calculate duration
-            analysis_end_time = datetime.utcnow()
+            analysis_end_time = datetime.now(timezone.utc)
             photo.analyzed_at = analysis_end_time
 
             # Calculate analysis duration if start time exists
@@ -577,10 +577,10 @@ async def upload_photo(
         try:
             taken_at_dt = datetime.fromisoformat(taken_at.replace('Z', '+00:00'))
         except:
-            taken_at_dt = datetime.utcnow()
+            taken_at_dt = datetime.now(timezone.utc)
     else:
         # Try to get date from EXIF
-        taken_at_dt = datetime.utcnow()
+        taken_at_dt = datetime.now(timezone.utc)
         if exif_data:
             date_taken = exif_data.get('DateTimeOriginal') or exif_data.get('DateTime')
             if date_taken:
@@ -902,7 +902,7 @@ async def delete_photo(
         raise HTTPException(status_code=404, detail="Photo not found")
 
     # Soft delete in DB
-    photo.deleted_at = datetime.utcnow()
+    photo.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
     # Delete physical files
