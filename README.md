@@ -36,8 +36,9 @@ Sistema self-hosted per la gestione intelligente di foto con AI, analisi automat
 - **Gestione utenti** con ruoli (admin, editor, viewer)
 - **Monitoraggio sistema** con status container
 - **Visualizzazione log** backend e Ollama
-- **Statistiche** foto, analisi, spazio disco
+- **Statistiche** foto, analisi, spazio disco, CPU e RAM
 - **Refresh manuale** per log e status
+- **Cancellazione fisica** file e aggiornamento spazio reale
 
 ## 🛠️ Stack Tecnologico
 
@@ -254,6 +255,12 @@ VITE_API_URL=http://your-server-ip:8000
 Questo è un progetto self-hosted personale. Fork, modifiche e suggerimenti sono benvenuti!
 
 ## 📝 Changelog
+
+### v1.0.3 (2026-01-23)
+- 📊 Aggiunto monitoraggio CPU e RAM nel pannello admin
+- 🗑️ Fix cancellazione fisica file al delete (prima solo soft delete)
+- 💾 Spazio disco ora riflette l'occupazione reale
+- ⚡ Migliorata accuratezza statistiche storage
 
 ### v1.0.2 (2026-01-23)
 - 🐛 Fix errore pagina bianca al click su foto

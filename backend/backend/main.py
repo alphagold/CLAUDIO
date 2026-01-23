@@ -15,6 +15,8 @@ from pathlib import Path
 import time
 import asyncio
 import httpx
+import psutil
+import os
 from PIL import Image
 from PIL.ExifTags import TAGS
 
@@ -865,7 +867,7 @@ async def delete_photo(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete photo (soft delete)"""
+    """Delete photo (soft delete in DB + physical file deletion)"""
     photo = (
         db.query(Photo)
         .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
@@ -874,8 +876,20 @@ async def delete_photo(
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
+    # Soft delete in DB
     photo.deleted_at = datetime.utcnow()
     db.commit()
+
+    # Delete physical files
+    try:
+        if photo.original_path and os.path.exists(photo.original_path):
+            os.remove(photo.original_path)
+        if photo.thumbnail_128_path and os.path.exists(photo.thumbnail_128_path):
+            os.remove(photo.thumbnail_128_path)
+        if photo.thumbnail_512_path and os.path.exists(photo.thumbnail_512_path):
+            os.remove(photo.thumbnail_512_path)
+    except Exception as e:
+        print(f"Error deleting physical files for photo {photo_id}: {e}")
 
     return {"message": "Photo deleted"}
 

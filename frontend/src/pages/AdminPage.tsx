@@ -14,7 +14,9 @@ import {
   Eye,
   Loader,
   Users,
-  ChevronRight
+  ChevronRight,
+  Cpu,
+  MemoryStick
 } from 'lucide-react';
 import apiClient from '../api/client';
 
@@ -25,6 +27,12 @@ interface SystemStatus {
     analyzed_photos: number;
     pending_analysis: number;
     disk_usage_mb: number;
+  };
+  system: {
+    cpu_percent: number;
+    memory_percent: number;
+    memory_used_mb: number;
+    memory_total_mb: number;
   };
 }
 
@@ -104,7 +112,7 @@ export default function AdminPage() {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Total Photos */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-2">
@@ -153,6 +161,32 @@ export default function AdminPage() {
               {statusLoading ? '...' : Math.round(status?.statistics.disk_usage_mb || 0)}
             </p>
             <p className="text-xs text-gray-500 mt-1">MB</p>
+          </div>
+
+          {/* CPU Usage */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-600 text-sm font-medium">CPU Usage</span>
+              <Cpu className="w-5 h-5 text-orange-600" />
+            </div>
+            <p className="text-3xl font-bold text-gray-900">
+              {statusLoading ? '...' : status?.system.cpu_percent || 0}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">%</p>
+          </div>
+
+          {/* RAM Usage */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-600 text-sm font-medium">RAM Usage</span>
+              <MemoryStick className="w-5 h-5 text-pink-600" />
+            </div>
+            <p className="text-3xl font-bold text-gray-900">
+              {statusLoading ? '...' : status?.system.memory_percent || 0}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {status && `${Math.round(status.system.memory_used_mb)} / ${Math.round(status.system.memory_total_mb)} MB`}
+            </p>
           </div>
         </div>
 

@@ -9,6 +9,7 @@ from database import get_db
 from models import User, Photo
 import subprocess
 import os
+import psutil
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -133,6 +134,19 @@ async def get_system_status(
     except:
         disk_usage_mb = 0
 
+    # Get system metrics (CPU, RAM)
+    try:
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        memory = psutil.virtual_memory()
+        memory_percent = memory.percent
+        memory_used_mb = memory.used / (1024 * 1024)
+        memory_total_mb = memory.total / (1024 * 1024)
+    except:
+        cpu_percent = 0
+        memory_percent = 0
+        memory_used_mb = 0
+        memory_total_mb = 0
+
     return {
         "containers": containers,
         "statistics": {
@@ -140,6 +154,12 @@ async def get_system_status(
             "analyzed_photos": analyzed_photos,
             "pending_analysis": pending_photos,
             "disk_usage_mb": round(disk_usage_mb, 2)
+        },
+        "system": {
+            "cpu_percent": round(cpu_percent, 1),
+            "memory_percent": round(memory_percent, 1),
+            "memory_used_mb": round(memory_used_mb, 2),
+            "memory_total_mb": round(memory_total_mb, 2)
         }
     }
 
