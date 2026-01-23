@@ -4,8 +4,9 @@ import { Link } from 'react-router-dom';
 import { photosApi } from '../api/client';
 import Layout from '../components/Layout';
 import PhotoUpload from '../components/PhotoUpload';
-import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X, Grid3x3, Grid2x2, List, LayoutGrid, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X, Grid3x3, Grid2x2, List, LayoutGrid, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import type { Photo } from '../types';
+import PhotoSkeleton from '../components/PhotoSkeleton';
 
 type SortOption = 'date' | 'year' | 'month' | 'day';
 type ViewMode = 'grid-small' | 'grid-large' | 'list' | 'details';
@@ -638,26 +639,34 @@ export default function GalleryPage() {
 
         {/* Loading State */}
         {isLoading && (
-          <div className="flex items-center justify-center h-64">
-            <Loader className="w-8 h-8 text-blue-600 animate-spin" />
+          <div className={getGridClasses()}>
+            {Array.from({ length: 12 }).map((_, i) => (
+              <PhotoSkeleton key={i} viewMode={viewMode} />
+            ))}
           </div>
         )}
 
         {/* Empty State */}
         {!isLoading && photos.length === 0 && (
-          <div className="text-center py-16">
-            <div className="bg-gray-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ImageIcon className="w-12 h-12 text-gray-400" />
+          <div className="text-center py-20">
+            <div className="relative w-32 h-32 mx-auto mb-8">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-purple-500 rounded-3xl transform rotate-6 opacity-20 animate-pulse"></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-purple-600 rounded-3xl flex items-center justify-center">
+                <ImageIcon className="w-16 h-16 text-white" />
+              </div>
+              <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-2 animate-bounce">
+                <Sparkles className="w-6 h-6 text-white" />
+              </div>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Nessuna foto</h2>
-            <p className="text-gray-600 mb-8">
-              Inizia caricando la tua prima foto con AI!
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">La tua galleria è vuota</h2>
+            <p className="text-lg text-gray-600 mb-10 max-w-md mx-auto">
+              Carica la tua prima foto e lascia che l'intelligenza artificiale la analizzi automaticamente! ✨
             </p>
             <button
               onClick={() => setShowUpload(true)}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors inline-flex items-center space-x-2"
+              className="group px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 inline-flex items-center space-x-3"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
               <span>Carica Prima Foto</span>
             </button>
           </div>
@@ -718,22 +727,22 @@ export default function GalleryPage() {
                         </div>
 
                         {/* Overlay with Info */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm">
+                          <div className="absolute bottom-0 left-0 right-0 p-4 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
                             {photo.analysis?.description_short && (
-                              <p className="text-sm font-medium mb-2 line-clamp-2">
+                              <p className="text-sm font-semibold mb-2 line-clamp-2 drop-shadow-lg">
                                 {photo.analysis.description_short}
                               </p>
                             )}
-                            <div className="space-y-1 text-xs">
-                              <div className="flex items-center space-x-1">
-                                <Clock className="w-3 h-3" />
+                            <div className="space-y-1.5 text-xs">
+                              <div className="flex items-center space-x-1.5 text-white/90">
+                                <Clock className="w-3.5 h-3.5" />
                                 <span>{formatRelativeTime(photo.taken_at || photo.uploaded_at)}</span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-white/70">{formatDate(photo.uploaded_at)}</span>
+                              <div className="flex items-center justify-between text-white/80">
+                                <span>{formatDate(photo.uploaded_at)}</span>
                                 {photo.analyzed_at && (
-                                  <div className="flex items-center space-x-1">
+                                  <div className="flex items-center space-x-1 bg-green-500/20 backdrop-blur-sm px-2 py-0.5 rounded-full">
                                     <Eye className="w-3 h-3" />
                                     <span>Analizzata</span>
                                   </div>
@@ -775,35 +784,35 @@ export default function GalleryPage() {
                       <Link
                         key={photo.id}
                         to={`/photos/${photo.id}`}
-                        className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-200"
+                        className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 border border-gray-200 hover:border-blue-300 transform hover:-translate-y-1"
                       >
                         {/* Photo Image */}
-                        <div className="aspect-square bg-gray-100 overflow-hidden">
+                        <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
                           <img
                             src={photosApi.getThumbnailUrl(photo.id, 512)}
                             alt={photo.analysis?.description_short || 'Photo'}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            className="w-full h-full object-cover group-hover:scale-110 transition-all duration-500 ease-out"
                             loading="lazy"
                           />
                         </div>
 
                         {/* Overlay with Info */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-sm">
+                          <div className="absolute bottom-0 left-0 right-0 p-4 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
                             {photo.analysis?.description_short && (
-                              <p className="text-sm font-medium mb-2 line-clamp-2">
+                              <p className="text-sm font-semibold mb-2 line-clamp-2 drop-shadow-lg">
                                 {photo.analysis.description_short}
                               </p>
                             )}
-                            <div className="space-y-1 text-xs">
-                              <div className="flex items-center space-x-1">
-                                <Clock className="w-3 h-3" />
+                            <div className="space-y-1.5 text-xs">
+                              <div className="flex items-center space-x-1.5 text-white/90">
+                                <Clock className="w-3.5 h-3.5" />
                                 <span>{formatRelativeTime(photo.taken_at || photo.uploaded_at)}</span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-white/70">{formatDate(photo.uploaded_at)}</span>
+                              <div className="flex items-center justify-between text-white/80">
+                                <span>{formatDate(photo.uploaded_at)}</span>
                                 {photo.analyzed_at && (
-                                  <div className="flex items-center space-x-1">
+                                  <div className="flex items-center space-x-1 bg-green-500/20 backdrop-blur-sm px-2 py-0.5 rounded-full">
                                     <Eye className="w-3 h-3" />
                                     <span>Analizzata</span>
                                   </div>

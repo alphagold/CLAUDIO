@@ -114,79 +114,131 @@ export default function AdminPage() {
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {/* Total Photos */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">Total Photos</span>
-              <ImageIcon className="w-5 h-5 text-blue-600" />
+          <div className="group relative bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm hover:shadow-lg border border-blue-200/50 p-6 overflow-hidden transition-all duration-300">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-blue-900 text-sm font-semibold">Total Photos</span>
+                <div className="p-2 bg-blue-600/10 rounded-lg">
+                  <ImageIcon className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+              <p className="text-4xl font-bold text-blue-900">
+                {statusLoading ? '...' : status?.statistics.total_photos || 0}
+              </p>
             </div>
-            <p className="text-3xl font-bold text-gray-900">
-              {statusLoading ? '...' : status?.statistics.total_photos || 0}
-            </p>
           </div>
 
           {/* Analyzed Photos */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">Analyzed</span>
-              <Eye className="w-5 h-5 text-green-600" />
-            </div>
-            <p className="text-3xl font-bold text-gray-900">
-              {statusLoading ? '...' : status?.statistics.analyzed_photos || 0}
-            </p>
-            {status && status.statistics.total_photos > 0 && (
-              <p className="text-xs text-gray-500 mt-1">
-                {Math.round((status.statistics.analyzed_photos / status.statistics.total_photos) * 100)}%
+          <div className="group relative bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl shadow-sm hover:shadow-lg border border-green-200/50 p-6 overflow-hidden transition-all duration-300">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-green-600/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-green-900 text-sm font-semibold">Analyzed</span>
+                <div className="p-2 bg-green-600/10 rounded-lg">
+                  <Eye className="w-5 h-5 text-green-600" />
+                </div>
+              </div>
+              <p className="text-4xl font-bold text-green-900">
+                {statusLoading ? '...' : status?.statistics.analyzed_photos || 0}
               </p>
-            )}
+              {status && status.statistics.total_photos > 0 && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-xs text-green-700 mb-1">
+                    <span>Progress</span>
+                    <span className="font-semibold">{Math.round((status.statistics.analyzed_photos / status.statistics.total_photos) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-green-200 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-green-600 to-emerald-500 h-2 rounded-full transition-all duration-1000"
+                      style={{ width: `${(status.statistics.analyzed_photos / status.statistics.total_photos) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Pending Analysis */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">Pending</span>
-              <Activity className="w-5 h-5 text-yellow-600" />
+          <div className="group relative bg-gradient-to-br from-yellow-50 to-amber-100 rounded-xl shadow-sm hover:shadow-lg border border-yellow-200/50 p-6 overflow-hidden transition-all duration-300">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-600/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-yellow-900 text-sm font-semibold">Pending</span>
+                <div className="p-2 bg-yellow-600/10 rounded-lg">
+                  <Activity className="w-5 h-5 text-yellow-600 animate-pulse" />
+                </div>
+              </div>
+              <p className="text-4xl font-bold text-yellow-900">
+                {statusLoading ? '...' : status?.statistics.pending_analysis || 0}
+              </p>
             </div>
-            <p className="text-3xl font-bold text-gray-900">
-              {statusLoading ? '...' : status?.statistics.pending_analysis || 0}
-            </p>
           </div>
 
           {/* Disk Usage */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">Disk Usage</span>
-              <HardDrive className="w-5 h-5 text-purple-600" />
+          <div className="group relative bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-sm hover:shadow-lg border border-purple-200/50 p-6 overflow-hidden transition-all duration-300">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-purple-900 text-sm font-semibold">Disk Usage</span>
+                <div className="p-2 bg-purple-600/10 rounded-lg">
+                  <HardDrive className="w-5 h-5 text-purple-600" />
+                </div>
+              </div>
+              <p className="text-4xl font-bold text-purple-900">
+                {statusLoading ? '...' : Math.round(status?.statistics.disk_usage_mb || 0)}
+              </p>
+              <p className="text-xs text-purple-700 mt-1 font-medium">MB</p>
             </div>
-            <p className="text-3xl font-bold text-gray-900">
-              {statusLoading ? '...' : Math.round(status?.statistics.disk_usage_mb || 0)}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">MB</p>
           </div>
 
           {/* CPU Usage */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">CPU Usage</span>
-              <Cpu className="w-5 h-5 text-orange-600" />
+          <div className="group relative bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl shadow-sm hover:shadow-lg border border-orange-200/50 p-6 overflow-hidden transition-all duration-300">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-600/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-orange-900 text-sm font-semibold">CPU Usage</span>
+                <div className="p-2 bg-orange-600/10 rounded-lg">
+                  <Cpu className="w-5 h-5 text-orange-600" />
+                </div>
+              </div>
+              <p className="text-4xl font-bold text-orange-900">
+                {statusLoading ? '...' : status?.system.cpu_percent || 0}
+                <span className="text-2xl">%</span>
+              </p>
+              <div className="w-full bg-orange-200 rounded-full h-2 mt-3">
+                <div
+                  className="bg-gradient-to-r from-orange-600 to-orange-500 h-2 rounded-full transition-all duration-1000"
+                  style={{ width: `${status?.system.cpu_percent || 0}%` }}
+                ></div>
+              </div>
             </div>
-            <p className="text-3xl font-bold text-gray-900">
-              {statusLoading ? '...' : status?.system.cpu_percent || 0}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">%</p>
           </div>
 
           {/* RAM Usage */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm font-medium">RAM Usage</span>
-              <MemoryStick className="w-5 h-5 text-pink-600" />
+          <div className="group relative bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl shadow-sm hover:shadow-lg border border-pink-200/50 p-6 overflow-hidden transition-all duration-300">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-pink-600/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-pink-900 text-sm font-semibold">RAM Usage</span>
+                <div className="p-2 bg-pink-600/10 rounded-lg">
+                  <MemoryStick className="w-5 h-5 text-pink-600" />
+                </div>
+              </div>
+              <p className="text-4xl font-bold text-pink-900">
+                {statusLoading ? '...' : status?.system.memory_percent || 0}
+                <span className="text-2xl">%</span>
+              </p>
+              <p className="text-xs text-pink-700 mt-2 font-medium">
+                {status && `${Math.round(status.system.memory_used_mb)} / ${Math.round(status.system.memory_total_mb)} MB`}
+              </p>
+              <div className="w-full bg-pink-200 rounded-full h-2 mt-2">
+                <div
+                  className="bg-gradient-to-r from-pink-600 to-pink-500 h-2 rounded-full transition-all duration-1000"
+                  style={{ width: `${status?.system.memory_percent || 0}%` }}
+                ></div>
+              </div>
             </div>
-            <p className="text-3xl font-bold text-gray-900">
-              {statusLoading ? '...' : status?.system.memory_percent || 0}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              {status && `${Math.round(status.system.memory_used_mb)} / ${Math.round(status.system.memory_total_mb)} MB`}
-            </p>
           </div>
         </div>
 
