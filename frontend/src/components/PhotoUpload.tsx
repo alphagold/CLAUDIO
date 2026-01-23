@@ -89,8 +89,8 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
           const uploadResponse = await uploadMutation.mutateAsync(file);
 
           // Track analysis start time immediately after upload
-          if (uploadResponse?.id) {
-            const analysisStartKey = `analysis_start_${uploadResponse.id}`;
+          if (uploadResponse?.photo?.id) {
+            const analysisStartKey = `analysis_start_${uploadResponse.photo.id}`;
             localStorage.setItem(analysisStartKey, Date.now().toString());
           }
 
