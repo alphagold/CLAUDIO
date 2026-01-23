@@ -31,6 +31,9 @@ export default function PhotoMap({ latitude, longitude, locationName, takenAt }:
     });
   };
 
+  // Unique key to prevent Leaflet double-initialization in React 19
+  const mapKey = `map-${latitude}-${longitude}`;
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="p-4 border-b border-gray-200">
@@ -43,8 +46,9 @@ export default function PhotoMap({ latitude, longitude, locationName, takenAt }:
         )}
         <p className="text-xs text-gray-500 mt-1">{formatDate(takenAt)}</p>
       </div>
-      <div className="h-64 relative">
+      <div className="h-64 relative" key={mapKey}>
         <MapContainer
+          key={mapKey}
           center={[latitude, longitude]}
           zoom={13}
           style={{ height: '100%', width: '100%' }}

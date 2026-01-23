@@ -9,7 +9,11 @@
       "Bash(npm create:*)",
       "Bash(npm install)",
       "Bash(npm install:*)",
-      "Bash(npx tailwindcss:*)"
+      "Bash(npx tailwindcss:*)",
+      "Bash(docker compose:*)",
+      "Bash(git restore:*)",
+      "Bash(npm run build:*)",
+      "Bash(git tag:*)"
     ]
   }
 }

@@ -37,6 +37,9 @@ export default function MapPage() {
       ]
     : [41.9028, 12.4964]; // Rome as default
 
+  // Unique key to prevent Leaflet double-initialization in React 19
+  const mapKey = `map-page-${photosWithGPS.length}`;
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('it-IT', {
       day: 'numeric',
@@ -90,6 +93,7 @@ export default function MapPage() {
           </div>
         ) : (
           <MapContainer
+            key={mapKey}
             center={mapCenter}
             zoom={6}
             style={{ height: '100%', width: '100%' }}
