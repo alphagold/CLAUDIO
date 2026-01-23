@@ -30,7 +30,9 @@ CREATE TABLE photos (
     -- Timestamps
     taken_at TIMESTAMPTZ NOT NULL,
     uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+    analysis_started_at TIMESTAMPTZ,
     analyzed_at TIMESTAMPTZ,
+    analysis_duration_seconds INTEGER,
 
     -- Location
     latitude DECIMAL(10, 8),
@@ -56,6 +58,7 @@ CREATE TABLE photos (
 CREATE INDEX idx_photos_user_taken ON photos(user_id, taken_at DESC);
 CREATE INDEX idx_photos_user_filters ON photos(user_id, is_food, is_document) WHERE deleted_at IS NULL;
 CREATE INDEX idx_photos_location ON photos(latitude, longitude) WHERE latitude IS NOT NULL;
+CREATE INDEX idx_photos_analysis_started_at ON photos(analysis_started_at);
 
 -- Photo analysis (Vision AI results)
 CREATE TABLE photo_analysis (
