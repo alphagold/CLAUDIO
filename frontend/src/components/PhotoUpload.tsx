@@ -86,7 +86,13 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
             return newFiles;
           });
 
-          await uploadMutation.mutateAsync(file);
+          const uploadResponse = await uploadMutation.mutateAsync(file);
+
+          // Track analysis start time immediately after upload
+          if (uploadResponse?.id) {
+            const analysisStartKey = `analysis_start_${uploadResponse.id}`;
+            localStorage.setItem(analysisStartKey, Date.now().toString());
+          }
 
           // Update status to success
           setFiles(prev => {
