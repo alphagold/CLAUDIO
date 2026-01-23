@@ -15,7 +15,6 @@ from pathlib import Path
 import time
 import asyncio
 import httpx
-import psutil
 import os
 from PIL import Image
 from PIL.ExifTags import TAGS

@@ -9,7 +9,13 @@ from database import get_db
 from models import User, Photo
 import subprocess
 import os
-import psutil
+
+# Optional import for system metrics
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -135,13 +141,21 @@ async def get_system_status(
         disk_usage_mb = 0
 
     # Get system metrics (CPU, RAM)
-    try:
-        cpu_percent = psutil.cpu_percent(interval=0.1)
-        memory = psutil.virtual_memory()
-        memory_percent = memory.percent
-        memory_used_mb = memory.used / (1024 * 1024)
-        memory_total_mb = memory.total / (1024 * 1024)
-    except:
+    if PSUTIL_AVAILABLE:
+        try:
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+            memory_percent = memory.percent
+            memory_used_mb = memory.used / (1024 * 1024)
+            memory_total_mb = memory.total / (1024 * 1024)
+        except Exception as e:
+            print(f"Error getting system metrics: {e}")
+            cpu_percent = 0
+            memory_percent = 0
+            memory_used_mb = 0
+            memory_total_mb = 0
+    else:
+        # psutil not installed - return zeros
         cpu_percent = 0
         memory_percent = 0
         memory_used_mb = 0
