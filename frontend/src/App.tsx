@@ -10,7 +10,7 @@ import GalleryPage from './pages/GalleryPage';
 import PhotoDetailPage from './pages/PhotoDetailPage';
 import AlbumsPage from './pages/AlbumsPage';
 import AlbumDetailPage from './pages/AlbumDetailPage';
-import SearchPage from './pages/SearchPage';
+import MapPage from './pages/MapPage';
 import AdminPage from './pages/AdminPage';
 import AdminUsersPage from './pages/AdminUsersPage';
 
@@ -118,10 +118,10 @@ function App() {
             }
           />
           <Route
-            path="/search"
+            path="/map"
             element={
               <ProtectedRoute>
-                <SearchPage />
+                <MapPage />
               </ProtectedRoute>
             }
           />

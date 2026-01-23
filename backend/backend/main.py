@@ -413,17 +413,18 @@ def extract_exif_data(file_path: str) -> dict:
 async def reverse_geocode(latitude: float, longitude: float) -> Optional[str]:
     """Get location name from GPS coordinates using Nominatim (OpenStreetMap)"""
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        # Nominatim requires delay between requests (1 req/sec)
+        async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
                 "https://nominatim.openstreetmap.org/reverse",
                 params={
                     "lat": latitude,
                     "lon": longitude,
                     "format": "json",
-                    "zoom": 14,  # City/town level
+                    "zoom": 14,
                 },
                 headers={
-                    "User-Agent": "PhotoMemory/1.0"  # Required by Nominatim
+                    "User-Agent": "PhotoMemory/1.0"
                 }
             )
 
@@ -431,7 +432,7 @@ async def reverse_geocode(latitude: float, longitude: float) -> Optional[str]:
                 data = response.json()
                 address = data.get("address", {})
 
-                # Build location string from components
+                # Build location string
                 parts = []
                 if city := (address.get("city") or address.get("town") or address.get("village")):
                     parts.append(city)
@@ -440,11 +441,11 @@ async def reverse_geocode(latitude: float, longitude: float) -> Optional[str]:
                 if country := address.get("country"):
                     parts.append(country)
 
-                return ", ".join(parts) if parts else data.get("display_name")
+                return ", ".join(parts) if parts else None
 
             return None
     except Exception as e:
-        print(f"Reverse geocoding error: {e}")
+        print(f"Geocoding error (non-critical): {e}")
         return None
 
 
@@ -571,9 +572,14 @@ async def upload_photo(
     if not longitude and exif_data:
         longitude = exif_data.get('GPS_Longitude_Decimal')
 
-    # Get location name from coordinates if not provided
-    if latitude and longitude and not location_name:
-        location_name = await reverse_geocode(latitude, longitude)
+    # Get location name from coordinates (non-blocking, can fail silently)
+    location_name = None
+    if latitude and longitude:
+        try:
+            location_name = await reverse_geocode(latitude, longitude)
+        except Exception as e:
+            print(f"Geocoding failed (non-critical): {e}")
+            location_name = None
 
     # Create photo record
     photo = Photo(
