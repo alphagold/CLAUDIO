@@ -17,6 +17,13 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
+from datetime import datetime
+from collections import deque
+from typing import List, Dict
+
+# In-memory storage for metrics history (last 60 data points = 5 minutes at 5s interval)
+metrics_history: deque = deque(maxlen=60)
+
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 # OAuth2 scheme for token extraction (matches main.py)
@@ -324,3 +331,85 @@ async def delete_user(
     db.commit()
 
     return {"message": "User deleted successfully"}
+
+
+@router.get("/cleanup/soft-deleted-count")
+async def get_soft_deleted_count(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Get count of soft-deleted photos waiting to be cleaned up"""
+    count = db.query(func.count(Photo.id)).filter(Photo.deleted_at.isnot(None)).scalar()
+    return {
+        "soft_deleted_count": count,
+        "message": f"{count} soft-deleted photos in database" if count > 0 else "No soft-deleted photos"
+    }
+
+
+@router.post("/cleanup/soft-deleted-photos")
+async def cleanup_soft_deleted_photos(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Permanently delete soft-deleted photos from database
+    (files are already deleted when soft-delete happens)
+    """
+    # Count soft-deleted photos
+    count = db.query(func.count(Photo.id)).filter(Photo.deleted_at.isnot(None)).scalar()
+
+    if count == 0:
+        return {"message": "No soft-deleted photos to clean up", "deleted_count": 0}
+
+    # Permanently delete soft-deleted photos
+    db.query(Photo).filter(Photo.deleted_at.isnot(None)).delete(synchronize_session=False)
+    db.commit()
+
+    return {
+        "message": f"Successfully cleaned up {count} soft-deleted photos",
+        "deleted_count": count
+    }
+
+
+# ============================================================================
+# SYSTEM METRICS MONITORING
+# ============================================================================
+
+@router.get("/metrics/history")
+async def get_metrics_history(
+    current_user: User = Depends(require_admin)
+):
+    """Get historical system metrics for charting"""
+    return {
+        "metrics": list(metrics_history),
+        "count": len(metrics_history)
+    }
+
+
+@router.post("/metrics/record")
+async def record_current_metrics(
+    current_user: User = Depends(require_admin)
+):
+    """Record current system metrics (called by frontend polling)"""
+    if PSUTIL_AVAILABLE:
+        try:
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+            memory_percent = memory.percent
+
+            metric_entry = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "cpu_percent": round(cpu_percent, 1),
+                "memory_percent": round(memory_percent, 1)
+            }
+
+            metrics_history.append(metric_entry)
+
+            return {
+                "message": "Metrics recorded",
+                "current": metric_entry
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error recording metrics: {str(e)}")
+    else:
+        raise HTTPException(status_code=503, detail="psutil not available")

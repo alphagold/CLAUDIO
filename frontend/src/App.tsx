@@ -13,6 +13,7 @@ import AlbumDetailPage from './pages/AlbumDetailPage';
 import MapPage from './pages/MapPage';
 import AdminPage from './pages/AdminPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import SystemMonitoringPage from './pages/SystemMonitoringPage';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -138,6 +139,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <AdminUsersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/monitoring"
+            element={
+              <ProtectedRoute>
+                <SystemMonitoringPage />
               </ProtectedRoute>
             }
           />

@@ -4,10 +4,11 @@ import { Link } from 'react-router-dom';
 import { photosApi } from '../api/client';
 import Layout from '../components/Layout';
 import PhotoUpload from '../components/PhotoUpload';
-import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X } from 'lucide-react';
+import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X, Grid3x3, Grid2x2, List, LayoutGrid, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Photo } from '../types';
 
 type SortOption = 'date' | 'year' | 'month' | 'day';
+type ViewMode = 'grid-small' | 'grid-large' | 'list' | 'details';
 
 // Helper to get elapsed time for a photo
 const getElapsedTime = (photoId: string): number => {
@@ -36,6 +37,9 @@ export default function GalleryPage() {
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({});
 
+  // View mode state
+  const [viewMode, setViewMode] = useState<ViewMode>('grid-large');
+
   // Multi-select state
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
@@ -44,6 +48,9 @@ export default function GalleryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('');
+
+  // Tag filter state
+  const [showAllTags, setShowAllTags] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['photos', activeQuery, selectedTag],
@@ -243,6 +250,157 @@ export default function GalleryPage() {
     return b.localeCompare(a, 'it');
   });
 
+  // Get grid CSS classes based on view mode
+  const getGridClasses = () => {
+    switch (viewMode) {
+      case 'grid-small':
+        return 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3';
+      case 'grid-large':
+        return 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6';
+      case 'list':
+        return 'flex flex-col space-y-3';
+      case 'details':
+        return 'grid grid-cols-1 lg:grid-cols-2 gap-4';
+      default:
+        return 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6';
+    }
+  };
+
+  // Render photo card based on view mode
+  const renderPhotoCard = (photo: Photo, isSelected: boolean) => {
+    if (viewMode === 'list') {
+      return (
+        <Link
+          key={photo.id}
+          to={`/photos/${photo.id}`}
+          className="group relative bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200 flex items-center"
+        >
+          {/* Thumbnail */}
+          <div className="w-32 h-32 flex-shrink-0 bg-gray-100 overflow-hidden">
+            <img
+              src={photosApi.getThumbnailUrl(photo.id, 128)}
+              alt={photo.analysis?.description_short || 'Photo'}
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="font-semibold text-gray-900 line-clamp-1">
+                  {photo.analysis?.description_short || 'Analisi in corso...'}
+                </p>
+                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                  {photo.analysis?.description_long || ''}
+                </p>
+                <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                  <div className="flex items-center space-x-1">
+                    <Clock className="w-3 h-3" />
+                    <span>{formatRelativeTime(photo.taken_at || photo.uploaded_at)}</span>
+                  </div>
+                  {photo.analyzed_at && (
+                    <div className="flex items-center space-x-1">
+                      <Eye className="w-3 h-3" />
+                      <span>Analizzata</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {!photo.analyzed_at && (
+                <div className="ml-4">
+                  <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
+                    <Loader className="w-3 h-3 animate-spin" />
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Tags */}
+            {photo.analysis?.tags && photo.analysis.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {photo.analysis.tags.slice(0, 5).map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </Link>
+      );
+    }
+
+    if (viewMode === 'details') {
+      return (
+        <Link
+          key={photo.id}
+          to={`/photos/${photo.id}`}
+          className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-200"
+        >
+          {/* Image */}
+          <div className="aspect-video bg-gray-100 overflow-hidden">
+            <img
+              src={photosApi.getThumbnailUrl(photo.id, 512)}
+              alt={photo.analysis?.description_short || 'Photo'}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              loading="lazy"
+            />
+          </div>
+
+          {/* Details */}
+          <div className="p-4">
+            <h3 className="font-semibold text-gray-900 mb-2 line-clamp-1">
+              {photo.analysis?.description_short || 'Analisi in corso...'}
+            </h3>
+            <p className="text-sm text-gray-600 mb-3 line-clamp-3">
+              {photo.analysis?.description_long || ''}
+            </p>
+
+            {/* Tags */}
+            {photo.analysis?.tags && photo.analysis.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-3">
+                {photo.analysis.tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Metadata */}
+            <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100">
+              <div className="flex items-center space-x-1">
+                <Clock className="w-3 h-3" />
+                <span>{formatRelativeTime(photo.taken_at || photo.uploaded_at)}</span>
+              </div>
+              {photo.analyzed_at ? (
+                <div className="flex items-center space-x-1 text-green-600">
+                  <Eye className="w-3 h-3" />
+                  <span>Analizzata</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-1 text-yellow-600">
+                  <Loader className="w-3 h-3 animate-spin" />
+                  <span>Analisi...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </Link>
+      );
+    }
+
+    // grid-small or grid-large view
+    return null; // Will use existing rendering below
+  };
+
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -256,6 +414,54 @@ export default function GalleryPage() {
             </p>
           </div>
           <div className="flex items-center space-x-3">
+            {/* View Mode Options */}
+            <div className="flex items-center space-x-1 bg-white rounded-lg border border-gray-200 p-1">
+              <button
+                onClick={() => setViewMode('grid-small')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'grid-small'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+                title="Griglia piccola"
+              >
+                <Grid3x3 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid-large')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'grid-large'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+                title="Griglia grande"
+              >
+                <Grid2x2 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+                title="Lista"
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('details')}
+                className={`p-2 rounded transition-colors ${
+                  viewMode === 'details'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+                title="Dettagli"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+            </div>
+
             {/* Sort Options */}
             <div className="flex items-center space-x-2 bg-white rounded-lg border border-gray-200 p-1">
               <Calendar className="w-4 h-4 text-gray-500 ml-2" />
@@ -346,13 +552,24 @@ export default function GalleryPage() {
 
         {/* Tag Filters */}
         {availableTags.length > 0 && (
-          <div className="mb-6">
-            <div className="flex items-center space-x-2 mb-3">
-              <Filter className="w-4 h-4 text-gray-600" />
-              <h2 className="text-sm font-semibold text-gray-700">Filtra per Tag ({availableTags.length})</h2>
+          <div className="mb-6 bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2">
+                <Filter className="w-4 h-4 text-gray-600" />
+                <h2 className="text-sm font-semibold text-gray-700">Filtra per Tag ({availableTags.length})</h2>
+              </div>
+              {availableTags.length > 10 && (
+                <button
+                  onClick={() => setShowAllTags(!showAllTags)}
+                  className="flex items-center space-x-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  <span>{showAllTags ? 'Mostra meno' : `Mostra tutti (${availableTags.length})`}</span>
+                  {showAllTags ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
-              {availableTags.map((tag) => (
+              {(showAllTags ? availableTags : availableTags.slice(0, 10)).map((tag) => (
                 <button
                   key={tag}
                   onClick={() => handleTagFilter(tag)}
@@ -460,9 +677,14 @@ export default function GalleryPage() {
                     </span>
                   </h2>
                 )}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div className={getGridClasses()}>
                   {groupedPhotos[groupKey].map((photo: Photo) => {
                     const isSelected = selectedPhotos.has(photo.id);
+
+                    // Use special rendering for list and details views (no select mode)
+                    if (!selectMode && (viewMode === 'list' || viewMode === 'details')) {
+                      return renderPhotoCard(photo, isSelected);
+                    }
 
                     return selectMode ? (
                       <div
