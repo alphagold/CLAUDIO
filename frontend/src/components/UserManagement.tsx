@@ -9,16 +9,9 @@ interface User {
   email: string;
   full_name: string;
   is_admin: boolean;
-  role: 'admin' | 'editor' | 'viewer';
   created_at: string;
   photo_count: number;
 }
-
-const ROLES = {
-  admin: { label: 'Admin', description: 'Accesso completo al sistema', color: 'purple' },
-  editor: { label: 'Editor', description: 'Può gestire le proprie foto', color: 'blue' },
-  viewer: { label: 'Viewer', description: 'Solo visualizzazione', color: 'gray' },
-};
 
 export default function UserManagement() {
   const queryClient = useQueryClient();
@@ -35,7 +28,7 @@ export default function UserManagement() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { email: string; password: string; full_name: string; role: string }) => {
+    mutationFn: async (data: { email: string; password: string; full_name: string; is_admin: boolean }) => {
       return apiClient.post('/api/admin/users', null, { params: data });
     },
     onSuccess: async () => {
@@ -73,7 +66,7 @@ export default function UserManagement() {
       email: '',
       password: '',
       full_name: '',
-      role: 'editor' as 'admin' | 'editor' | 'viewer',
+      is_admin: false,
     });
 
     return (
@@ -126,18 +119,18 @@ export default function UserManagement() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Ruolo</label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'editor' | 'viewer' })}
-                className="w-full px-3 py-2 border rounded-lg"
-              >
-                {Object.entries(ROLES).map(([key, role]) => (
-                  <option key={key} value={key}>
-                    {role.label} - {role.description}
-                  </option>
-                ))}
-              </select>
+              <label className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  checked={formData.is_admin}
+                  onChange={(e) => setFormData({ ...formData, is_admin: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-sm font-medium">Amministratore</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Gli amministratori hanno accesso completo al sistema
+              </p>
             </div>
 
             <div className="flex space-x-2">
@@ -206,20 +199,16 @@ export default function UserManagement() {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{user.email}</td>
                   <td className="px-4 py-3">
-                    {(() => {
-                      const roleInfo = ROLES[user.role];
-                      const colorClasses: Record<string, string> = {
-                        purple: 'bg-purple-100 text-purple-700',
-                        blue: 'bg-blue-100 text-blue-700',
-                        gray: 'bg-gray-100 text-gray-700',
-                      };
-                      return (
-                        <span className={`inline-flex items-center space-x-1 px-2 py-1 ${colorClasses[roleInfo.color]} rounded-full text-xs font-medium`}>
-                          {user.role === 'admin' && <Shield className="w-3 h-3" />}
-                          <span>{roleInfo.label}</span>
-                        </span>
-                      );
-                    })()}
+                    {user.is_admin ? (
+                      <span className="inline-flex items-center space-x-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                        <Shield className="w-3 h-3" />
+                        <span>Admin</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1 px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                        <span>Utente</span>
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">{user.photo_count}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">

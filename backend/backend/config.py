@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # Processing
     THUMBNAIL_SIZES: list = [128, 512]
-    ANALYSIS_TIMEOUT: int = 300  # seconds (llama3.2-vision on CPU can take 2-4 minutes)
+    ANALYSIS_TIMEOUT: int = 900  # seconds (llama3.2-vision on CPU can take 5-10 minutes, no parallel support)
 
     class Config:
         env_file = ".env"

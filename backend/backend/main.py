@@ -814,9 +814,9 @@ async def reanalyze_photo(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Reanalyze photo with vision AI (choose model: llava-phi3 or llama3.2-vision)"""
+    """Reanalyze photo with vision AI (choose model: moondream, llava-phi3 or llama3.2-vision)"""
     # Validate model
-    valid_models = ["llava-phi3", "llama3.2-vision"]
+    valid_models = ["moondream", "llava-phi3", "llama3.2-vision"]
     if model not in valid_models:
         raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
 

@@ -315,6 +315,21 @@ export default function PhotoDetailPage() {
 
         <div className="space-y-3">
           <button
+            onClick={() => reanalyzeMutation.mutate('moondream')}
+            disabled={reanalyzeMutation.isPending}
+            className="w-full p-4 text-left border-2 border-green-200 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Zap className="w-5 h-5 text-green-600" />
+                <span className="font-semibold text-gray-900">Moondream</span>
+              </div>
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Super Veloce</span>
+            </div>
+            <p className="text-sm text-gray-600">Modello ultraleggero (1.7GB) - Analisi in ~10 secondi</p>
+          </button>
+
+          <button
             onClick={() => reanalyzeMutation.mutate('llava-phi3')}
             disabled={reanalyzeMutation.isPending}
             className="w-full p-4 text-left border-2 border-blue-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50"
@@ -324,9 +339,9 @@ export default function PhotoDetailPage() {
                 <Zap className="w-5 h-5 text-blue-600" />
                 <span className="font-semibold text-gray-900">LLaVA-Phi3</span>
               </div>
-              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Veloce</span>
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Veloce</span>
             </div>
-            <p className="text-sm text-gray-600">Modello veloce (3.8B) - Analisi in ~30 secondi</p>
+            <p className="text-sm text-gray-600">Modello veloce (3.8GB) - Analisi in ~30 secondi</p>
           </button>
 
           <button
@@ -341,7 +356,7 @@ export default function PhotoDetailPage() {
               </div>
               <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Dettagliato</span>
             </div>
-            <p className="text-sm text-gray-600">Modello avanzato (11B) - Analisi in ~3 minuti, massima qualità</p>
+            <p className="text-sm text-gray-600">Modello avanzato (11B) - Analisi in ~10 minuti, massima qualità</p>
           </button>
         </div>
 
