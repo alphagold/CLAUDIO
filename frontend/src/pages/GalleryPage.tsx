@@ -267,7 +267,7 @@ export default function GalleryPage() {
   };
 
   // Render photo card based on view mode
-  const renderPhotoCard = (photo: Photo, isSelected: boolean) => {
+  const renderPhotoCard = (photo: Photo) => {
     if (viewMode === 'list') {
       return (
         <Link
@@ -293,7 +293,7 @@ export default function GalleryPage() {
                   {photo.analysis?.description_short || 'Analisi in corso...'}
                 </p>
                 <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                  {photo.analysis?.description_long || ''}
+                  {photo.analysis?.description_full || ''}
                 </p>
                 <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
                   <div className="flex items-center space-x-1">
@@ -357,7 +357,7 @@ export default function GalleryPage() {
               {photo.analysis?.description_short || 'Analisi in corso...'}
             </h3>
             <p className="text-sm text-gray-600 mb-3 line-clamp-3">
-              {photo.analysis?.description_long || ''}
+              {photo.analysis?.description_full || ''}
             </p>
 
             {/* Tags */}
@@ -683,7 +683,7 @@ export default function GalleryPage() {
 
                     // Use special rendering for list and details views (no select mode)
                     if (!selectMode && (viewMode === 'list' || viewMode === 'details')) {
-                      return renderPhotoCard(photo, isSelected);
+                      return renderPhotoCard(photo);
                     }
 
                     return selectMode ? (
