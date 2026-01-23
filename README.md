@@ -174,6 +174,12 @@ VITE_API_URL=http://your-server-ip:8000
 2. Cerca per contenuto: "cibo italiano", "paesaggio montagna", ecc.
 3. Oppure filtra per **tag** cliccando sui pill sotto la ricerca
 
+### Visualizza Mappa
+1. Clicca su **"Mappa"** nel menu principale
+2. Vedi tutte le foto geolocalizzate sulla mappa interattiva
+3. Clicca sui marker per vedere anteprima e dettagli
+4. Clicca sull'anteprima per aprire la foto completa
+
 ### Multi-selezione
 1. Clicca **"Seleziona"** nella galleria
 2. Clicca sulle foto da selezionare
@@ -248,6 +254,13 @@ VITE_API_URL=http://your-server-ip:8000
 Questo è un progetto self-hosted personale. Fork, modifiche e suggerimenti sono benvenuti!
 
 ## 📝 Changelog
+
+### v1.0.1 (2026-01-23)
+- 🗺️ Nuova pagina Mappa per visualizzare tutte le foto geolocalizzate
+- 🔍 Rimossa pagina Search (ricerca integrata in Gallery)
+- 🐛 Fix errore upload con foto GPS
+- ⚡ Geocoding non-blocking (upload continua anche se geocoding fallisce)
+- 🎨 Ottimizzazione UX e navigazione
 
 ### v1.0.0 (2026-01-23)
 - ✨ Release iniziale
