@@ -50,7 +50,6 @@ export default function OllamaModelsPage() {
       apiClient.post('/api/admin/ollama/models/pull', null, { params: { model_name: modelName } }),
     onSuccess: () => {
       toast.success('Download avviato! Controlla tra qualche minuto.');
-      setShowPullDialog(false);
       setModelToPull('');
       setTimeout(() => refetchModels(), 3000);
     },
