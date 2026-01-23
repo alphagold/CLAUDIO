@@ -255,6 +255,12 @@ Questo è un progetto self-hosted personale. Fork, modifiche e suggerimenti sono
 
 ## 📝 Changelog
 
+### v1.0.2 (2026-01-23)
+- 🐛 Fix errore pagina bianca al click su foto
+- 🗺️ Fix errore "Map container already initialized"
+- ⚡ Disabilitato React StrictMode per compatibilità Leaflet
+- 🔧 Aggiunto key univoco ai componenti mappa
+
 ### v1.0.1 (2026-01-23)
 - 🗺️ Nuova pagina Mappa per visualizzare tutte le foto geolocalizzate
 - 🔍 Rimossa pagina Search (ricerca integrata in Gallery)
