@@ -4,7 +4,7 @@ import { DivIcon } from 'leaflet';
 import { Link } from 'react-router-dom';
 import { photosApi } from '../api/client';
 import Layout from '../components/Layout';
-import { Loader, MapPin, Calendar, Image as ImageIcon } from 'lucide-react';
+import { Loader, MapPin, Calendar } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 
 // Custom animated marker icon with pulse effect
