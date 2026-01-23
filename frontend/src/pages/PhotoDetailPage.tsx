@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { photosApi } from '../api/client';
 import Layout from '../components/Layout';
+import PhotoMap from '../components/PhotoMap';
 import {
   ArrowLeft,
   Loader,
@@ -708,6 +709,16 @@ export default function PhotoDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Map Section */}
+          {photo.latitude && photo.longitude && (
+            <PhotoMap
+              latitude={photo.latitude}
+              longitude={photo.longitude}
+              locationName={photo.location_name}
+              takenAt={photo.taken_at || photo.uploaded_at}
+            />
+          )}
         </div>
 
         {/* Dialogs */}

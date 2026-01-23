@@ -14,6 +14,7 @@ import uuid
 from pathlib import Path
 import time
 import asyncio
+import httpx
 from PIL import Image
 from PIL.ExifTags import TAGS
 
@@ -310,7 +311,6 @@ def extract_exif_data(file_path: str) -> dict:
                     gps_info = exif.get_ifd(0x8825)  # GPS IFD
                     if gps_info:
                         from PIL.ExifTags import GPSTAGS
-                        print(f"Found GPS IFD with {len(gps_info)} tags")
 
                         # Store raw GPS data
                         for tag_id, value in gps_info.items():
@@ -336,8 +336,6 @@ def extract_exif_data(file_path: str) -> dict:
                         def dms_to_decimal(dms_tuple, ref):
                             """Convert GPS DMS (degrees, minutes, seconds) to decimal"""
                             try:
-                                print(f"Converting DMS to decimal: {dms_tuple}, ref={ref}")
-
                                 # Handle IFDRational objects or plain floats
                                 if hasattr(dms_tuple[0], 'numerator'):
                                     # IFDRational object with fractions
@@ -358,35 +356,30 @@ def extract_exif_data(file_path: str) -> dict:
                                 decimal = degrees + (minutes / 60) + (seconds / 3600)
                                 if ref in ['S', 'W']:
                                     decimal = -decimal
-                                print(f"Converted to decimal: {decimal}")
                                 return decimal
                             except Exception as e:
-                                print(f"DMS conversion error: {e}, tuple={dms_tuple}, ref={ref}")
+                                print(f"GPS conversion error: {e}")
                                 return None
 
                         # Extract and convert latitude
                         gps_lat = gps_info.get(2)  # GPSLatitude
                         gps_lat_ref = gps_info.get(1)  # GPSLatitudeRef
-                        print(f"GPS Latitude raw: {gps_lat}, ref: {gps_lat_ref}")
                         if gps_lat and gps_lat_ref:
                             if isinstance(gps_lat_ref, bytes):
                                 gps_lat_ref = gps_lat_ref.decode('utf-8')
                             lat_decimal = dms_to_decimal(gps_lat, gps_lat_ref)
                             if lat_decimal is not None:
                                 exif_data['GPS_Latitude_Decimal'] = lat_decimal
-                                print(f"Set GPS_Latitude_Decimal: {lat_decimal}")
 
                         # Extract and convert longitude
                         gps_lon = gps_info.get(4)  # GPSLongitude
                         gps_lon_ref = gps_info.get(3)  # GPSLongitudeRef
-                        print(f"GPS Longitude raw: {gps_lon}, ref: {gps_lon_ref}")
                         if gps_lon and gps_lon_ref:
                             if isinstance(gps_lon_ref, bytes):
                                 gps_lon_ref = gps_lon_ref.decode('utf-8')
                             lon_decimal = dms_to_decimal(gps_lon, gps_lon_ref)
                             if lon_decimal is not None:
                                 exif_data['GPS_Longitude_Decimal'] = lon_decimal
-                                print(f"Set GPS_Longitude_Decimal: {lon_decimal}")
 
                 except Exception as gps_error:
                     print(f"GPS extraction error: {gps_error}")
@@ -415,6 +408,44 @@ def extract_exif_data(file_path: str) -> dict:
     exif_data = sanitize_value(exif_data)
 
     return exif_data
+
+
+async def reverse_geocode(latitude: float, longitude: float) -> Optional[str]:
+    """Get location name from GPS coordinates using Nominatim (OpenStreetMap)"""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={
+                    "lat": latitude,
+                    "lon": longitude,
+                    "format": "json",
+                    "zoom": 14,  # City/town level
+                },
+                headers={
+                    "User-Agent": "PhotoMemory/1.0"  # Required by Nominatim
+                }
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                address = data.get("address", {})
+
+                # Build location string from components
+                parts = []
+                if city := (address.get("city") or address.get("town") or address.get("village")):
+                    parts.append(city)
+                if state := address.get("state"):
+                    parts.append(state)
+                if country := address.get("country"):
+                    parts.append(country)
+
+                return ", ".join(parts) if parts else data.get("display_name")
+
+            return None
+    except Exception as e:
+        print(f"Reverse geocoding error: {e}")
+        return None
 
 
 # ============================================================================
@@ -537,12 +568,12 @@ async def upload_photo(
     # Get GPS coordinates from EXIF if not provided manually
     if not latitude and exif_data:
         latitude = exif_data.get('GPS_Latitude_Decimal')
-        print(f"Extracted latitude from EXIF: {latitude}")
     if not longitude and exif_data:
         longitude = exif_data.get('GPS_Longitude_Decimal')
-        print(f"Extracted longitude from EXIF: {longitude}")
 
-    print(f"Final GPS coordinates - Latitude: {latitude}, Longitude: {longitude}")
+    # Get location name from coordinates if not provided
+    if latitude and longitude and not location_name:
+        location_name = await reverse_geocode(latitude, longitude)
 
     # Create photo record
     photo = Photo(
@@ -552,6 +583,7 @@ async def upload_photo(
         taken_at=taken_at_dt,
         latitude=latitude,
         longitude=longitude,
+        location_name=location_name,
         file_size=file_path.stat().st_size,
         width=width,
         height=height,
