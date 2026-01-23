@@ -100,6 +100,10 @@ export const photosApi = {
     await apiClient.delete(`/api/photos/${photoId}`);
   },
 
+  bulkDeletePhotos: async (photoIds: string[]): Promise<void> => {
+    await Promise.all(photoIds.map(id => apiClient.delete(`/api/photos/${id}`)));
+  },
+
   reanalyzePhoto: async (photoId: string, model: string = 'llama3.2-vision'): Promise<any> => {
     const response = await apiClient.post(`/api/photos/${photoId}/reanalyze`, null, {
       params: { model },

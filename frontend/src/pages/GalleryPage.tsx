@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { photosApi } from '../api/client';
 import Layout from '../components/Layout';
 import PhotoUpload from '../components/PhotoUpload';
-import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar } from 'lucide-react';
+import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X } from 'lucide-react';
 import type { Photo } from '../types';
 
 type SortOption = 'date' | 'year' | 'month' | 'day';
@@ -36,9 +36,30 @@ export default function GalleryPage() {
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({});
 
+  // Multi-select state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeQuery, setActiveQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['photos'],
-    queryFn: () => photosApi.getPhotos({ limit: 100 }),
+    queryKey: ['photos', activeQuery, selectedCategory],
+    queryFn: async () => {
+      // If searching, use search functionality
+      if (activeQuery) {
+        const searchResults = await photosApi.searchPhotos(activeQuery, 100);
+        return { photos: searchResults, total: searchResults.length, skip: 0, limit: 100 };
+      }
+      // If category filter, use category filter
+      if (selectedCategory) {
+        return photosApi.getPhotos({ scene_category: selectedCategory, limit: 100 });
+      }
+      // Otherwise get all photos
+      return photosApi.getPhotos({ limit: 100 });
+    },
     refetchInterval: (query) => {
       // Auto-refresh if any photo is being analyzed
       const photos = query.state.data?.photos || [];
@@ -48,6 +69,16 @@ export default function GalleryPage() {
   });
 
   const photos = data?.photos || [];
+
+  // Categories for search
+  const categories = [
+    { value: 'food', label: 'Cibo', icon: '🍕' },
+    { value: 'outdoor', label: 'All\'aperto', icon: '🏞️' },
+    { value: 'indoor', label: 'Interni', icon: '🏠' },
+    { value: 'people', label: 'Persone', icon: '👥' },
+    { value: 'document', label: 'Documenti', icon: '📄' },
+    { value: 'receipt', label: 'Scontrini', icon: '🧾' },
+  ];
 
   // Track analysis times
   useEffect(() => {
@@ -103,6 +134,68 @@ export default function GalleryPage() {
     return `${diffYears} ${diffYears === 1 ? 'anno' : 'anni'} fa`;
   };
 
+  // Search handlers
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setActiveQuery(searchQuery);
+    setSelectedCategory('');
+  };
+
+  const handleCategoryFilter = (category: string) => {
+    setSelectedCategory(category);
+    setActiveQuery('');
+    setSearchQuery('');
+  };
+
+  const clearSearch = () => {
+    setActiveQuery('');
+    setSelectedCategory('');
+    setSearchQuery('');
+  };
+
+  // Selection handlers
+  const toggleSelectMode = () => {
+    setSelectMode(!selectMode);
+    setSelectedPhotos(new Set());
+  };
+
+  const togglePhotoSelection = (photoId: string) => {
+    const newSelected = new Set(selectedPhotos);
+    if (newSelected.has(photoId)) {
+      newSelected.delete(photoId);
+    } else {
+      newSelected.add(photoId);
+    }
+    setSelectedPhotos(newSelected);
+  };
+
+  const selectAll = () => {
+    const allPhotoIds = new Set(photos.map(p => p.id));
+    setSelectedPhotos(allPhotoIds);
+  };
+
+  const deselectAll = () => {
+    setSelectedPhotos(new Set());
+  };
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (selectedPhotos.size === 0) return;
+
+    const confirmMsg = `Vuoi eliminare ${selectedPhotos.size} ${selectedPhotos.size === 1 ? 'foto' : 'foto'}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await photosApi.bulkDeletePhotos(Array.from(selectedPhotos));
+      setSelectedPhotos(new Set());
+      setSelectMode(false);
+      refetch();
+    } catch (error) {
+      console.error('Errore durante l\'eliminazione:', error);
+      alert('Errore durante l\'eliminazione delle foto');
+    }
+  };
+
   // Group photos based on sort option
   const groupedPhotos = useMemo(() => {
     if (photos.length === 0) return {};
@@ -155,14 +248,15 @@ export default function GalleryPage() {
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">La tua Galleria</h1>
             <p className="text-gray-600 mt-1">
               {photos.length} {photos.length === 1 ? 'foto' : 'foto'}
+              {(activeQuery || selectedCategory) && ' (filtrate)'}
             </p>
           </div>
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
             {/* Sort Options */}
             <div className="flex items-center space-x-2 bg-white rounded-lg border border-gray-200 p-1">
               <Calendar className="w-4 h-4 text-gray-500 ml-2" />
@@ -208,6 +302,17 @@ export default function GalleryPage() {
               </button>
             </div>
             <button
+              onClick={toggleSelectMode}
+              className={`flex items-center space-x-2 px-4 py-3 rounded-lg font-semibold transition-colors ${
+                selectMode
+                  ? 'bg-gray-600 text-white hover:bg-gray-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {selectMode ? <X className="w-5 h-5" /> : <CheckSquare className="w-5 h-5" />}
+              <span>{selectMode ? 'Annulla' : 'Seleziona'}</span>
+            </button>
+            <button
               onClick={() => setShowUpload(!showUpload)}
               className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
             >
@@ -216,6 +321,91 @@ export default function GalleryPage() {
             </button>
           </div>
         </div>
+
+        {/* Search Bar */}
+        <div className="mb-6">
+          <form onSubmit={handleSearch} className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cerca 'cibo italiano', 'vacanza in montagna', 'foto con amici'..."
+              className="w-full pl-12 pr-24 py-3 text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            />
+            {(activeQuery || selectedCategory) && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancella
+              </button>
+            )}
+          </form>
+        </div>
+
+        {/* Category Filters */}
+        <div className="mb-6">
+          <div className="flex items-center space-x-2 mb-3">
+            <Filter className="w-4 h-4 text-gray-600" />
+            <h2 className="text-sm font-semibold text-gray-700">Filtra per Categoria</h2>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            {categories.map((category) => (
+              <button
+                key={category.value}
+                onClick={() => handleCategoryFilter(category.value)}
+                className={`p-3 rounded-lg border-2 transition-all ${
+                  selectedCategory === category.value
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}
+              >
+                <div className="text-2xl mb-1">{category.icon}</div>
+                <div className="text-xs font-medium text-gray-900">{category.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Bulk Action Toolbar */}
+        {selectMode && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <span className="text-sm font-semibold text-gray-900">
+                  {selectedPhotos.size} {selectedPhotos.size === 1 ? 'foto selezionata' : 'foto selezionate'}
+                </span>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={selectAll}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Seleziona tutto
+                  </button>
+                  {selectedPhotos.size > 0 && (
+                    <button
+                      onClick={deselectAll}
+                      className="text-sm text-gray-600 hover:text-gray-700 font-medium"
+                    >
+                      Deseleziona tutto
+                    </button>
+                  )}
+                </div>
+              </div>
+              {selectedPhotos.size > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Elimina</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Upload Section */}
         {showUpload && (
@@ -271,77 +461,166 @@ export default function GalleryPage() {
                   </h2>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                  {groupedPhotos[groupKey].map((photo: Photo) => (
-                    <Link
-                      key={photo.id}
-                      to={`/photos/${photo.id}`}
-                      className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-200"
-                    >
-                      {/* Photo Image */}
-                      <div className="aspect-square bg-gray-100 overflow-hidden">
-                        <img
-                          src={photosApi.getThumbnailUrl(photo.id, 512)}
-                          alt={photo.analysis?.description_short || 'Photo'}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                          loading="lazy"
-                        />
-                      </div>
+                  {groupedPhotos[groupKey].map((photo: Photo) => {
+                    const isSelected = selectedPhotos.has(photo.id);
 
-                      {/* Overlay with Info */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                          {photo.analysis?.description_short && (
-                            <p className="text-sm font-medium mb-2 line-clamp-2">
-                              {photo.analysis.description_short}
-                            </p>
-                          )}
-                          <div className="space-y-1 text-xs">
-                            <div className="flex items-center space-x-1">
-                              <Clock className="w-3 h-3" />
-                              <span>{formatRelativeTime(photo.taken_at || photo.uploaded_at)}</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-white/70">{formatDate(photo.uploaded_at)}</span>
-                              {photo.analyzed_at && (
-                                <div className="flex items-center space-x-1">
-                                  <Eye className="w-3 h-3" />
-                                  <span>Analizzata</span>
-                                </div>
-                              )}
+                    return selectMode ? (
+                      <div
+                        key={photo.id}
+                        onClick={() => togglePhotoSelection(photo.id)}
+                        className={`group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border-2 cursor-pointer ${
+                          isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
+                        }`}
+                      >
+                        {/* Photo Image */}
+                        <div className="aspect-square bg-gray-100 overflow-hidden">
+                          <img
+                            src={photosApi.getThumbnailUrl(photo.id, 512)}
+                            alt={photo.analysis?.description_short || 'Photo'}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+
+                        {/* Selection Checkbox */}
+                        <div className="absolute top-3 left-3 z-10">
+                          <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${
+                            isSelected ? 'bg-blue-600 border-blue-600' : 'bg-white/90 border-gray-300'
+                          } border-2`}>
+                            {isSelected && (
+                              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Overlay with Info */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                            {photo.analysis?.description_short && (
+                              <p className="text-sm font-medium mb-2 line-clamp-2">
+                                {photo.analysis.description_short}
+                              </p>
+                            )}
+                            <div className="space-y-1 text-xs">
+                              <div className="flex items-center space-x-1">
+                                <Clock className="w-3 h-3" />
+                                <span>{formatRelativeTime(photo.taken_at || photo.uploaded_at)}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-white/70">{formatDate(photo.uploaded_at)}</span>
+                                {photo.analyzed_at && (
+                                  <div className="flex items-center space-x-1">
+                                    <Eye className="w-3 h-3" />
+                                    <span>Analizzata</span>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Analysis Status Badge */}
-                      {!photo.analyzed_at && (
-                        <div className="absolute top-2 right-2">
-                          <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
-                            <Loader className="w-3 h-3 animate-spin" />
-                            <span>
-                              {elapsedTimes[photo.id] > 0
-                                ? `${Math.floor(elapsedTimes[photo.id] / 60)}:${String(elapsedTimes[photo.id] % 60).padStart(2, '0')}`
-                                : 'Analisi...'}
-                            </span>
+                        {/* Analysis Status Badge */}
+                        {!photo.analyzed_at && (
+                          <div className="absolute top-3 right-3">
+                            <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
+                              <Loader className="w-3 h-3 animate-spin" />
+                              <span>
+                                {elapsedTimes[photo.id] > 0
+                                  ? `${Math.floor(elapsedTimes[photo.id] / 60)}:${String(elapsedTimes[photo.id] % 60).padStart(2, '0')}`
+                                  : 'Analisi...'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tags Preview - only if not selected */}
+                        {!isSelected && photo.analysis?.tags && photo.analysis.tags.length > 0 && (
+                          <div className="absolute top-3 left-3 flex flex-wrap gap-1">
+                            {photo.analysis.tags.slice(0, 2).map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <Link
+                        key={photo.id}
+                        to={`/photos/${photo.id}`}
+                        className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-gray-200"
+                      >
+                        {/* Photo Image */}
+                        <div className="aspect-square bg-gray-100 overflow-hidden">
+                          <img
+                            src={photosApi.getThumbnailUrl(photo.id, 512)}
+                            alt={photo.analysis?.description_short || 'Photo'}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                        </div>
+
+                        {/* Overlay with Info */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                            {photo.analysis?.description_short && (
+                              <p className="text-sm font-medium mb-2 line-clamp-2">
+                                {photo.analysis.description_short}
+                              </p>
+                            )}
+                            <div className="space-y-1 text-xs">
+                              <div className="flex items-center space-x-1">
+                                <Clock className="w-3 h-3" />
+                                <span>{formatRelativeTime(photo.taken_at || photo.uploaded_at)}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-white/70">{formatDate(photo.uploaded_at)}</span>
+                                {photo.analyzed_at && (
+                                  <div className="flex items-center space-x-1">
+                                    <Eye className="w-3 h-3" />
+                                    <span>Analizzata</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      )}
 
-                      {/* Tags Preview */}
-                      {photo.analysis?.tags && photo.analysis.tags.length > 0 && (
-                        <div className="absolute top-2 left-2 flex flex-wrap gap-1">
-                          {photo.analysis.tags.slice(0, 2).map((tag, idx) => (
-                            <span
-                              key={idx}
-                              className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </Link>
-                  ))}
+                        {/* Analysis Status Badge */}
+                        {!photo.analyzed_at && (
+                          <div className="absolute top-2 right-2">
+                            <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
+                              <Loader className="w-3 h-3 animate-spin" />
+                              <span>
+                                {elapsedTimes[photo.id] > 0
+                                  ? `${Math.floor(elapsedTimes[photo.id] / 60)}:${String(elapsedTimes[photo.id] % 60).padStart(2, '0')}`
+                                  : 'Analisi...'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Tags Preview */}
+                        {photo.analysis?.tags && photo.analysis.tags.length > 0 && (
+                          <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+                            {photo.analysis.tags.slice(0, 2).map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="bg-blue-600 text-white text-xs px-2 py-1 rounded-full"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             ))}

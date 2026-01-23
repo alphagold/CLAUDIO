@@ -310,19 +310,63 @@ def extract_exif_data(file_path: str) -> dict:
                     gps_info = exif.get_ifd(0x8825)  # GPS IFD
                     if gps_info:
                         from PIL.ExifTags import GPSTAGS
+
+                        # Store raw GPS data
                         for tag_id, value in gps_info.items():
                             tag_name = GPSTAGS.get(tag_id, f"GPS_{tag_id}")
                             try:
                                 if isinstance(value, bytes):
                                     exif_data[tag_name] = value.decode('utf-8', errors='ignore')
-                                elif isinstance(value, tuple) and len(value) == 2:
-                                    exif_data[tag_name] = f"{value[0]}/{value[1]}"
+                                elif isinstance(value, tuple):
+                                    # GPS coordinates are often tuples of tuples
+                                    if len(value) == 3 and all(isinstance(x, tuple) for x in value):
+                                        # Convert DMS (degrees, minutes, seconds) to string
+                                        exif_data[tag_name] = f"{value[0][0]}/{value[0][1]}° {value[1][0]}/{value[1][1]}' {value[2][0]}/{value[2][1]}\""
+                                    elif len(value) == 2:
+                                        exif_data[tag_name] = f"{value[0]}/{value[1]}"
+                                    else:
+                                        exif_data[tag_name] = str(value)
                                 else:
                                     exif_data[tag_name] = str(value)
                             except:
-                                pass
-                except:
-                    pass
+                                exif_data[tag_name] = str(value)
+
+                        # Convert GPS to decimal coordinates
+                        def dms_to_decimal(dms_tuple, ref):
+                            """Convert GPS DMS (degrees, minutes, seconds) to decimal"""
+                            try:
+                                degrees = float(dms_tuple[0][0]) / float(dms_tuple[0][1])
+                                minutes = float(dms_tuple[1][0]) / float(dms_tuple[1][1])
+                                seconds = float(dms_tuple[2][0]) / float(dms_tuple[2][1])
+                                decimal = degrees + (minutes / 60) + (seconds / 3600)
+                                if ref in ['S', 'W']:
+                                    decimal = -decimal
+                                return decimal
+                            except:
+                                return None
+
+                        # Extract and convert latitude
+                        gps_lat = gps_info.get(2)  # GPSLatitude
+                        gps_lat_ref = gps_info.get(1)  # GPSLatitudeRef
+                        if gps_lat and gps_lat_ref:
+                            if isinstance(gps_lat_ref, bytes):
+                                gps_lat_ref = gps_lat_ref.decode('utf-8')
+                            lat_decimal = dms_to_decimal(gps_lat, gps_lat_ref)
+                            if lat_decimal is not None:
+                                exif_data['GPS_Latitude_Decimal'] = lat_decimal
+
+                        # Extract and convert longitude
+                        gps_lon = gps_info.get(4)  # GPSLongitude
+                        gps_lon_ref = gps_info.get(3)  # GPSLongitudeRef
+                        if gps_lon and gps_lon_ref:
+                            if isinstance(gps_lon_ref, bytes):
+                                gps_lon_ref = gps_lon_ref.decode('utf-8')
+                            lon_decimal = dms_to_decimal(gps_lon, gps_lon_ref)
+                            if lon_decimal is not None:
+                                exif_data['GPS_Longitude_Decimal'] = lon_decimal
+
+                except Exception as gps_error:
+                    print(f"GPS extraction error: {gps_error}")
 
         except Exception as exif_error:
             print(f"EXIF extraction warning: {exif_error}")
@@ -453,6 +497,12 @@ async def upload_photo(
     # Get image dimensions
     width = exif_data.get('Width') if exif_data else None
     height = exif_data.get('Height') if exif_data else None
+
+    # Get GPS coordinates from EXIF if not provided manually
+    if not latitude and exif_data:
+        latitude = exif_data.get('GPS_Latitude_Decimal')
+    if not longitude and exif_data:
+        longitude = exif_data.get('GPS_Longitude_Decimal')
 
     # Create photo record
     photo = Photo(
