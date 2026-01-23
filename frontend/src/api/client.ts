@@ -111,6 +111,14 @@ export const photosApi = {
     return response.data;
   },
 
+  bulkAnalyzePhotos: async (photoIds: string[], model?: string): Promise<any> => {
+    const params = model ? { model } : {};
+    const response = await apiClient.post('/api/photos/bulk-analyze', photoIds, {
+      params,
+    });
+    return response.data;
+  },
+
   updatePhoto: async (photoId: string, data: { taken_at?: string; latitude?: number; longitude?: number; location_name?: string }): Promise<Photo> => {
     const response = await apiClient.patch(`/api/photos/${photoId}`, null, {
       params: data,

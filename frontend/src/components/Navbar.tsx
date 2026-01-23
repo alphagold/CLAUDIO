@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Images, Album, Map, LogOut, User, Shield } from 'lucide-react';
+import { Images, Album, Map, LogOut, User, Shield, Settings } from 'lucide-react';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -73,6 +73,21 @@ export default function Navbar() {
               <span className="font-medium">Mappa</span>
               {isActive('/map') && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full"></div>
+              )}
+            </Link>
+
+            <Link
+              to="/settings"
+              className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                isActive('/settings')
+                  ? 'bg-gradient-to-r from-green-50 to-green-100 text-green-600 shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <Settings className="w-5 h-5" />
+              <span className="font-medium">Impostazioni</span>
+              {isActive('/settings') && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-green-600 to-green-400 rounded-full"></div>
               )}
             </Link>
 

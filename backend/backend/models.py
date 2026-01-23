@@ -17,6 +17,8 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(255))
     is_admin = Column(Boolean, default=False, nullable=False)
+    preferred_model = Column(String(50), default="moondream", nullable=False)
+    auto_analyze = Column(Boolean, default=True, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 

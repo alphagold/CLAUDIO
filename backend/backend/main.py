@@ -539,6 +539,53 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
 
 
 # ============================================================================
+# ROUTES - USER PROFILE & PREFERENCES
+# ============================================================================
+
+@app.get("/api/user/profile")
+async def get_user_profile(
+    current_user: User = Depends(get_current_user)
+):
+    """Get current user profile and preferences"""
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "is_admin": current_user.is_admin,
+        "preferred_model": current_user.preferred_model,
+        "auto_analyze": current_user.auto_analyze,
+        "created_at": current_user.created_at.isoformat()
+    }
+
+
+@app.patch("/api/user/preferences")
+async def update_user_preferences(
+    preferred_model: Optional[str] = None,
+    auto_analyze: Optional[bool] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user preferences for AI model and auto-analysis"""
+    if preferred_model is not None:
+        valid_models = ["moondream", "llava-phi3", "llama3.2-vision"]
+        if preferred_model not in valid_models:
+            raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
+        current_user.preferred_model = preferred_model
+
+    if auto_analyze is not None:
+        current_user.auto_analyze = auto_analyze
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "message": "Preferences updated successfully",
+        "preferred_model": current_user.preferred_model,
+        "auto_analyze": current_user.auto_analyze
+    }
+
+
+# ============================================================================
 # ROUTES - PHOTOS
 # ============================================================================
 
@@ -551,7 +598,7 @@ async def upload_photo(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Upload new photo"""
+    """Upload new photo (uses user's preferred AI model)"""
     # Validate file
     file_ext = Path(file.filename).suffix.lower()
     if file_ext not in settings.ALLOWED_EXTENSIONS:
@@ -626,9 +673,12 @@ async def upload_photo(
     db.commit()
     db.refresh(photo)
 
-    # Add to analysis queue (processed one at a time)
-    # User gets immediate response, analysis happens in background
-    enqueue_analysis(photo.id, str(file_path))
+    # Auto-analyze only if user preference is enabled
+    if current_user.auto_analyze:
+        model = current_user.preferred_model or "moondream"
+        # Add to analysis queue (processed one at a time)
+        # User gets immediate response, analysis happens in background
+        enqueue_analysis(photo.id, str(file_path), model)
 
     return photo
 
@@ -844,6 +894,56 @@ async def reanalyze_photo(
         "photo_id": str(photo.id),
         "model": model,
         "queue_position": analysis_queue.qsize()
+    }
+
+
+@app.post("/api/photos/bulk-analyze")
+async def bulk_analyze_photos(
+    photo_ids: list[uuid.UUID],
+    model: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Analyze or reanalyze multiple photos at once"""
+    # Use user's preferred model if not specified
+    selected_model = model or current_user.preferred_model or "moondream"
+
+    # Validate model
+    valid_models = ["moondream", "llava-phi3", "llama3.2-vision"]
+    if selected_model not in valid_models:
+        raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
+
+    # Verify all photos belong to user
+    photos = db.query(Photo).filter(
+        Photo.id.in_(photo_ids),
+        Photo.user_id == current_user.id,
+        Photo.deleted_at.is_(None)
+    ).all()
+
+    if len(photos) != len(photo_ids):
+        raise HTTPException(status_code=404, detail="Some photos not found")
+
+    # Queue all photos for analysis
+    queued_count = 0
+    for photo in photos:
+        file_path = Path(photo.original_path)
+        if not file_path.exists():
+            continue
+
+        # Reset analyzed_at to show analysis is in progress
+        photo.analyzed_at = None
+
+        # Add to queue
+        enqueue_analysis(photo.id, str(file_path), selected_model)
+        queued_count += 1
+
+    db.commit()
+
+    return {
+        "message": f"Started analysis for {queued_count} photos",
+        "queued": queued_count,
+        "model": selected_model,
+        "queue_size": analysis_queue.qsize()
     }
 
 
