@@ -201,7 +201,6 @@ async def list_users(
         "email": user.email,
         "full_name": user.full_name,
         "is_admin": user.is_admin,
-        "role": user.role,
         "created_at": user.created_at.isoformat(),
         "photo_count": db.query(func.count(Photo.id)).filter(
             Photo.user_id == user.id,
@@ -215,16 +214,12 @@ async def create_user(
     email: str,
     password: str,
     full_name: str = "",
-    role: str = "editor",  # 'admin', 'editor', 'viewer'
+    is_admin: bool = False,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
     """Create new user (admin only)"""
     from passlib.context import CryptContext
-
-    # Validate role
-    if role not in ['admin', 'editor', 'viewer']:
-        raise HTTPException(status_code=400, detail="Invalid role. Must be 'admin', 'editor', or 'viewer'")
 
     # Check if user exists
     existing = db.query(User).filter(User.email == email).first()
@@ -240,8 +235,7 @@ async def create_user(
         email=email,
         password_hash=password_hash,
         full_name=full_name,
-        role=role,
-        is_admin=(role == 'admin')  # Set is_admin based on role
+        is_admin=is_admin
     )
     db.add(new_user)
     db.commit()
@@ -252,7 +246,6 @@ async def create_user(
         "email": new_user.email,
         "full_name": new_user.full_name,
         "is_admin": new_user.is_admin,
-        "role": new_user.role,
         "created_at": new_user.created_at.isoformat()
     }
 
@@ -262,7 +255,7 @@ async def update_user(
     user_id: str,
     email: str = None,
     full_name: str = None,
-    role: str = None,  # 'admin', 'editor', 'viewer'
+    is_admin: bool = None,
     new_password: str = None,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
@@ -286,11 +279,8 @@ async def update_user(
     if full_name is not None:
         user.full_name = full_name
 
-    if role is not None:
-        if role not in ['admin', 'editor', 'viewer']:
-            raise HTTPException(status_code=400, detail="Invalid role. Must be 'admin', 'editor', or 'viewer'")
-        user.role = role
-        user.is_admin = (role == 'admin')  # Sync is_admin with role
+    if is_admin is not None:
+        user.is_admin = is_admin
 
     if new_password is not None:
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -304,7 +294,6 @@ async def update_user(
         "email": user.email,
         "full_name": user.full_name,
         "is_admin": user.is_admin,
-        "role": user.role,
         "created_at": user.created_at.isoformat()
     }
 
