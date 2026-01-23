@@ -151,7 +151,7 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
   const successFiles = files.filter(f => f.uploadStatus === 'success').length;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl shadow-lg border border-gray-200/50 p-6 animate-fade-in">
       {/* Drop Zone */}
       <div
         onDragOver={(e) => {
@@ -160,25 +160,30 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-xl p-12 text-center transition-all ${
+        className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${
           isDragging
-            ? 'border-blue-500 bg-blue-50 scale-105'
-            : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+            ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 scale-105 shadow-xl'
+            : 'border-gray-300 hover:border-blue-400 hover:bg-gradient-to-br hover:from-gray-50 hover:to-blue-50'
         }`}
       >
         <div className="flex flex-col items-center">
-          <div className={`p-4 rounded-full mb-4 transition-colors ${
-            isDragging ? 'bg-blue-100' : 'bg-gray-100'
+          <div className={`relative p-5 rounded-2xl mb-4 transition-all duration-300 ${
+            isDragging ? 'bg-gradient-to-br from-blue-500 to-blue-600 scale-110' : 'bg-gradient-to-br from-gray-100 to-gray-200'
           }`}>
-            <Upload className={`w-10 h-10 ${isDragging ? 'text-blue-600' : 'text-gray-400'}`} />
+            <Upload className={`w-12 h-12 transition-all duration-300 ${isDragging ? 'text-white animate-bounce' : 'text-gray-400'}`} />
+            {isDragging && (
+              <div className="absolute inset-0 bg-blue-400 rounded-2xl blur-xl opacity-50 animate-pulse"></div>
+            )}
           </div>
-          <p className="text-xl font-semibold text-gray-700 mb-2">
-            Trascina le foto qui
+          <p className={`text-2xl font-bold mb-2 transition-colors ${
+            isDragging ? 'text-blue-600' : 'text-gray-800'
+          }`}>
+            {isDragging ? '✨ Rilascia qui le foto!' : 'Trascina le foto qui'}
           </p>
-          <p className="text-sm text-gray-500 mb-6">
+          <p className="text-sm text-gray-500 mb-6 font-medium">
             oppure
           </p>
-          <label className="cursor-pointer">
+          <label className="cursor-pointer group">
             <input
               type="file"
               multiple
@@ -187,13 +192,14 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
               className="hidden"
               disabled={isUploading}
             />
-            <span className="px-8 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 active:scale-95 transition-all inline-block">
-              Seleziona File
+            <span className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold hover:from-blue-700 hover:to-blue-800 active:scale-95 transition-all inline-block shadow-lg hover:shadow-xl group-hover:-translate-y-0.5">
+              📁 Seleziona File
             </span>
           </label>
-          <p className="text-xs text-gray-400 mt-4">
-            Supporta JPG, PNG, HEIC, WebP (max 50MB)
-          </p>
+          <div className="mt-6 flex items-center space-x-2 text-xs text-gray-500 bg-gray-100 px-4 py-2 rounded-full">
+            <CheckCircle className="w-4 h-4 text-green-600" />
+            <span>Supporta JPG, PNG, HEIC, WebP (max 50MB)</span>
+          </div>
         </div>
       </div>
 
@@ -309,18 +315,18 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
           <button
             onClick={handleUpload}
             disabled={isUploading || pendingFiles === 0}
-            className="w-full mt-6 px-6 py-4 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all active:scale-95 flex items-center justify-center space-x-2"
+            className="group w-full mt-6 px-6 py-5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold hover:from-green-700 hover:to-emerald-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-300 active:scale-95 flex items-center justify-center space-x-3 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
           >
             {isUploading ? (
               <>
-                <Loader className="w-5 h-5 animate-spin" />
-                <span>Caricamento in corso...</span>
+                <Loader className="w-6 h-6 animate-spin" />
+                <span className="text-lg">Caricamento in corso...</span>
               </>
             ) : (
               <>
-                <Upload className="w-5 h-5" />
-                <span>
-                  Carica {pendingFiles} {pendingFiles === 1 ? 'Foto' : 'Foto'}
+                <Upload className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                <span className="text-lg">
+                  🚀 Carica {pendingFiles} {pendingFiles === 1 ? 'Foto' : 'Foto'}
                 </span>
               </>
             )}

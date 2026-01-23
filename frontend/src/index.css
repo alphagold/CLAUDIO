@@ -17,5 +17,30 @@
 }
 
 @layer components {
-  /* Custom component styles can go here */
+  /* Custom Leaflet Map Marker Styles */
+  .custom-marker {
+    background: transparent !important;
+    border: none !important;
+  }
+
+  /* Custom Leaflet Popup Styles */
+  .leaflet-popup-content-wrapper {
+    @apply rounded-2xl shadow-2xl border border-gray-200/50 overflow-hidden;
+    padding: 0 !important;
+  }
+
+  .leaflet-popup-content {
+    margin: 0 !important;
+    padding: 1rem !important;
+    min-width: 280px !important;
+  }
+
+  .leaflet-popup-tip {
+    @apply shadow-lg;
+  }
+
+  /* Smooth popup animation */
+  .leaflet-popup {
+    @apply animate-scale-in;
+  }
 }

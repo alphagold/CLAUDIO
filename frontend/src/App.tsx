@@ -1,19 +1,21 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/authStore';
+import { Loader } from 'lucide-react';
 
-// Pages (we'll create these next)
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import GalleryPage from './pages/GalleryPage';
-import PhotoDetailPage from './pages/PhotoDetailPage';
-import AlbumsPage from './pages/AlbumsPage';
-import AlbumDetailPage from './pages/AlbumDetailPage';
-import MapPage from './pages/MapPage';
-import AdminPage from './pages/AdminPage';
-import AdminUsersPage from './pages/AdminUsersPage';
-import SystemMonitoringPage from './pages/SystemMonitoringPage';
+// Lazy load pages for code splitting and better performance
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const GalleryPage = lazy(() => import('./pages/GalleryPage'));
+const PhotoDetailPage = lazy(() => import('./pages/PhotoDetailPage'));
+const AlbumsPage = lazy(() => import('./pages/AlbumsPage'));
+const AlbumDetailPage = lazy(() => import('./pages/AlbumDetailPage'));
+const MapPage = lazy(() => import('./pages/MapPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'));
+const SystemMonitoringPage = lazy(() => import('./pages/SystemMonitoringPage'));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -66,9 +68,26 @@ function App() {
         }}
       />
       <Router>
-        <Routes>
-          {/* Public routes */}
-          <Route
+        <Suspense
+          fallback={
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+              <div className="text-center animate-fade-in">
+                <div className="relative inline-block mb-6">
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full blur-xl opacity-50 animate-pulse"></div>
+                  <div className="relative p-6 bg-white rounded-full shadow-2xl">
+                    <Loader className="w-12 h-12 text-blue-600 animate-spin" />
+                  </div>
+                </div>
+                <p className="text-lg font-semibold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                  Caricamento...
+                </p>
+              </div>
+            </div>
+          }
+        >
+          <Routes>
+            {/* Public routes */}
+            <Route
             path="/login"
             element={
               <PublicRoute>
@@ -151,10 +170,11 @@ function App() {
             }
           />
 
-          {/* Default redirect */}
-          <Route path="/" element={<Navigate to="/gallery" />} />
-          <Route path="*" element={<Navigate to="/gallery" />} />
-        </Routes>
+            {/* Default redirect */}
+            <Route path="/" element={<Navigate to="/gallery" />} />
+            <Route path="*" element={<Navigate to="/gallery" />} />
+          </Routes>
+        </Suspense>
       </Router>
     </QueryClientProvider>
   );

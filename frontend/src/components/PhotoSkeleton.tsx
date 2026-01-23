@@ -1,8 +1,10 @@
+import { memo } from 'react';
+
 interface PhotoSkeletonProps {
   viewMode: 'grid-small' | 'grid-large' | 'list' | 'details';
 }
 
-export default function PhotoSkeleton({ viewMode }: PhotoSkeletonProps) {
+function PhotoSkeleton({ viewMode }: PhotoSkeletonProps) {
   if (viewMode === 'list') {
     return (
       <div className="bg-white rounded-lg overflow-hidden shadow-sm border border-gray-200 flex items-center animate-pulse">
@@ -46,3 +48,6 @@ export default function PhotoSkeleton({ viewMode }: PhotoSkeletonProps) {
     </div>
   );
 }
+
+// Wrap with memo to prevent unnecessary re-renders
+export default memo(PhotoSkeleton);

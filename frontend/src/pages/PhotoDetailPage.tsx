@@ -409,7 +409,7 @@ export default function PhotoDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
           {/* Photo */}
-          <div className="lg:col-span-3 bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200">
+          <div className="lg:col-span-3 bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200 animate-fade-in">
             <div className="relative w-full">
               <img
                 src={photosApi.getPhotoUrl(photo.id)}
@@ -423,7 +423,7 @@ export default function PhotoDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Analysis Status */}
             {!photo.analyzed_at ? (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <Loader className="w-6 h-6 text-yellow-600 animate-spin" />
@@ -443,7 +443,7 @@ export default function PhotoDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-6">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-6 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <Sparkles className="w-6 h-6 text-green-600" />
@@ -469,7 +469,7 @@ export default function PhotoDetailPage() {
 
             {/* Description */}
             {photo.analysis?.description_full && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
                 <div className="flex items-center space-x-2 mb-3">
                   <FileText className="w-5 h-5 text-blue-600" />
                   <h3 className="font-semibold text-gray-900">Descrizione AI</h3>
@@ -486,7 +486,7 @@ export default function PhotoDetailPage() {
 
             {/* Detected Objects */}
             {photo.analysis?.detected_objects && photo.analysis?.detected_objects.length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
                 <div className="flex items-center space-x-2 mb-3">
                   <Eye className="w-5 h-5 text-purple-600" />
                   <h3 className="font-semibold text-gray-900">Oggetti Rilevati</h3>
@@ -506,7 +506,7 @@ export default function PhotoDetailPage() {
 
             {/* Tags */}
             {photo.analysis?.tags && photo.analysis?.tags.length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
                 <div className="flex items-center space-x-2 mb-3">
                   <Tag className="w-5 h-5 text-blue-600" />
                   <h3 className="font-semibold text-gray-900">Tags</h3>
@@ -526,7 +526,7 @@ export default function PhotoDetailPage() {
 
             {/* Extracted Text */}
             {photo.analysis?.extracted_text && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
                 <div className="flex items-center space-x-2 mb-3">
                   <FileText className="w-5 h-5 text-orange-600" />
                   <h3 className="font-semibold text-gray-900">Testo Estratto</h3>
@@ -539,7 +539,7 @@ export default function PhotoDetailPage() {
 
             {/* Scene Category */}
             {photo.analysis?.scene_category && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
                 <div className="flex items-center space-x-2 mb-3">
                   <Sparkles className="w-5 h-5 text-indigo-600" />
                   <h3 className="font-semibold text-gray-900">Categoria Scena</h3>
@@ -584,7 +584,7 @@ export default function PhotoDetailPage() {
               });
 
               return (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-2">
                       <Camera className="w-5 h-5 text-gray-600" />
@@ -671,7 +671,7 @@ export default function PhotoDetailPage() {
             })()}
 
             {/* Metadata */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
               <div className="flex items-center space-x-2 mb-3">
                 <Calendar className="w-5 h-5 text-gray-600" />
                 <h3 className="font-semibold text-gray-900">Informazioni</h3>

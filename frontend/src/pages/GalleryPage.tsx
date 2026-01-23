@@ -250,7 +250,7 @@ export default function GalleryPage() {
         <Link
           key={photo.id}
           to={`/photos/${photo.id}`}
-          className="group relative bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200 flex items-center"
+          className="group relative bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200 flex items-center animate-fade-in"
         >
           {/* Thumbnail */}
           <div className="w-32 h-32 flex-shrink-0 bg-gray-100 overflow-hidden">
@@ -316,7 +316,7 @@ export default function GalleryPage() {
         <Link
           key={photo.id}
           to={`/photos/${photo.id}`}
-          className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-200"
+          className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-200 animate-fade-in"
         >
           {/* Image */}
           <div className="aspect-video bg-gray-100 overflow-hidden">
@@ -675,7 +675,7 @@ export default function GalleryPage() {
                       <div
                         key={photo.id}
                         onClick={() => togglePhotoSelection(photo.id)}
-                        className={`group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border-2 cursor-pointer ${
+                        className={`group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border-2 cursor-pointer animate-fade-in ${
                           isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
                         }`}
                       >
@@ -760,7 +760,7 @@ export default function GalleryPage() {
                       <Link
                         key={photo.id}
                         to={`/photos/${photo.id}`}
-                        className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 border border-gray-200 hover:border-blue-300 transform hover:-translate-y-1"
+                        className="group relative bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 border border-gray-200 hover:border-blue-300 transform hover:-translate-y-1 animate-fade-in"
                       >
                         {/* Photo Image */}
                         <div className="aspect-square bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden">
