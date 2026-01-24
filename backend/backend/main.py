@@ -105,9 +105,12 @@ def get_current_user(
 ) -> User:
     """Get current authenticated user from JWT token"""
     user_id = decode_token(token)
+    # Expire all cached objects to ensure we get fresh data from DB
+    db.expire_all()
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    print(f"[AUTH] Loaded user {user.email} - auto_analyze: {user.auto_analyze}, preferred_model: {user.preferred_model}")
     return user
 
 
@@ -566,6 +569,9 @@ async def update_user_preferences(
     db: Session = Depends(get_db)
 ):
     """Update user preferences for AI model and auto-analysis"""
+    print(f"[PREFERENCES] Updating preferences for user {current_user.email}")
+    print(f"[PREFERENCES] Before update - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}")
+
     if preferred_model is not None:
         valid_models = ["moondream", "llava-phi3", "llama3.2-vision"]
         if preferred_model not in valid_models:
@@ -577,6 +583,8 @@ async def update_user_preferences(
 
     db.commit()
     db.refresh(current_user)
+
+    print(f"[PREFERENCES] After update - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}")
 
     return {
         "message": "Preferences updated successfully",
@@ -674,11 +682,19 @@ async def upload_photo(
     db.refresh(photo)
 
     # Auto-analyze only if user preference is enabled
+    # Refresh user from DB to get latest preferences
+    db.refresh(current_user)
+
+    print(f"[UPLOAD] User {current_user.email} - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}")
+
     if current_user.auto_analyze:
         model = current_user.preferred_model or "moondream"
+        print(f"[UPLOAD] Auto-analysis enabled, using model: {model}")
         # Add to analysis queue (processed one at a time)
         # User gets immediate response, analysis happens in background
         enqueue_analysis(photo.id, str(file_path), model)
+    else:
+        print(f"[UPLOAD] Auto-analysis disabled, skipping analysis")
 
     return photo
 
