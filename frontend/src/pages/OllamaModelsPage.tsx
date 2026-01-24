@@ -100,7 +100,7 @@ export default function OllamaModelsPage() {
     setDownloadProgress({ status: 'Connessione...' });
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token');
       // EventSource doesn't support custom headers, so we pass token as query parameter
       const eventSource = new EventSource(
         `http://192.168.200.4:8000/api/admin/ollama/models/pull?model_name=${encodeURIComponent(modelName)}&token=${token}`
