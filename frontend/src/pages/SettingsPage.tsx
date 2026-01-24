@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Layout from '../components/Layout';
 import apiClient from '../api/client';
@@ -58,6 +58,14 @@ export default function SettingsPage() {
 
   const [preferredModel, setPreferredModel] = useState(profile?.preferred_model || 'moondream');
   const [autoAnalyze, setAutoAnalyze] = useState(profile?.auto_analyze ?? true);
+
+  // Sync local state with profile data when it loads or changes
+  useEffect(() => {
+    if (profile) {
+      setPreferredModel(profile.preferred_model || 'moondream');
+      setAutoAnalyze(profile.auto_analyze ?? true);
+    }
+  }, [profile]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: { preferred_model?: string; auto_analyze?: boolean }) => {
