@@ -506,7 +506,8 @@ async def delete_ollama_model(
         decoded_model_name = unquote(model_name)
 
         async with httpx.AsyncClient() as client:
-            response = await client.delete(
+            response = await client.request(
+                "DELETE",
                 f"{settings.OLLAMA_HOST}/api/delete",
                 json={"name": decoded_model_name},
                 timeout=30.0
