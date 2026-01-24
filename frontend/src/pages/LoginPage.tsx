@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { authApi } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import { Images, Mail, Lock, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
+import { Brain, Mail, Lock, AlertCircle, Sparkles, ArrowRight } from 'lucide-react';
 import type { LoginRequest } from '../types';
 
 export default function LoginPage() {
@@ -44,16 +44,16 @@ export default function LoginPage() {
         {/* Logo and Title */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4 relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur-lg opacity-50 animate-pulse"></div>
-            <div className="relative bg-gradient-to-r from-blue-600 to-purple-600 p-4 rounded-2xl shadow-lg transform hover:scale-110 transition-transform duration-300">
-              <Images className="w-12 h-12 text-white" />
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-500 rounded-2xl blur-lg opacity-50 animate-pulse"></div>
+            <div className="relative bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-500 p-4 rounded-2xl shadow-lg transform hover:scale-110 transition-transform duration-300">
+              <Brain className="w-12 h-12 text-white" />
               <div className="absolute -top-1 -right-1">
                 <Sparkles className="w-6 h-6 text-yellow-300 animate-pulse" />
               </div>
             </div>
           </div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-2">
-            Photo Memory
+            Done
           </h1>
           <p className="text-gray-600 text-lg">Benvenuto! Accedi al tuo account</p>
         </div>

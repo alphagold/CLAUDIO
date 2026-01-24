@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Images, Album, Map, LogOut, User, Shield, Settings } from 'lucide-react';
+import { Brain, Album, Map, LogOut, User, Shield, Settings } from 'lucide-react';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -19,13 +19,15 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <Link to="/gallery" className="flex items-center space-x-2 group">
+          <Link to="/gallery" className="flex items-center space-x-3 group">
             <div className="relative">
-              <Images className="w-8 h-8 text-blue-600 group-hover:text-blue-700 transition-colors" />
-              <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg blur opacity-0 group-hover:opacity-20 transition-opacity"></div>
+              <div className="absolute -inset-2 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-500 rounded-xl blur-md opacity-75 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-500 p-2 rounded-xl shadow-lg">
+                <Brain className="w-6 h-6 text-white" />
+              </div>
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-              Photo Memory
+            <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-500 bg-clip-text text-transparent">
+              Done
             </span>
           </Link>
 

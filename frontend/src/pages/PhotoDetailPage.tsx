@@ -106,11 +106,11 @@ export default function PhotoDetailPage() {
   const reanalyzeMutation = useMutation({
     mutationFn: (model: string) => photosApi.reanalyzePhoto(photoId!, model),
     onSuccess: () => {
-      toast.success('Rianalisi avviata! Aggiorna tra qualche secondo.');
+      toast.success('Rianalisi avviata!');
       setShowModelDialog(false);
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
-      }, 3000);
+      // Invalidate immediately to trigger refetch and show progress
+      queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
+      queryClient.invalidateQueries({ queryKey: ['photos'] }); // Also invalidate gallery
     },
     onError: () => {
       toast.error('Errore nell\'avvio della rianalisi');
@@ -465,7 +465,7 @@ export default function PhotoDetailPage() {
                     <div>
                       <h3 className="font-semibold text-green-900">Analisi completata</h3>
                       <p className="text-sm text-green-700">
-                        Modello: {photo.analysis?.model_version} • {photo.analysis?.processing_time_ms}ms
+                        Modello: {photo.analysis?.model_version} • {photo.analysis?.processing_time_ms ? (photo.analysis.processing_time_ms / 1000).toFixed(1) : '0'}s
                       </p>
                     </div>
                   </div>
