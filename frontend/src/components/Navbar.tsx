@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Brain, Album, Map, LogOut, User, Shield, Settings } from 'lucide-react';
+import { Brain, Album, Map, LogOut, User, Shield, Settings, ImageIcon } from 'lucide-react';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -41,7 +41,7 @@ export default function Navbar() {
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
-              <Images className="w-5 h-5" />
+              <ImageIcon className="w-5 h-5" />
               <span className="font-medium">Gallery</span>
               {isActive('/gallery') && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full"></div>
