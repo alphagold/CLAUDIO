@@ -60,7 +60,7 @@ export default function GalleryPage() {
     refetchInterval: (query) => {
       // Auto-refresh if any photo is being analyzed
       const photos = query.state.data?.photos || [];
-      const hasAnalyzing = photos.some(p => !p.analyzed_at);
+      const hasAnalyzing = photos.some(p => !p.analyzed_at && p.analysis_started_at);
       return hasAnalyzing ? 3000 : false; // Refresh every 3s if analyzing
     },
   });
@@ -287,7 +287,7 @@ export default function GalleryPage() {
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 line-clamp-1">
-                  {photo.analysis?.description_short || 'Analisi in corso...'}
+                  {photo.analysis?.description_short || (!photo.analyzed_at && photo.analysis_started_at ? 'Analisi in corso...' : 'Non analizzata')}
                 </p>
                 <p className="text-sm text-gray-600 mt-1 line-clamp-2">
                   {photo.analysis?.description_full || ''}
@@ -305,7 +305,7 @@ export default function GalleryPage() {
                   )}
                 </div>
               </div>
-              {!photo.analyzed_at && (
+              {!photo.analyzed_at && photo.analysis_started_at && (
                 <div className="ml-4">
                   <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
                     <Loader className="w-3 h-3 animate-spin" />
@@ -351,7 +351,7 @@ export default function GalleryPage() {
           {/* Details */}
           <div className="p-4">
             <h3 className="font-semibold text-gray-900 mb-2 line-clamp-1">
-              {photo.analysis?.description_short || 'Analisi in corso...'}
+              {photo.analysis?.description_short || (!photo.analyzed_at && photo.analysis_started_at ? 'Analisi in corso...' : 'Non analizzata')}
             </h3>
             <p className="text-sm text-gray-600 mb-3 line-clamp-3">
               {photo.analysis?.description_full || ''}
@@ -382,10 +382,15 @@ export default function GalleryPage() {
                   <Eye className="w-3 h-3" />
                   <span>Analizzata</span>
                 </div>
-              ) : (
+              ) : photo.analysis_started_at ? (
                 <div className="flex items-center space-x-1 text-yellow-600">
                   <Loader className="w-3 h-3 animate-spin" />
                   <span>Analisi...</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-1 text-gray-400">
+                  <Eye className="w-3 h-3" />
+                  <span>Non analizzata</span>
                 </div>
               )}
             </div>
