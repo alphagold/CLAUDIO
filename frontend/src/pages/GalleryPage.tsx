@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { photosApi } from '../api/client';
 import Layout from '../components/Layout';
 import PhotoUpload from '../components/PhotoUpload';
-import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X, Grid3x3, Grid2x2, List, LayoutGrid, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X, Grid3x3, Grid2x2, List, LayoutGrid, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
 import type { Photo } from '../types';
 import PhotoSkeleton from '../components/PhotoSkeleton';
+import toast from 'react-hot-toast';
 
 type SortOption = 'date' | 'year' | 'month' | 'day';
 type ViewMode = 'grid-small' | 'grid-large' | 'list' | 'details';
@@ -19,6 +20,7 @@ const getElapsedTime = (photo: Photo): number => {
 };
 
 export default function GalleryPage() {
+  const queryClient = useQueryClient();
   const [showUpload, setShowUpload] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({});
@@ -29,6 +31,7 @@ export default function GalleryPage() {
   // Multi-select state
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState<Set<string>>(new Set());
+  const [showBulkAnalyzeDialog, setShowBulkAnalyzeDialog] = useState(false);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -178,6 +181,23 @@ export default function GalleryPage() {
       alert('Errore durante l\'eliminazione delle foto');
     }
   };
+
+  // Bulk analyze mutation
+  const bulkAnalyzeMutation = useMutation({
+    mutationFn: (model: string) => photosApi.bulkAnalyzePhotos(Array.from(selectedPhotos), model),
+    onSuccess: (data) => {
+      toast.success(`Analisi avviata per ${data.queued} foto!`);
+      setShowBulkAnalyzeDialog(false);
+      setSelectedPhotos(new Set());
+      setSelectMode(false);
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['photos'] });
+      }, 2000);
+    },
+    onError: () => {
+      toast.error('Errore nell\'avvio dell\'analisi multipla');
+    },
+  });
 
   // Group photos based on sort option
   const groupedPhotos = useMemo(() => {
@@ -589,13 +609,22 @@ export default function GalleryPage() {
                 </div>
               </div>
               {selectedPhotos.size > 0 && (
-                <button
-                  onClick={handleBulkDelete}
-                  className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Elimina</span>
-                </button>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowBulkAnalyzeDialog(true)}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Analizza</span>
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Elimina</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -834,6 +863,78 @@ export default function GalleryPage() {
           </div>
         )}
       </div>
+
+      {/* Bulk Analyze Dialog */}
+      {showBulkAnalyzeDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">Scegli Modello per Analisi</h3>
+              <button onClick={() => setShowBulkAnalyzeDialog(false)}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Seleziona il modello da utilizzare per analizzare {selectedPhotos.size} foto
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => bulkAnalyzeMutation.mutate('moondream')}
+                disabled={bulkAnalyzeMutation.isPending}
+                className="w-full p-4 text-left border-2 border-green-200 rounded-lg hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Zap className="w-5 h-5 text-green-600" />
+                    <span className="font-semibold text-gray-900">Moondream</span>
+                  </div>
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Super Veloce</span>
+                </div>
+                <p className="text-sm text-gray-600">Modello ultraleggero (1.7GB) - ~10 secondi per foto</p>
+              </button>
+
+              <button
+                onClick={() => bulkAnalyzeMutation.mutate('llava-phi3')}
+                disabled={bulkAnalyzeMutation.isPending}
+                className="w-full p-4 text-left border-2 border-blue-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Zap className="w-5 h-5 text-blue-600" />
+                    <span className="font-semibold text-gray-900">LLaVA-Phi3</span>
+                  </div>
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Veloce</span>
+                </div>
+                <p className="text-sm text-gray-600">Modello veloce (3.8GB) - ~30 secondi per foto</p>
+              </button>
+
+              <button
+                onClick={() => bulkAnalyzeMutation.mutate('llama3.2-vision')}
+                disabled={bulkAnalyzeMutation.isPending}
+                className="w-full p-4 text-left border-2 border-purple-200 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-5 h-5 text-purple-600" />
+                    <span className="font-semibold text-gray-900">Llama 3.2 Vision</span>
+                  </div>
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Dettagliato</span>
+                </div>
+                <p className="text-sm text-gray-600">Modello avanzato (11GB) - ~10 minuti per foto, massima qualità</p>
+              </button>
+            </div>
+
+            {bulkAnalyzeMutation.isPending && (
+              <div className="mt-4 flex items-center justify-center space-x-2 text-blue-600">
+                <Loader className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Avvio analisi...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
