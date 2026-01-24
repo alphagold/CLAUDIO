@@ -55,7 +55,7 @@ export default function OllamaModelsPage() {
 
   // Track elapsed time during download
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let interval: number | null = null;
 
     if (isDownloading) {
       downloadStartTime.current = Date.now();
