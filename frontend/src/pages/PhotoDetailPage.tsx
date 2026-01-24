@@ -38,8 +38,9 @@ export default function PhotoDetailPage() {
     queryFn: () => photosApi.getPhoto(photoId!),
     enabled: !!photoId,
     refetchInterval: (query) => {
-      // Auto-refresh while analysis is in progress
-      return query.state.data && !query.state.data.analyzed_at ? 2000 : false;
+      // Auto-refresh only while analysis is truly in progress
+      const photo = query.state.data;
+      return photo && !photo.analyzed_at && photo.analysis_started_at ? 2000 : false;
     },
   });
 
@@ -49,8 +50,8 @@ export default function PhotoDetailPage() {
 
     const storageKey = `analysis_start_${photoId}`;
 
-    if (!photo.analyzed_at) {
-      // Analysis in progress
+    if (!photo.analyzed_at && photo.analysis_started_at) {
+      // Analysis in progress - track time
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         // Resume from saved time
@@ -62,12 +63,12 @@ export default function PhotoDetailPage() {
         setAnalysisStartTime(now);
       }
     } else {
-      // Analysis completed - clean up
+      // Analysis completed or not started - clean up
       localStorage.removeItem(storageKey);
       setAnalysisStartTime(null);
       setElapsedTime(0);
     }
-  }, [photo?.analyzed_at, photoId]);
+  }, [photo?.analyzed_at, photo?.analysis_started_at, photoId]);
 
   // Update elapsed time every second during analysis
   useEffect(() => {
@@ -437,7 +438,7 @@ export default function PhotoDetailPage() {
           {/* Details */}
           <div className="lg:col-span-2 space-y-6">
             {/* Analysis Status */}
-            {!photo.analyzed_at ? (
+            {!photo.analyzed_at && photo.analysis_started_at ? (
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -455,6 +456,29 @@ export default function PhotoDetailPage() {
                       <div className="text-xs text-yellow-700">tempo trascorso</div>
                     </div>
                   )}
+                </div>
+              </div>
+            ) : !photo.analyzed_at && !photo.analysis_started_at ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Eye className="w-6 h-6 text-gray-400" />
+                    <div>
+                      <h3 className="font-semibold text-gray-900">Non analizzata</h3>
+                      <p className="text-sm text-gray-600">
+                        Questa foto non è ancora stata analizzata dall'AI
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleReanalyze}
+                    disabled={reanalyzeMutation.isPending}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    title="Analizza con AI"
+                  >
+                    <Sparkles className={`w-4 h-4 ${reanalyzeMutation.isPending ? 'animate-spin' : ''}`} />
+                    <span>{reanalyzeMutation.isPending ? 'Avviando...' : 'Analizza'}</span>
+                  </button>
                 </div>
               </div>
             ) : (

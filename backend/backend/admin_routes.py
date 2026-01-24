@@ -128,7 +128,12 @@ async def get_system_status(
         Photo.analyzed_at.isnot(None),
         Photo.deleted_at.is_(None)
     ).scalar()
-    pending_photos = total_photos - analyzed_photos
+    # Count only photos truly in analysis (started but not completed)
+    pending_photos = db.query(func.count(Photo.id)).filter(
+        Photo.analyzed_at.is_(None),
+        Photo.analysis_started_at.isnot(None),
+        Photo.deleted_at.is_(None)
+    ).scalar()
 
     # Get disk usage
     try:
