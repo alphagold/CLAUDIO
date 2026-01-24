@@ -446,41 +446,52 @@ async def pull_ollama_model(
     model_name: str,
     current_user: User = Depends(require_admin)
 ):
-    """Download an Ollama model (runs in background)"""
+    """Download an Ollama model with progress streaming"""
     import httpx
     from config import settings
+    from fastapi.responses import StreamingResponse
+    import json
 
-    try:
-        # Start pull in background (non-blocking)
-        async with httpx.AsyncClient() as client:
-            # Just trigger the pull, don't wait for completion
-            response = await client.post(
-                f"{settings.OLLAMA_HOST}/api/pull",
-                json={"name": model_name},
-                timeout=5.0  # Quick timeout, download continues in background
-            )
+    async def stream_pull_progress():
+        """Stream download progress from Ollama"""
+        try:
+            async with httpx.AsyncClient(timeout=None) as client:
+                async with client.stream(
+                    'POST',
+                    f"{settings.OLLAMA_HOST}/api/pull",
+                    json={"name": model_name}
+                ) as response:
+                    if response.status_code != 200:
+                        yield f"data: {json.dumps({'error': 'Failed to start download'})}\n\n"
+                        return
 
-            if response.status_code == 200:
-                return {
-                    "message": f"Started downloading {model_name}",
-                    "model": model_name,
-                    "status": "downloading"
-                }
-            else:
-                raise HTTPException(status_code=response.status_code, detail="Failed to start download")
+                    async for line in response.aiter_lines():
+                        if line:
+                            try:
+                                data = json.loads(line)
+                                # Send progress update to client
+                                yield f"data: {json.dumps(data)}\n\n"
 
-    except httpx.TimeoutException:
-        # Timeout is expected - download continues in background
-        return {
-            "message": f"Download started for {model_name} (running in background)",
-            "model": model_name,
-            "status": "downloading"
+                                # If download is complete, break
+                                if data.get('status') == 'success':
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        stream_pull_progress(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error pulling model: {str(e)}")
+    )
 
 
-@router.delete("/ollama/models/{model_name}")
+@router.delete("/ollama/models/{model_name:path}")
 async def delete_ollama_model(
     model_name: str,
     current_user: User = Depends(require_admin)
@@ -488,25 +499,36 @@ async def delete_ollama_model(
     """Delete an Ollama model"""
     import httpx
     from config import settings
+    from urllib.parse import unquote
 
     try:
+        # Decode URL-encoded model name (e.g., llama3.2-vision%3Alatest -> llama3.2-vision:latest)
+        decoded_model_name = unquote(model_name)
+
         async with httpx.AsyncClient() as client:
             response = await client.delete(
                 f"{settings.OLLAMA_HOST}/api/delete",
-                json={"name": model_name},
+                json={"name": decoded_model_name},
                 timeout=30.0
             )
 
             if response.status_code == 200:
                 return {
-                    "message": f"Model {model_name} deleted successfully",
-                    "model": model_name
+                    "message": f"Model {decoded_model_name} deleted successfully",
+                    "model": decoded_model_name
                 }
             else:
-                raise HTTPException(status_code=response.status_code, detail="Failed to delete model")
+                # Try to get error details from response
+                try:
+                    error_detail = response.json().get('error', 'Failed to delete model')
+                except:
+                    error_detail = f"Failed to delete model (status {response.status_code})"
+                raise HTTPException(status_code=response.status_code, detail=error_detail)
 
     except httpx.RequestError as e:
         raise HTTPException(status_code=503, detail=f"Cannot connect to Ollama: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting model: {str(e)}")
 

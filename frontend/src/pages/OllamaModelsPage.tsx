@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Layout from '../components/Layout';
 import apiClient from '../api/client';
@@ -23,6 +23,15 @@ interface OllamaStatus {
 export default function OllamaModelsPage() {
   const queryClient = useQueryClient();
   const [modelToPull, setModelToPull] = useState('');
+  const [downloadProgress, setDownloadProgress] = useState<{
+    status: string;
+    completed?: number;
+    total?: number;
+    percent?: number;
+  } | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const downloadStartTime = useRef<number | null>(null);
 
   // Fetch models list
   const { data: modelsData, isLoading: modelsLoading, refetch: refetchModels } = useQuery({
@@ -44,19 +53,28 @@ export default function OllamaModelsPage() {
     refetchInterval: 5000,
   });
 
-  // Pull model mutation
-  const pullMutation = useMutation({
-    mutationFn: (modelName: string) =>
-      apiClient.post('/api/admin/ollama/models/pull', null, { params: { model_name: modelName } }),
-    onSuccess: () => {
-      toast.success('Download avviato! Controlla tra qualche minuto.');
-      setModelToPull('');
-      setTimeout(() => refetchModels(), 3000);
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.detail || 'Errore durante il download');
-    },
-  });
+  // Track elapsed time during download
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (isDownloading) {
+      downloadStartTime.current = Date.now();
+      setElapsedTime(0);
+
+      interval = setInterval(() => {
+        if (downloadStartTime.current) {
+          setElapsedTime(Math.floor((Date.now() - downloadStartTime.current) / 1000));
+        }
+      }, 1000);
+    } else {
+      downloadStartTime.current = null;
+      setElapsedTime(0);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isDownloading]);
 
   // Delete model mutation
   const deleteMutation = useMutation({
@@ -71,12 +89,78 @@ export default function OllamaModelsPage() {
     },
   });
 
-  const handlePullModel = () => {
+  const handlePullModel = async () => {
     if (!modelToPull.trim()) {
       toast.error('Inserisci il nome del modello');
       return;
     }
-    pullMutation.mutate(modelToPull.trim());
+
+    const modelName = modelToPull.trim();
+    setIsDownloading(true);
+    setDownloadProgress({ status: 'Connessione...' });
+
+    try {
+      const token = localStorage.getItem('token');
+      const eventSource = new EventSource(
+        `http://192.168.200.4:8000/api/admin/ollama/models/pull?model_name=${encodeURIComponent(modelName)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        } as any
+      );
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.error) {
+            toast.error(data.error);
+            eventSource.close();
+            setIsDownloading(false);
+            setDownloadProgress(null);
+            return;
+          }
+
+          // Update progress
+          if (data.status) {
+            const progress: any = { status: data.status };
+
+            if (data.completed && data.total) {
+              progress.completed = data.completed;
+              progress.total = data.total;
+              progress.percent = Math.round((data.completed / data.total) * 100);
+            }
+
+            setDownloadProgress(progress);
+
+            // Download complete
+            if (data.status === 'success') {
+              toast.success(`Modello ${modelName} scaricato con successo!`);
+              eventSource.close();
+              setIsDownloading(false);
+              setDownloadProgress(null);
+              setModelToPull('');
+              setTimeout(() => refetchModels(), 1000);
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing SSE data:', e);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('EventSource error:', error);
+        toast.error('Errore durante il download');
+        eventSource.close();
+        setIsDownloading(false);
+        setDownloadProgress(null);
+      };
+    } catch (error) {
+      toast.error('Errore durante il download');
+      setIsDownloading(false);
+      setDownloadProgress(null);
+    }
   };
 
   const handleDeleteModel = (modelName: string) => {
@@ -182,10 +266,10 @@ export default function OllamaModelsPage() {
             />
             <button
               onClick={handlePullModel}
-              disabled={pullMutation.isPending || !modelToPull.trim()}
+              disabled={isDownloading || !modelToPull.trim()}
               className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
             >
-              {pullMutation.isPending ? (
+              {isDownloading ? (
                 <>
                   <Loader className="w-5 h-5 animate-spin" />
                   <span>Download...</span>
@@ -198,6 +282,50 @@ export default function OllamaModelsPage() {
               )}
             </button>
           </div>
+
+          {/* Download Progress */}
+          {downloadProgress && (
+            <div className="mt-4 bg-white rounded-lg p-4 border-2 border-green-300 shadow-sm animate-fade-in">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <Loader className="w-5 h-5 text-green-600 animate-spin" />
+                  <span className="text-sm font-semibold text-gray-900">{downloadProgress.status}</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  {downloadProgress.percent !== undefined && (
+                    <span className="text-lg font-bold text-green-600">{downloadProgress.percent}%</span>
+                  )}
+                  <span className="text-sm text-gray-500">
+                    {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              {downloadProgress.percent !== undefined && (
+                <div className="relative w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${downloadProgress.percent}%` }}
+                  >
+                    <div className="absolute top-0 right-0 bottom-0 left-0 bg-white opacity-20 animate-pulse"></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Download Stats */}
+              {downloadProgress.completed && downloadProgress.total && (
+                <div className="mt-2 flex items-center justify-between text-xs text-gray-600">
+                  <span>{formatSize(downloadProgress.completed)} / {formatSize(downloadProgress.total)}</span>
+                  <span>
+                    {downloadProgress.total > 0 && elapsedTime > 0 && (
+                      <>~{formatSize((downloadProgress.total - downloadProgress.completed) / (downloadProgress.completed / elapsedTime))} rimanenti</>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mt-4 flex items-start space-x-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-200">
             <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
