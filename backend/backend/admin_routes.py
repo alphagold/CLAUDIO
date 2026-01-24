@@ -441,16 +441,35 @@ async def list_ollama_models(
         raise HTTPException(status_code=500, detail=f"Error listing models: {str(e)}")
 
 
-@router.post("/ollama/models/pull")
+@router.get("/ollama/models/pull")
 async def pull_ollama_model(
     model_name: str,
-    current_user: User = Depends(require_admin)
+    token: str = None,
+    db: Session = Depends(get_db)
 ):
-    """Download an Ollama model with progress streaming"""
+    """Download an Ollama model with progress streaming via SSE"""
     import httpx
     from config import settings
     from fastapi.responses import StreamingResponse
     import json
+    from jose import jwt, JWTError
+
+    # EventSource doesn't support custom headers, so we accept token as query parameter
+    # Validate token before streaming
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication token required")
+
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user or not user.is_admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
     async def stream_pull_progress():
         """Stream download progress from Ollama"""
