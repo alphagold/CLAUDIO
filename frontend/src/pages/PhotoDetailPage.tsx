@@ -326,6 +326,36 @@ export default function PhotoDetailPage() {
             </div>
             <p className="text-sm text-gray-600">Modello avanzato (11B) - Analisi in ~10 minuti, massima qualità</p>
           </button>
+
+          <button
+            onClick={() => reanalyzeMutation.mutate('qwen3-vl:latest')}
+            disabled={reanalyzeMutation.isPending}
+            className="w-full p-4 text-left border-2 border-indigo-200 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-5 h-5 text-indigo-600" />
+                <span className="font-semibold text-gray-900">Qwen3-VL</span>
+              </div>
+              <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">Multilingua</span>
+            </div>
+            <p className="text-sm text-gray-600">Modello avanzato multilingua (4GB) - Analisi in ~1 minuto</p>
+          </button>
+
+          <button
+            onClick={() => reanalyzeMutation.mutate('llava:latest')}
+            disabled={reanalyzeMutation.isPending}
+            className="w-full p-4 text-left border-2 border-cyan-200 rounded-lg hover:border-cyan-400 hover:bg-cyan-50 transition-colors disabled:opacity-50"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-5 h-5 text-cyan-600" />
+                <span className="font-semibold text-gray-900">LLaVA</span>
+              </div>
+              <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full">Preciso</span>
+            </div>
+            <p className="text-sm text-gray-600">Modello versatile e preciso (4.5GB) - Analisi in ~45 secondi</p>
+          </button>
         </div>
 
         {reanalyzeMutation.isPending && (

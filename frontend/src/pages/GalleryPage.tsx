@@ -759,7 +759,7 @@ export default function GalleryPage() {
                         </div>
 
                         {/* Analysis Status Badge */}
-                        {!photo.analyzed_at && (
+                        {!photo.analyzed_at && photo.analysis_started_at && (
                           <div className="absolute top-3 right-3">
                             <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
                               <Loader className="w-3 h-3 animate-spin" />
@@ -768,6 +768,15 @@ export default function GalleryPage() {
                                   ? `${Math.floor(photo.elapsed_time_seconds / 60)}:${String(photo.elapsed_time_seconds % 60).padStart(2, '0')}`
                                   : 'Analisi...'}
                               </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Not Analyzed Badge */}
+                        {!photo.analyzed_at && !photo.analysis_started_at && (
+                          <div className="absolute top-3 right-3">
+                            <div className="bg-gray-500 text-white text-xs font-medium px-2 py-1 rounded-full">
+                              Da analizzare
                             </div>
                           </div>
                         )}
@@ -829,7 +838,7 @@ export default function GalleryPage() {
                         </div>
 
                         {/* Analysis Status Badge */}
-                        {!photo.analyzed_at && (
+                        {!photo.analyzed_at && photo.analysis_started_at && (
                           <div className="absolute top-2 right-2">
                             <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
                               <Loader className="w-3 h-3 animate-spin" />
@@ -838,6 +847,15 @@ export default function GalleryPage() {
                                   ? `${Math.floor(photo.elapsed_time_seconds / 60)}:${String(photo.elapsed_time_seconds % 60).padStart(2, '0')}`
                                   : 'Analisi...'}
                               </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Not Analyzed Badge */}
+                        {!photo.analyzed_at && !photo.analysis_started_at && (
+                          <div className="absolute top-2 right-2">
+                            <div className="bg-gray-500 text-white text-xs font-medium px-2 py-1 rounded-full">
+                              Da analizzare
                             </div>
                           </div>
                         )}
@@ -924,6 +942,36 @@ export default function GalleryPage() {
                   <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Dettagliato</span>
                 </div>
                 <p className="text-sm text-gray-600">Modello avanzato (11GB) - ~10 minuti per foto, massima qualità</p>
+              </button>
+
+              <button
+                onClick={() => bulkAnalyzeMutation.mutate('qwen3-vl:latest')}
+                disabled={bulkAnalyzeMutation.isPending}
+                className="w-full p-4 text-left border-2 border-indigo-200 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-5 h-5 text-indigo-600" />
+                    <span className="font-semibold text-gray-900">Qwen3-VL</span>
+                  </div>
+                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">Multilingua</span>
+                </div>
+                <p className="text-sm text-gray-600">Modello avanzato multilingua (4GB) - ~1 minuto per foto</p>
+              </button>
+
+              <button
+                onClick={() => bulkAnalyzeMutation.mutate('llava:latest')}
+                disabled={bulkAnalyzeMutation.isPending}
+                className="w-full p-4 text-left border-2 border-cyan-200 rounded-lg hover:border-cyan-400 hover:bg-cyan-50 transition-colors disabled:opacity-50"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-5 h-5 text-cyan-600" />
+                    <span className="font-semibold text-gray-900">LLaVA</span>
+                  </div>
+                  <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full">Preciso</span>
+                </div>
+                <p className="text-sm text-gray-600">Modello versatile e preciso (4.5GB) - ~45 secondi per foto</p>
               </button>
             </div>
 
