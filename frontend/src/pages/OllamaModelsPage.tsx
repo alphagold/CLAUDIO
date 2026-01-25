@@ -332,7 +332,7 @@ export default function OllamaModelsPage() {
                 <li><strong>llava-phi3</strong> - Buon compromesso qualità/velocità (~3.8 GB)</li>
                 <li><strong>qwen2-vl:latest</strong> - Modello avanzato multilingua (~4 GB)</li>
                 <li><strong>llava:latest</strong> - Modello versatile e preciso (~4.5 GB)</li>
-                <li><strong>llama3.2-vision</strong> - Massima qualità (RICHIEDE 10.9 GB RAM - non compatibile) (~7.9 GB)</li>
+                <li><strong>llama3.2-vision</strong> - Massima qualità e dettaglio (~7.9 GB, richiede 10.9 GB RAM)</li>
               </ul>
             </div>
           </div>
