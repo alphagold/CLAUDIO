@@ -76,6 +76,7 @@ class PhotoResponse(PhotoBase):
     analysis_started_at: Optional[datetime]
     analyzed_at: Optional[datetime]
     analysis_duration_seconds: Optional[int]
+    elapsed_time_seconds: Optional[int] = None  # Calculated elapsed time
     has_text: bool
     has_faces: bool
     is_food: bool

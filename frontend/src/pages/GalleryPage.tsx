@@ -12,18 +12,10 @@ import toast from 'react-hot-toast';
 type SortOption = 'date' | 'year' | 'month' | 'day';
 type ViewMode = 'grid-small' | 'grid-large' | 'list' | 'details';
 
-// Helper to get elapsed time for a photo from analysis_started_at
-const getElapsedTime = (photo: Photo): number => {
-  if (!photo.analysis_started_at) return 0;
-  const startTime = new Date(photo.analysis_started_at).getTime();
-  return Math.floor((Date.now() - startTime) / 1000);
-};
-
 export default function GalleryPage() {
   const queryClient = useQueryClient();
   const [showUpload, setShowUpload] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('date');
-  const [elapsedTimes, setElapsedTimes] = useState<Record<string, number>>({});
 
   // View mode state
   const [viewMode, setViewMode] = useState<ViewMode>('grid-large');
@@ -74,24 +66,6 @@ export default function GalleryPage() {
   });
 
   const availableTags = tagsData?.tags || [];
-
-  // Track analysis times using server timestamps
-  useEffect(() => {
-    if (photos.length === 0) return;
-
-    // Update elapsed times every second for analyzing photos
-    const interval = setInterval(() => {
-      const times: Record<string, number> = {};
-      photos.forEach(photo => {
-        if (!photo.analyzed_at && photo.analysis_started_at) {
-          times[photo.id] = getElapsedTime(photo);
-        }
-      });
-      setElapsedTimes(times);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [photos]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('it-IT', {
@@ -768,8 +742,8 @@ export default function GalleryPage() {
                             <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
                               <Loader className="w-3 h-3 animate-spin" />
                               <span>
-                                {elapsedTimes[photo.id] > 0
-                                  ? `${Math.floor(elapsedTimes[photo.id] / 60)}:${String(elapsedTimes[photo.id] % 60).padStart(2, '0')}`
+                                {photo.elapsed_time_seconds && photo.elapsed_time_seconds > 0
+                                  ? `${Math.floor(photo.elapsed_time_seconds / 60)}:${String(photo.elapsed_time_seconds % 60).padStart(2, '0')}`
                                   : 'Analisi...'}
                               </span>
                             </div>
@@ -838,8 +812,8 @@ export default function GalleryPage() {
                             <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
                               <Loader className="w-3 h-3 animate-spin" />
                               <span>
-                                {elapsedTimes[photo.id] > 0
-                                  ? `${Math.floor(elapsedTimes[photo.id] / 60)}:${String(elapsedTimes[photo.id] % 60).padStart(2, '0')}`
+                                {photo.elapsed_time_seconds && photo.elapsed_time_seconds > 0
+                                  ? `${Math.floor(photo.elapsed_time_seconds / 60)}:${String(photo.elapsed_time_seconds % 60).padStart(2, '0')}`
                                   : 'Analisi...'}
                               </span>
                             </div>

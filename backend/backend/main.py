@@ -453,6 +453,21 @@ async def reverse_geocode(latitude: float, longitude: float) -> Optional[str]:
         return None
 
 
+def calculate_elapsed_time(photo: Photo) -> Optional[int]:
+    """Calculate elapsed analysis time in seconds"""
+    if not photo.analysis_started_at:
+        return None
+
+    if photo.analyzed_at and photo.analysis_duration_seconds:
+        return photo.analysis_duration_seconds
+
+    if not photo.analyzed_at and photo.analysis_started_at:
+        elapsed = (datetime.now(timezone.utc) - photo.analysis_started_at).total_seconds()
+        return int(elapsed)
+
+    return None
+
+
 # ============================================================================
 # BACKGROUND TASKS
 # ============================================================================
@@ -898,8 +913,10 @@ async def reanalyze_photo(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Photo file not found")
 
-    # Reset analyzed_at to show analysis is in progress
+    # Reset analysis timestamps for reanalysis
     photo.analyzed_at = None
+    photo.analysis_started_at = None
+    photo.analysis_duration_seconds = None
     db.commit()
 
     # Add to analysis queue with specified model
@@ -946,8 +963,10 @@ async def bulk_analyze_photos(
         if not file_path.exists():
             continue
 
-        # Reset analyzed_at to show analysis is in progress
+        # Reset analysis timestamps for reanalysis
         photo.analyzed_at = None
+        photo.analysis_started_at = None
+        photo.analysis_duration_seconds = None
 
         # Add to queue
         enqueue_analysis(photo.id, str(file_path), selected_model)

@@ -53,6 +53,7 @@ export interface Photo {
   analysis_started_at: string | null;
   analyzed_at: string | null;
   analysis_duration_seconds: number | null;
+  elapsed_time_seconds?: number | null;
   latitude: number | null;
   longitude: number | null;
   location_name: string | null;

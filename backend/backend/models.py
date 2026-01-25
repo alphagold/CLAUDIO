@@ -6,6 +6,8 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
+from datetime import datetime, timezone
+from typing import Optional
 from database import Base
 
 
@@ -68,6 +70,21 @@ class Photo(Base):
     # Relationships
     user = relationship("User", back_populates="photos")
     analysis = relationship("PhotoAnalysis", back_populates="photo", uselist=False, cascade="all, delete-orphan")
+
+    @property
+    def elapsed_time_seconds(self) -> Optional[int]:
+        """Calculate elapsed analysis time in seconds"""
+        if not self.analysis_started_at:
+            return None
+
+        if self.analyzed_at and self.analysis_duration_seconds:
+            return self.analysis_duration_seconds
+
+        if not self.analyzed_at and self.analysis_started_at:
+            elapsed = (datetime.now(timezone.utc) - self.analysis_started_at).total_seconds()
+            return int(elapsed)
+
+        return None
 
 
 class PhotoAnalysis(Base):

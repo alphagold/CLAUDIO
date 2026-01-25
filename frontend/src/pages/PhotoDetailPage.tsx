@@ -30,8 +30,6 @@ export default function PhotoDetailPage() {
   const queryClient = useQueryClient();
   const [showModelDialog, setShowModelDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [analysisStartTime, setAnalysisStartTime] = useState<number | null>(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
 
   const { data: photo, isLoading } = useQuery({
     queryKey: ['photo', photoId],
@@ -43,47 +41,6 @@ export default function PhotoDetailPage() {
       return photo && !photo.analyzed_at && photo.analysis_started_at ? 2000 : false;
     },
   });
-
-  // Track analysis time
-  useEffect(() => {
-    if (!photo || !photoId) return;
-
-    const storageKey = `analysis_start_${photoId}`;
-
-    if (!photo.analyzed_at && photo.analysis_started_at) {
-      // Analysis in progress - track time
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        // Resume from saved time
-        setAnalysisStartTime(parseInt(saved));
-      } else if (!analysisStartTime) {
-        // Start new tracking
-        const now = Date.now();
-        localStorage.setItem(storageKey, now.toString());
-        setAnalysisStartTime(now);
-      }
-    } else {
-      // Analysis completed or not started - clean up
-      localStorage.removeItem(storageKey);
-      setAnalysisStartTime(null);
-      setElapsedTime(0);
-    }
-  }, [photo?.analyzed_at, photo?.analysis_started_at, photoId]);
-
-  // Update elapsed time every second during analysis
-  useEffect(() => {
-    if (!analysisStartTime) {
-      setElapsedTime(0);
-      return;
-    }
-
-    const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - analysisStartTime) / 1000);
-      setElapsedTime(elapsed);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [analysisStartTime]);
 
   const formatElapsedTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -450,9 +407,9 @@ export default function PhotoDetailPage() {
                       </p>
                     </div>
                   </div>
-                  {elapsedTime > 0 && (
+                  {photo.elapsed_time_seconds && photo.elapsed_time_seconds > 0 && (
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-yellow-900">{formatElapsedTime(elapsedTime)}</div>
+                      <div className="text-2xl font-bold text-yellow-900">{formatElapsedTime(photo.elapsed_time_seconds)}</div>
                       <div className="text-xs text-yellow-700">tempo trascorso</div>
                     </div>
                   )}
