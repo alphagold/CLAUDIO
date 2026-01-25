@@ -394,9 +394,25 @@ export default function AdminPage() {
             </div>
           ) : (
             <div className="bg-gray-900 rounded-lg p-4 h-96 overflow-auto">
-              <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap break-words">
-                {logs?.logs || 'No logs available'}
-              </pre>
+              <div className="text-xs font-mono whitespace-pre-wrap break-words">
+                {(logs?.logs || 'No logs available').split('\n').map((line, idx) => {
+                  const isError = /error|exception|failed|fatal/i.test(line);
+                  const isWarning = /warn|warning/i.test(line);
+
+                  return (
+                    <div
+                      key={idx}
+                      className={
+                        isError ? 'text-red-400 bg-red-900/20' :
+                        isWarning ? 'text-yellow-400 bg-yellow-900/20' :
+                        'text-green-400'
+                      }
+                    >
+                      {line}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

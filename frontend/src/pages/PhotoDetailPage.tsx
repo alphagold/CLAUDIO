@@ -24,6 +24,16 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+// Helper to get CSS class for image orientation from EXIF
+const getOrientationClass = (orientation?: number) => {
+  switch (orientation) {
+    case 3: return 'rotate-180';
+    case 6: return 'rotate-90';
+    case 8: return '-rotate-90';
+    default: return '';
+  }
+};
+
 export default function PhotoDetailPage() {
   const { photoId } = useParams<{ photoId: string }>();
   const navigate = useNavigate();
@@ -387,7 +397,7 @@ export default function PhotoDetailPage() {
               <img
                 src={photosApi.getPhotoUrl(photo.id)}
                 alt={photo.analysis?.description_short || 'Photo'}
-                className="w-full h-auto object-contain max-h-[80vh]"
+                className={`w-full h-auto object-contain max-h-[80vh] ${getOrientationClass(photo.exif_data?.Orientation)}`}
               />
             </div>
           </div>
