@@ -35,9 +35,13 @@
 
 ### AI Models (Ollama)
 - **Porta Ollama**: 11434
-- **Modello Raccomandato**: `moondream` (1.7 GB) - veloce e leggero
-- **Modello Alternativo**: `llava-phi3` (3.8 GB) - buon compromesso
-- **EVITARE**: `llama3.2-vision` (7.9 GB) - richiede 10.9 GB RAM (sistema ha solo 8.5 GB disponibili)
+- **RAM Sistema**: 16 GB (sufficiente per tutti i modelli)
+- **Modello Veloce**: `moondream` (1.7 GB) - velocissimo, ~10 secondi
+- **Modelli Bilanciati**:
+  - `llava-phi3` (3.8 GB) - buon compromesso, ~30 secondi
+  - `qwen2-vl:latest` (4 GB) - multilingua avanzato, ~1 minuto
+  - `llava:latest` (4.5 GB) - versatile e preciso, ~45 secondi
+- **Modello Qualità**: `llama3.2-vision` (7.9 GB) - massima qualità, ~10 minuti, richiede 10.9 GB RAM
 
 ---
 
@@ -177,15 +181,7 @@ npm run build  # Build per produzione
 
 ## Problemi Noti e Soluzioni
 
-### 1. RAM Insufficiente per llama3.2-vision
-**Problema**: `model requires more system memory (10.9 GiB) than is available (8.5 GiB)`
-
-**Soluzione**:
-- Usare `moondream` (1.7 GB) per analisi veloci
-- Oppure `llava-phi3` (3.8 GB) per compromesso qualità/velocità
-- Non installare mai `llama3.2-vision` su questo sistema
-
-### 2. Model Deletion Error 500
+### 1. Model Deletion Error 500
 **Problema**: Modelli con `:latest` nel nome causavano errore 500 in DELETE
 
 **Soluzione**: ✅ RISOLTO
@@ -193,7 +189,7 @@ npm run build  # Build per produzione
 - Implementato URL decoding: `unquote(model_name)`
 - File: `backend/backend/admin_routes.py:494-533`
 
-### 3. Download Modelli Senza Feedback
+### 2. Download Modelli Senza Feedback
 **Problema**: Download partiva ma senza progress bar
 
 **Soluzione**: ✅ RISOLTO
@@ -202,7 +198,7 @@ npm run build  # Build per produzione
 - Progress bar mostra: percentuale, tempo trascorso, byte scaricati
 - File: `backend/backend/admin_routes.py:444-491` + `frontend/src/pages/OllamaModelsPage.tsx:68-140`
 
-### 4. JWT Authentication Placeholder
+### 3. JWT Authentication Placeholder
 **Problema**: `get_current_user()` era un placeholder che non validava JWT
 
 **Stato**: ⚠️ DA IMPLEMENTARE (vedi plan mode)
@@ -254,13 +250,12 @@ npm run build  # Build per produzione
 ✅ Leggere questo file all'inizio di ogni sessione complessa
 ✅ Fare push su GitHub dopo ogni commit
 ✅ Controllare che Docker Desktop sia in esecuzione prima di restart container
-✅ Usare `moondream` per test AI, non llama3.2-vision
+✅ Usare `moondream` per test AI veloci (più leggero)
 ✅ Preferire Edit su file esistenti invece di creare nuovi file
 ✅ Commit message in italiano senza emoji
 
 ### Cosa NON Fare Mai
 ❌ Commit senza push successivo
-❌ Installare llama3.2-vision (troppa RAM richiesta)
 ❌ Creare file di documentazione non richiesti
 ❌ Modificare docker-compose.yml senza conferma utente
 ❌ Usare emoji nei commit o nel codice
