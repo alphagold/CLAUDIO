@@ -173,6 +173,18 @@ export default function GalleryPage() {
     },
   });
 
+  // Stop all analyses mutation
+  const stopAllMutation = useMutation({
+    mutationFn: () => photosApi.stopAllAnalyses(),
+    onSuccess: (data) => {
+      toast.success(`${data.queue_cleared} analisi fermate!`);
+      queryClient.invalidateQueries({ queryKey: ['photos'] });
+    },
+    onError: () => {
+      toast.error('Errore nel fermare le analisi');
+    },
+  });
+
   // Group photos based on sort option
   const groupedPhotos = useMemo(() => {
     if (photos.length === 0) return {};
@@ -500,6 +512,16 @@ export default function GalleryPage() {
               <Plus className="w-5 h-5" />
               <span>Carica Foto</span>
             </button>
+            {photos.some(p => !p.analyzed_at && p.analysis_started_at) && (
+              <button
+                onClick={() => stopAllMutation.mutate()}
+                disabled={stopAllMutation.isPending}
+                className="flex items-center space-x-2 px-4 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+                <span>Ferma Analisi</span>
+              </button>
+            )}
           </div>
         </div>
 

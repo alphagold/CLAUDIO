@@ -204,12 +204,40 @@ async def get_me(current_user: User = Depends(get_current_user)):
 # Global queue for photo analysis tasks
 analysis_queue = asyncio.Queue()
 analysis_worker_started = False
+stop_all_requested = False
 
 async def analysis_worker():
     """Worker that processes analysis tasks one at a time"""
+    global stop_all_requested
     print("Analysis worker started")
     while True:
         try:
+            # Check if stop all analyses was requested
+            if stop_all_requested:
+                print("Stop all analyses requested - clearing queue")
+                cleared = 0
+                # Clear the queue
+                while not analysis_queue.empty():
+                    try:
+                        photo_id, file_path, model = analysis_queue.get_nowait()
+                        analysis_queue.task_done()
+                        # Reset photo state in DB
+                        db = SessionLocal()
+                        try:
+                            photo = db.query(Photo).filter(Photo.id == photo_id).first()
+                            if photo:
+                                photo.analysis_started_at = None
+                                db.commit()
+                                cleared += 1
+                        finally:
+                            db.close()
+                    except asyncio.QueueEmpty:
+                        break
+
+                print(f"Cleared {cleared} photos from queue")
+                stop_all_requested = False
+                continue
+
             photo_id, file_path, model = await analysis_queue.get()
             print(f"Processing analysis for photo {photo_id} (queue size: {analysis_queue.qsize()})")
             await analyze_photo_background(photo_id, file_path, model)
@@ -979,6 +1007,38 @@ async def bulk_analyze_photos(
         "queued": queued_count,
         "model": selected_model,
         "queue_size": analysis_queue.qsize()
+    }
+
+
+@app.post("/api/photos/stop-all-analyses")
+async def stop_all_analyses(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Stop all pending analyses and clear the queue"""
+    global stop_all_requested
+    stop_all_requested = True
+
+    queue_size = analysis_queue.qsize()
+
+    # Find photos stuck in "analyzing" state
+    stuck_photos = db.query(Photo).filter(
+        Photo.user_id == current_user.id,
+        Photo.analyzed_at.is_(None),
+        Photo.analysis_started_at.isnot(None),
+        Photo.deleted_at.is_(None)
+    ).all()
+
+    # Reset stuck photos immediately
+    for photo in stuck_photos:
+        photo.analysis_started_at = None
+
+    db.commit()
+
+    return {
+        "message": "All analyses stopped",
+        "queue_cleared": queue_size,
+        "stuck_photos_reset": len(stuck_photos)
     }
 
 

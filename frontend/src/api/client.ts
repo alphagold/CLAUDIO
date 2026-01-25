@@ -119,6 +119,11 @@ export const photosApi = {
     return response.data;
   },
 
+  stopAllAnalyses: async (): Promise<any> => {
+    const response = await apiClient.post('/api/photos/stop-all-analyses');
+    return response.data;
+  },
+
   updatePhoto: async (photoId: string, data: { taken_at?: string; latitude?: number; longitude?: number; location_name?: string }): Promise<Photo> => {
     const response = await apiClient.patch(`/api/photos/${photoId}`, null, {
       params: data,
