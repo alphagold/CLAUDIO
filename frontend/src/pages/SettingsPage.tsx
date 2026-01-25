@@ -44,8 +44,8 @@ const MODELS = [
     color: 'purple'
   },
   {
-    id: 'qwen2-vl:latest',
-    name: 'Qwen2-VL',
+    id: 'qwen3-vl:latest',
+    name: 'Qwen3-VL',
     description: 'Modello avanzato multilingua',
     size: '~4 GB',
     speed: '~1 minuto',
