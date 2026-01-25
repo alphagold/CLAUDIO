@@ -39,9 +39,10 @@
 - **Modello Veloce**: `moondream` (1.7 GB) - velocissimo, ~10 secondi
 - **Modelli Bilanciati**:
   - `llava-phi3` (3.8 GB) - buon compromesso, ~30 secondi
-  - `qwen3-vl:latest` (4 GB) - multilingua avanzato, ~1 minuto
+  - `qwen3-vl:latest` (4 GB) - multilingua avanzato, ~1 minuto ⚠️ NO parallel requests
   - `llava:latest` (4.5 GB) - versatile e preciso, ~45 secondi
 - **Modello Qualità**: `llama3.2-vision` (7.9 GB) - massima qualità, ~10 minuti, richiede 10.9 GB RAM
+- **Configurazione Ollama**: `OLLAMA_NUM_PARALLEL=1` (richiesto per qwen3vl)
 
 ---
 
