@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { photosApi } from '../api/client';
+import apiClient from '../api/client';
 import Layout from '../components/Layout';
 import PhotoUpload from '../components/PhotoUpload';
 import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X, Grid3x3, Grid2x2, List, LayoutGrid, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
@@ -63,6 +64,14 @@ export default function GalleryPage() {
   const { data: tagsData } = useQuery({
     queryKey: ['tags'],
     queryFn: () => photosApi.getAllTags(),
+  });
+
+  const { data: profile } = useQuery({
+    queryKey: ['user', 'profile'],
+    queryFn: async () => {
+      const response = await apiClient.get('/api/user/profile');
+      return response.data;
+    },
   });
 
   const availableTags = tagsData?.tags || [];
@@ -973,6 +982,24 @@ export default function GalleryPage() {
                 </div>
                 <p className="text-sm text-gray-600">Modello versatile e preciso (4.5GB) - ~45 secondi per foto</p>
               </button>
+
+              {/* Remote Server Option */}
+              {profile?.remote_ollama_enabled && (
+                <button
+                  onClick={() => bulkAnalyzeMutation.mutate('remote')}
+                  disabled={bulkAnalyzeMutation.isPending}
+                  className="w-full p-4 text-left border-2 border-purple-200 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center space-x-2">
+                      <Zap className="w-5 h-5 text-purple-600" />
+                      <span className="font-semibold text-gray-900">Server Remoto</span>
+                    </div>
+                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Velocissimo</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Usa il tuo PC locale ({profile.remote_ollama_model}) - ~10-30 secondi per foto</p>
+                </button>
+              )}
             </div>
 
             {bulkAnalyzeMutation.isPending && (

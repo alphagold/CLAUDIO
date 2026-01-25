@@ -506,13 +506,23 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
         model_name = model or "llama3.2-vision"
         print(f"Starting background analysis for photo {photo_id} with {model_name}...")
 
-        # Mark analysis start time immediately
+        # Mark analysis start time immediately and get user preferences
         db = SessionLocal()
+        user_config = None
         try:
             photo = db.query(Photo).filter(Photo.id == photo_id).first()
             if not photo:
                 print(f"Photo {photo_id} not found")
                 return
+
+            # Get user preferences for remote server
+            user = db.query(User).filter(User.id == photo.user_id).first()
+            if user:
+                user_config = {
+                    "remote_enabled": user.remote_ollama_enabled,
+                    "remote_url": user.remote_ollama_url,
+                    "remote_model": user.remote_ollama_model
+                }
 
             # Save analysis start timestamp
             photo.analysis_started_at = datetime.now(timezone.utc)
@@ -523,8 +533,17 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
         finally:
             db.close()
 
-        # Analyze with specified model
-        analysis_result = await vision_client.analyze_photo(file_path, model=model)
+        # Determine which server to use
+        if model == "remote" and user_config and user_config["remote_enabled"]:
+            # Use remote Ollama server
+            from vision import OllamaVisionClient
+            remote_client = OllamaVisionClient(host=user_config["remote_url"])
+            actual_model = user_config["remote_model"]
+            print(f"Using remote Ollama server: {user_config['remote_url']} with model {actual_model}")
+            analysis_result = await remote_client.analyze_photo(file_path, model=actual_model)
+        else:
+            # Use local Ollama server
+            analysis_result = await vision_client.analyze_photo(file_path, model=model)
 
         # Create new DB session for background task
         db = SessionLocal()
@@ -600,6 +619,9 @@ async def get_user_profile(
         "is_admin": current_user.is_admin,
         "preferred_model": current_user.preferred_model,
         "auto_analyze": current_user.auto_analyze,
+        "remote_ollama_enabled": current_user.remote_ollama_enabled,
+        "remote_ollama_url": current_user.remote_ollama_url,
+        "remote_ollama_model": current_user.remote_ollama_model,
         "created_at": current_user.created_at.isoformat()
     }
 
@@ -608,6 +630,9 @@ async def get_user_profile(
 async def update_user_preferences(
     preferred_model: Optional[str] = None,
     auto_analyze: Optional[bool] = None,
+    remote_ollama_enabled: Optional[bool] = None,
+    remote_ollama_url: Optional[str] = None,
+    remote_ollama_model: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -616,7 +641,7 @@ async def update_user_preferences(
     print(f"[PREFERENCES] Before update - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}")
 
     if preferred_model is not None:
-        valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest"]
+        valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest", "remote"]
         if preferred_model not in valid_models:
             raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
         current_user.preferred_model = preferred_model
@@ -624,15 +649,28 @@ async def update_user_preferences(
     if auto_analyze is not None:
         current_user.auto_analyze = auto_analyze
 
+    if remote_ollama_enabled is not None:
+        current_user.remote_ollama_enabled = remote_ollama_enabled
+
+    if remote_ollama_url is not None:
+        current_user.remote_ollama_url = remote_ollama_url
+
+    if remote_ollama_model is not None:
+        current_user.remote_ollama_model = remote_ollama_model
+
     db.commit()
     db.refresh(current_user)
 
     print(f"[PREFERENCES] After update - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}")
+    print(f"[PREFERENCES] Remote Ollama - enabled: {current_user.remote_ollama_enabled}, url: {current_user.remote_ollama_url}, model: {current_user.remote_ollama_model}")
 
     return {
         "message": "Preferences updated successfully",
         "preferred_model": current_user.preferred_model,
-        "auto_analyze": current_user.auto_analyze
+        "auto_analyze": current_user.auto_analyze,
+        "remote_ollama_enabled": current_user.remote_ollama_enabled,
+        "remote_ollama_url": current_user.remote_ollama_url,
+        "remote_ollama_model": current_user.remote_ollama_model
     }
 
 

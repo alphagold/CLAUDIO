@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { photosApi } from '../api/client';
+import apiClient from '../api/client';
 import Layout from '../components/Layout';
 import PhotoMap from '../components/PhotoMap';
 import {
@@ -49,6 +50,14 @@ export default function PhotoDetailPage() {
       // Auto-refresh only while analysis is truly in progress
       const photo = query.state.data;
       return photo && !photo.analyzed_at && photo.analysis_started_at ? 2000 : false;
+    },
+  });
+
+  const { data: profile } = useQuery({
+    queryKey: ['user', 'profile'],
+    queryFn: async () => {
+      const response = await apiClient.get('/api/user/profile');
+      return response.data;
     },
   });
 
@@ -356,6 +365,26 @@ export default function PhotoDetailPage() {
             </div>
             <p className="text-sm text-gray-600">Modello versatile e preciso (4.5GB) - Analisi in ~45 secondi</p>
           </button>
+
+          {/* Remote Server Option */}
+          {profile?.remote_ollama_enabled && (
+            <button
+              onClick={() => reanalyzeMutation.mutate('remote')}
+              disabled={reanalyzeMutation.isPending}
+              className="w-full p-4 text-left border-2 border-purple-200 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors disabled:opacity-50"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center space-x-2">
+                  <Zap className="w-5 h-5 text-purple-600" />
+                  <span className="font-semibold text-gray-900">Server Remoto</span>
+                </div>
+                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">Velocissimo</span>
+              </div>
+              <p className="text-sm text-gray-600">
+                Usa il tuo PC locale ({profile.remote_ollama_model}) - Analisi ultra-rapida
+              </p>
+            </button>
+          )}
         </div>
 
         {reanalyzeMutation.isPending && (

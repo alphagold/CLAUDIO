@@ -12,6 +12,9 @@ interface UserProfile {
   is_admin: boolean;
   preferred_model: string;
   auto_analyze: boolean;
+  remote_ollama_enabled: boolean;
+  remote_ollama_url: string;
+  remote_ollama_model: string;
   created_at: string;
 }
 
@@ -76,20 +79,35 @@ export default function SettingsPage() {
 
   const [preferredModel, setPreferredModel] = useState(profile?.preferred_model || 'moondream');
   const [autoAnalyze, setAutoAnalyze] = useState(profile?.auto_analyze ?? true);
+  const [remoteEnabled, setRemoteEnabled] = useState(profile?.remote_ollama_enabled ?? false);
+  const [remoteUrl, setRemoteUrl] = useState(profile?.remote_ollama_url || 'http://localhost:11434');
+  const [remoteModel, setRemoteModel] = useState(profile?.remote_ollama_model || 'moondream');
 
   // Sync local state with profile data when it loads or changes
   useEffect(() => {
     if (profile) {
       setPreferredModel(profile.preferred_model || 'moondream');
       setAutoAnalyze(profile.auto_analyze ?? true);
+      setRemoteEnabled(profile.remote_ollama_enabled ?? false);
+      setRemoteUrl(profile.remote_ollama_url || 'http://localhost:11434');
+      setRemoteModel(profile.remote_ollama_model || 'moondream');
     }
   }, [profile]);
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { preferred_model?: string; auto_analyze?: boolean }) => {
+    mutationFn: async (data: {
+      preferred_model?: string;
+      auto_analyze?: boolean;
+      remote_ollama_enabled?: boolean;
+      remote_ollama_url?: string;
+      remote_ollama_model?: string;
+    }) => {
       const params = new URLSearchParams();
       if (data.preferred_model) params.append('preferred_model', data.preferred_model);
       if (data.auto_analyze !== undefined) params.append('auto_analyze', String(data.auto_analyze));
+      if (data.remote_ollama_enabled !== undefined) params.append('remote_ollama_enabled', String(data.remote_ollama_enabled));
+      if (data.remote_ollama_url) params.append('remote_ollama_url', data.remote_ollama_url);
+      if (data.remote_ollama_model) params.append('remote_ollama_model', data.remote_ollama_model);
 
       const response = await apiClient.patch(`/api/user/preferences?${params.toString()}`);
       return response.data;
@@ -107,6 +125,9 @@ export default function SettingsPage() {
     updateMutation.mutate({
       preferred_model: preferredModel,
       auto_analyze: autoAnalyze,
+      remote_ollama_enabled: remoteEnabled,
+      remote_ollama_url: remoteUrl,
+      remote_ollama_model: remoteModel,
     });
   };
 
@@ -205,6 +226,75 @@ export default function SettingsPage() {
               );
             })}
           </div>
+        </div>
+
+        {/* Remote Ollama Server Configuration */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <Sparkles className="w-6 h-6 text-purple-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Server Ollama Remoto</h2>
+              <p className="text-sm text-gray-600">Usa il tuo PC locale per analisi velocissime</p>
+            </div>
+          </div>
+
+          {/* Enable Remote Server Toggle */}
+          <div className="mb-6">
+            <label className="flex items-center space-x-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={remoteEnabled}
+                onChange={(e) => setRemoteEnabled(e.target.checked)}
+                className="w-5 h-5 text-purple-600 rounded focus:ring-purple-500"
+              />
+              <span className="text-gray-900 font-medium">Abilita Server Remoto</span>
+            </label>
+            <p className="text-sm text-gray-600 mt-2 ml-8">
+              Quando abilitato, puoi selezionare "Server Remoto" durante l'analisi foto
+            </p>
+          </div>
+
+          {remoteEnabled && (
+            <>
+              {/* Remote URL */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  URL Server (IP:Porta)
+                </label>
+                <input
+                  type="text"
+                  value={remoteUrl}
+                  onChange={(e) => setRemoteUrl(e.target.value)}
+                  placeholder="http://192.168.1.100:11434"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Esempio: http://192.168.1.100:11434
+                </p>
+              </div>
+
+              {/* Remote Model Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Modello sul Server Remoto
+                </label>
+                <select
+                  value={remoteModel}
+                  onChange={(e) => setRemoteModel(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                >
+                  {MODELS.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name} ({model.size})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Seleziona il modello installato sul tuo PC locale
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Save button */}
