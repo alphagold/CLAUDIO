@@ -328,9 +328,11 @@ export default function OllamaModelsPage() {
             <div>
               <p className="font-medium text-blue-900">Modelli consigliati:</p>
               <ul className="mt-1 space-y-1">
-                <li><strong>llama3.2-vision</strong> - Modello avanzato per analisi dettagliate (~7.9 GB)</li>
                 <li><strong>moondream</strong> - Modello veloce per analisi rapide (~1.7 GB)</li>
                 <li><strong>llava-phi3</strong> - Buon compromesso qualità/velocità (~3.8 GB)</li>
+                <li><strong>qwen2-vl:latest</strong> - Modello avanzato multilingua (~4 GB)</li>
+                <li><strong>llava:latest</strong> - Modello versatile e preciso (~4.5 GB)</li>
+                <li><strong>llama3.2-vision</strong> - Massima qualità (RICHIEDE 10.9 GB RAM - non compatibile) (~7.9 GB)</li>
               </ul>
             </div>
           </div>
