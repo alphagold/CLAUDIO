@@ -616,7 +616,7 @@ async def update_user_preferences(
     print(f"[PREFERENCES] Before update - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}")
 
     if preferred_model is not None:
-        valid_models = ["moondream", "llava-phi3", "llama3.2-vision"]
+        valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen2-vl:latest", "llava:latest"]
         if preferred_model not in valid_models:
             raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
         current_user.preferred_model = preferred_model
@@ -925,7 +925,7 @@ async def reanalyze_photo(
 ):
     """Reanalyze photo with vision AI (choose model: moondream, llava-phi3 or llama3.2-vision)"""
     # Validate model
-    valid_models = ["moondream", "llava-phi3", "llama3.2-vision"]
+    valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen2-vl:latest", "llava:latest"]
     if model not in valid_models:
         raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
 
@@ -970,7 +970,7 @@ async def bulk_analyze_photos(
     selected_model = model or current_user.preferred_model or "moondream"
 
     # Validate model
-    valid_models = ["moondream", "llava-phi3", "llama3.2-vision"]
+    valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen2-vl:latest", "llava:latest"]
     if selected_model not in valid_models:
         raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
 

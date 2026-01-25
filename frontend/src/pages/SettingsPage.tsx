@@ -42,6 +42,24 @@ const MODELS = [
     speed: '~10 minuti',
     icon: Sparkles,
     color: 'purple'
+  },
+  {
+    id: 'qwen2-vl:latest',
+    name: 'Qwen2-VL',
+    description: 'Modello avanzato multilingua',
+    size: '~4 GB',
+    speed: '~1 minuto',
+    icon: Sparkles,
+    color: 'indigo'
+  },
+  {
+    id: 'llava:latest',
+    name: 'LLaVA',
+    description: 'Modello versatile e preciso',
+    size: '~4.5 GB',
+    speed: '~45 secondi',
+    icon: Sparkles,
+    color: 'cyan'
   }
 ];
 

@@ -112,7 +112,7 @@ Istruzioni importanti:
 - extracted_text: Copia esattamente qualsiasi testo/scritta visibile (lascia vuoto "" se non c'è testo)
 - detected_objects: Lista degli oggetti principali visibili (in italiano)
 - scene_category: Scegli la categoria più appropriata tra: food, document, receipt, outdoor, indoor, people, other
-- tags: Parole chiave rilevanti per la ricerca (in italiano)
+- tags: Solo 3-5 tag principali ad alta confidenza - oggetti/persone realmente presenti e riconoscibili (in italiano)
 - confidence_score: Quanto sei sicuro dell'analisi (0.0-1.0)
 
 Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
@@ -129,6 +129,10 @@ Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
 
             data = json.loads(clean_text)
 
+            # Filter and limit tags to max 5 high-quality tags
+            raw_tags = data.get("tags", [])
+            filtered_tags = [tag for tag in raw_tags if len(tag) > 2][:5]
+
             # Validate and normalize
             return {
                 "description_full": data.get("description_full", "Immagine analizzata"),
@@ -138,7 +142,7 @@ Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
                 "detected_faces": data.get("detected_faces", 0),
                 "scene_category": data.get("scene_category", "other"),
                 "scene_subcategory": data.get("scene_subcategory"),
-                "tags": data.get("tags", []),
+                "tags": filtered_tags,
                 "confidence_score": float(data.get("confidence_score", 0.7)),
             }
 
