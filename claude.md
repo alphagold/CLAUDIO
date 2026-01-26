@@ -374,6 +374,13 @@ docker compose up -d
 
 ## Note per Claude
 
+### ⚠️ LINGUA DI COMUNICAZIONE
+**IMPORTANTE**: Usa sempre l'italiano per comunicare con l'utente.
+- ✅ Tutti i messaggi, spiegazioni, e domande devono essere in italiano
+- ✅ Commit message in italiano
+- ✅ Commenti di business logic in italiano
+- ✅ Solo codice tecnico e nomi di variabili/funzioni in inglese (convenzioni standard)
+
 ### Per Riprendere il Lavoro
 Quando riprendi una sessione, leggi nell'ordine:
 1. **CLAUDE.md** (questo file) - Sezione "Changelog / Ultime Modifiche" per vedere cosa è stato fatto
