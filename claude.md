@@ -180,6 +180,54 @@ npm run build  # Build per produzione
 
 ---
 
+## Deployment su Server Ubuntu
+
+### Prima Volta o Dopo Modifiche al Codice
+```bash
+# 1. Pull codice da GitHub
+cd /path/to/claudio
+git pull origin main
+
+# 2. Esegui migration se necessario (vedi migrations/ directory)
+cd backend
+docker exec -i photomemory-postgres psql -U photomemory -d photomemory < migrations/003_add_remote_ollama.sql
+
+# 3. Restart API
+docker compose restart api
+
+# 4. Verifica log
+docker compose logs -f api
+```
+
+### Reinizializzazione Completa Database
+**ATTENZIONE**: Cancella TUTTI i dati!
+
+Consulta: **REINIT_DATABASE.md** per istruzioni dettagliate
+
+```bash
+cd backend
+docker compose down
+docker volume rm backend_postgres_data
+docker compose up -d
+```
+
+### Configurazione Server Remoto (Dopo Deployment)
+1. Sul PC Windows locale:
+   - Avvia Ollama: `ollama serve`
+   - Trova IP: `ipconfig` → cerca `192.168.x.x`
+   - Pull modello: `ollama pull moondream`
+
+2. Nell'app PhotoMemory:
+   - Vai su **Settings**
+   - Abilita "Server Ollama Remoto"
+   - Inserisci URL: `http://192.168.x.x:11434`
+   - Seleziona modello installato
+   - Clicca "Salva Impostazioni"
+
+3. Usa "Server Remoto" nei dialog analisi foto
+
+---
+
 ## Problemi Noti e Soluzioni
 
 ### 1. Model Deletion Error 500
@@ -207,6 +255,61 @@ npm run build  # Build per produzione
 - TODO: Implementare OAuth2PasswordBearer e decode_token
 - TODO: Validare token JWT in tutte le route protette
 
+### 4. Timer Analisi Reset Navigando
+**Problema**: Timer si resettava navigando tra gallery e dettaglio foto
+
+**Soluzione**: ✅ RISOLTO (2026-01-25)
+- Backend calcola `elapsed_time_seconds` come @property nel modello Photo
+- Timer basato su `analysis_started_at` dal database (single source of truth)
+- Rimossa logica localStorage client-side
+- Reset completo timestamps su reanalisi
+- File: `backend/backend/models.py`, `backend/backend/main.py`, `frontend/src/pages/GalleryPage.tsx`, `frontend/src/pages/PhotoDetailPage.tsx`
+
+### 5. Mancava Button "Ferma Analisi"
+**Problema**: Non si potevano fermare analisi in corso
+
+**Soluzione**: ✅ RISOLTO (2026-01-25)
+- Nuovo endpoint `POST /api/photos/stop-all-analyses`
+- Flag globale `stop_all_requested` per svuotare coda
+- Button "Ferma Analisi" in GalleryPage (visibile solo durante analisi)
+- Reset automatico foto "stuck"
+- File: `backend/backend/main.py`, `frontend/src/pages/GalleryPage.tsx`
+
+### 6. Tag Extraction di Bassa Qualità
+**Problema**: AI generava troppi tag o tag poco rilevanti
+
+**Soluzione**: ✅ RISOLTO (2026-01-25)
+- Prompt aggiornato: "Solo 3-5 tag principali ad alta confidenza"
+- Filtering: rimuove tag < 2 caratteri, limita a max 5
+- File: `backend/backend/vision.py`
+
+### 7. Modelli Mancanti nei Dialog
+**Problema**: qwen3-vl e llava non disponibili per selezione
+
+**Soluzione**: ✅ RISOLTO (2026-01-25)
+- Aggiunti qwen3-vl:latest e llava:latest in GalleryPage bulk dialog
+- Aggiunti qwen3-vl:latest e llava:latest in PhotoDetailPage dialog rianalisi
+- Tutti i 5 modelli + "Server Remoto" ora disponibili
+- File: `frontend/src/pages/GalleryPage.tsx`, `frontend/src/pages/PhotoDetailPage.tsx`
+
+### 8. Badge "Analisi in Corso" Sempre Visibile
+**Problema**: Foto con auto_analyze=no mostravano "Analisi in corso" erroneamente
+
+**Soluzione**: ✅ RISOLTO (2026-01-25)
+- Badge "Analisi in corso" solo se `analyzed_at` è null E `analysis_started_at` è presente
+- Nuovo badge "Da analizzare" se entrambi null
+- Fix applicato in 2 posti (grid-small e grid-large)
+- File: `frontend/src/pages/GalleryPage.tsx`
+
+### 9. Warning qwen3vl Parallel Requests
+**Problema**: Log warning "qwen3vl does not support parallel requests"
+
+**Soluzione**: ✅ RISOLTO (2026-01-25)
+- `OLLAMA_NUM_PARALLEL` ridotto da 2 a 1 in docker-compose.yml
+- qwen3vl non supporta richieste parallele
+- Nessun impatto performance (analysis_worker già seriale)
+- File: `backend/docker-compose.yml`
+
 ---
 
 ## Architettura e Decisioni Tecniche
@@ -226,10 +329,29 @@ npm run build  # Build per produzione
 
 ### Analisi Foto con AI
 1. Upload foto → MinIO
-2. Trigger analisi → Ollama API
+2. Trigger analisi → Ollama API (locale o remoto)
 3. Ollama genera descrizione testuale
 4. Salva descrizione nel DB PostgreSQL
 5. Genera embedding vettoriale (pgvector) per ricerca semantica
+
+### Server Ollama Remoto (Nuovo!)
+- **Funzione**: Permette di usare un PC Windows locale con Ollama per analisi velocissime
+- **Configurazione User**:
+  - `remote_ollama_enabled` (boolean) - Abilita/disabilita server remoto
+  - `remote_ollama_url` (string) - URL server, es: `http://192.168.1.100:11434`
+  - `remote_ollama_model` (string) - Modello installato sul PC remoto
+- **Backend Logic**:
+  - Se `model == "remote"` E `remote_ollama_enabled == true`
+  - Crea `OllamaVisionClient` con URL remoto personalizzato
+  - Usa modello configurato dall'utente
+- **Frontend**:
+  - Settings: Sezione per configurare server remoto (URL + modello)
+  - GalleryPage/PhotoDetailPage: Button "Server Remoto" nei dialog analisi
+  - Opzione visibile solo se utente ha abilitato server remoto
+- **Vantaggi**:
+  - Analisi ultra-rapide usando GPU/CPU del PC locale
+  - Server Ubuntu non sovraccaricato
+  - Possibilità di usare modelli più potenti
 
 ### Progress Download Ollama
 - **Tecnica**: Server-Sent Events (SSE)
@@ -238,14 +360,27 @@ npm run build  # Build per produzione
 - **Formato dati**: JSON newline-delimited da Ollama API
 
 ### Database Schema
-- **users**: Utenti con email, password (hashed), is_admin
-- **photos**: Metadata foto (user_id, path, upload_date, analisi_status)
-- **photo_analysis**: Risultati analisi AI (photo_id, description, model_used, embedding vector)
+- **users**: Utenti con email, password (hashed), is_admin, preferred_model, auto_analyze, remote_ollama_enabled, remote_ollama_url, remote_ollama_model
+- **photos**: Metadata foto (user_id, path, upload_date, analysis_started_at, analyzed_at, analysis_duration_seconds)
+- **photo_analysis**: Risultati analisi AI (photo_id, description, model_used, tags, embedding vector)
 - **pgvector**: Extension per similarity search sugli embeddings
+
+### Migrations
+- `001_init.sql`: Schema iniziale database
+- `002_add_user_preferences.sql`: Aggiunge preferred_model e auto_analyze
+- `003_add_remote_ollama.sql`: Aggiunge configurazione server remoto (remote_ollama_*)
 
 ---
 
 ## Note per Claude
+
+### Per Riprendere il Lavoro
+Quando riprendi una sessione, leggi nell'ordine:
+1. **CLAUDE.md** (questo file) - Sezione "Changelog / Ultime Modifiche" per vedere cosa è stato fatto
+2. **CLAUDE.md** - Sezione "Problemi Noti e Soluzioni" per stato corrente
+3. **CLAUDE.md** - Sezione "Server Ollama Remoto" per capire l'architettura
+4. **backend/migrations/** - Verifica quali migration esistono (ultima: 003_add_remote_ollama.sql)
+5. **REINIT_DATABASE.md** - Se serve reinizializzare il database
 
 ### Cosa Fare Sempre
 ✅ Leggere questo file all'inizio di ogni sessione complessa
@@ -254,6 +389,7 @@ npm run build  # Build per produzione
 ✅ Usare `moondream` per test AI veloci (più leggero)
 ✅ Preferire Edit su file esistenti invece di creare nuovi file
 ✅ Commit message in italiano senza emoji
+✅ Verificare che le migration siano state applicate prima di modificare modelli
 
 ### Cosa NON Fare Mai
 ❌ Commit senza push successivo
@@ -267,6 +403,57 @@ npm run build  # Build per produzione
 2. Leggere i file README.md e PROJECT_PLAN_V3_SELFHOSTED.md
 3. Verificare docker-compose.yml per environment variables
 4. Chiedere all'utente invece di assumere
+
+---
+
+## Changelog / Ultime Modifiche
+
+### Sessione 2026-01-25: Miglioramenti Completi e Server Remoto
+
+**Phase 1: Timer Consistency (CRITICA)**
+- ✅ Timer centralizzato backend-side con @property elapsed_time_seconds
+- ✅ Rimossa logica localStorage client-side
+- ✅ Reset timestamps completo su reanalisi
+- ✅ Timer consistente navigando tra gallery/dettaglio
+- Commit: `280ea39`, `5c203b2` (fix TypeScript)
+
+**Phase 2: Stop All Analyses**
+- ✅ Endpoint `/api/photos/stop-all-analyses`
+- ✅ Button "Ferma Analisi" in GalleryPage
+- ✅ Flag globale `stop_all_requested` + svuota coda
+- Commit: `2b40b74`
+
+**Phase 3: Tag Extraction & New Models**
+- ✅ Migliora qualità tag (max 5, alta confidenza)
+- ✅ Aggiunti modelli qwen3-vl:latest e llava:latest
+- ✅ Aggiornati valid_models in tutti gli endpoint
+- Commit: `3dfdca4`, `f327dc2` (fix typo qwen2→qwen3), `48fc988` (OllamaModelsPage)
+
+**Phase 4: Logs & Image Orientation**
+- ✅ Log highlighting (rosso errori, giallo warning)
+- ✅ Fix orientamento immagini EXIF (rotation CSS)
+- Commit: `7f89bc8`
+
+**Fix Vari**
+- ✅ Badge "Da analizzare" vs "Analisi in corso" (condizione corretta)
+- ✅ Modelli mancanti nei dialog analisi (qwen3-vl, llava)
+- ✅ RAM sistema aggiornata a 16 GB (llama3.2-vision ora supportato)
+- Commit: `e525d44`, `a3acb89`, `3a0530a`, `ffcf819`
+
+**Feature: Server Ollama Remoto (GRANDE!)**
+- ✅ Backend: campi remote_ollama_* nel modello User
+- ✅ Migration SQL: `003_add_remote_ollama.sql`
+- ✅ Backend: logica per usare server remoto se `model="remote"`
+- ✅ Frontend SettingsPage: sezione configurazione server remoto
+- ✅ Frontend dialog: opzione "Server Remoto" (visibile se abilitato)
+- ✅ Permette analisi ultra-rapide usando PC Windows locale
+- Commit: `574d54c`, `9ad07df` (REINIT_DATABASE.md)
+
+**Fix Warning Ollama**
+- ✅ `OLLAMA_NUM_PARALLEL=1` per compatibilità qwen3vl
+- Commit: `3ee4172`, `6f57c5d`
+
+**Totale**: 18 commit, 9 problemi risolti, 1 feature maggiore implementata
 
 ---
 
@@ -293,6 +480,17 @@ npm run build  # Build per produzione
 
 ---
 
-**Ultimo aggiornamento**: 2026-01-24
+**Ultimo aggiornamento**: 2026-01-25 (Sessione completa: 18 commit, Server Remoto implementato)
 **Versione Claude Code**: Sonnet 4.5
-**Stato Progetto**: In sviluppo attivo
+**Stato Progetto**: In sviluppo attivo - Feature Server Remoto completata
+
+### File Importanti da Consultare
+- **CLAUDE.md** (questo file) - Documentazione completa progetto
+- **REINIT_DATABASE.md** - Istruzioni reinizializzazione database dopo migration
+- **README.md** - Overview progetto
+- **PROJECT_PLAN_V3_SELFHOSTED.md** - Piano architetturale dettagliato
+- **backend/migrations/** - Tutte le migration SQL (001, 002, 003)
+- **backend/docker-compose.yml** - Configurazione container
+- **backend/backend/main.py** - API backend principale
+- **backend/backend/vision.py** - Client Ollama AI
+- **frontend/src/pages/SettingsPage.tsx** - Configurazione utente + server remoto
