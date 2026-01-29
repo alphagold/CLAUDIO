@@ -963,7 +963,7 @@ async def reanalyze_photo(
 ):
     """Reanalyze photo with vision AI (choose model: moondream, llava-phi3 or llama3.2-vision)"""
     # Validate model
-    valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest"]
+    valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest", "remote"]
     if model not in valid_models:
         raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
 
@@ -1008,7 +1008,7 @@ async def bulk_analyze_photos(
     selected_model = model or current_user.preferred_model or "moondream"
 
     # Validate model
-    valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest"]
+    valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest", "remote"]
     if selected_model not in valid_models:
         raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
 
