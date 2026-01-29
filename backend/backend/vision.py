@@ -57,11 +57,16 @@ class OllamaVisionClient:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(
-                    f"{self.host}/api/generate",
+                    f"{self.host}/api/chat",
                     json={
                         "model": selected_model,
-                        "prompt": prompt,
-                        "images": [image_b64],
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": prompt,
+                                "images": [image_b64]
+                            }
+                        ],
                         "stream": False,
                         "keep_alive": "5m",  # Keep model loaded for 5 minutes
                         "options": {
@@ -74,8 +79,8 @@ class OllamaVisionClient:
                 response.raise_for_status()
                 result = response.json()
 
-                # Parse response
-                analysis_text = result.get("response", "")
+                # Parse response (chat format)
+                analysis_text = result.get("message", {}).get("content", "")
                 processing_time = int((time.time() - start_time) * 1000)
 
                 # Parse JSON from response
