@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
-from auth import get_current_user
+from main import get_current_user
 from models import User, Face, Person, Photo, FaceRecognitionConsent
 from face_recognition_service import FaceRecognitionService
 

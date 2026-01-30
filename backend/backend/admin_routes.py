@@ -672,7 +672,7 @@ async def get_remote_ollama_models(
 
 @router.get("/ollama/remote/test")
 async def test_remote_ollama_connection(
-    url: str,
+    ollama_url: str,
     current_user: User = Depends(get_current_user_dependency)
 ):
     """
@@ -683,8 +683,8 @@ async def test_remote_ollama_connection(
     from urllib.parse import urlparse, unquote
 
     # Decode URL in case it's URL-encoded
-    decoded_url = unquote(url)
-    print(f"[REMOTE TEST] Received URL: {url!r}, Decoded: {decoded_url!r}")
+    decoded_url = unquote(ollama_url)
+    print(f"[REMOTE TEST] Received URL: {ollama_url!r}, Decoded: {decoded_url!r}")
 
     # Validate URL format
     try:

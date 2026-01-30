@@ -177,7 +177,7 @@ export const remoteOllamaApi = {
 
   testConnection: async (url: string): Promise<{ status: string; message: string; url: string }> => {
     const response = await apiClient.get('/api/admin/ollama/remote/test', {
-      params: { url },
+      params: { ollama_url: url },
     });
     return response.data;
   },
