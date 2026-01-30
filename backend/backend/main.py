@@ -26,6 +26,8 @@ from models import User, Photo, PhotoAnalysis, SearchHistory
 import schemas
 from vision import vision_client
 import admin_routes
+import face_routes
+from face_recognition_service import FaceRecognitionService
 
 # Security
 from passlib.context import CryptContext
@@ -206,6 +208,10 @@ analysis_queue = asyncio.Queue()
 analysis_worker_started = False
 stop_all_requested = False
 
+# Global queue for face detection tasks
+face_detection_queue = asyncio.Queue()
+face_detection_worker_started = False
+
 async def analysis_worker():
     """Worker that processes analysis tasks one at a time"""
     global stop_all_requested
@@ -246,6 +252,55 @@ async def analysis_worker():
             print(f"Analysis worker error: {e}")
             # Continue processing next item
             analysis_queue.task_done()
+
+
+async def face_detection_worker():
+    """Worker dedicato per face detection in background"""
+    global face_detection_worker_started
+    print("Face detection worker started")
+    while True:
+        try:
+            photo_id, file_path = await face_detection_queue.get()
+            print(f"Processing face detection for photo {photo_id} (queue size: {face_detection_queue.qsize()})")
+
+            # Run face detection in thread pool (CPU-intensive)
+            db = SessionLocal()
+            try:
+                service = FaceRecognitionService(db)
+                await asyncio.to_thread(
+                    service.detect_faces_in_photo,
+                    photo_id,
+                    file_path,
+                    model="hog"  # CPU-friendly model
+                )
+                print(f"Face detection completed for photo {photo_id}")
+            except Exception as e:
+                print(f"Face detection error for photo {photo_id}: {e}")
+            finally:
+                db.close()
+
+            face_detection_queue.task_done()
+        except Exception as e:
+            print(f"Face detection worker error: {e}")
+            face_detection_queue.task_done()
+
+
+def enqueue_face_detection(photo_id: uuid.UUID, file_path: str):
+    """Add photo to face detection queue"""
+    global face_detection_worker_started
+
+    # Start worker if not already running
+    if not face_detection_worker_started:
+        asyncio.create_task(face_detection_worker())
+        face_detection_worker_started = True
+
+    # Add to queue (non-blocking)
+    try:
+        face_detection_queue.put_nowait((photo_id, file_path))
+        print(f"Added photo {photo_id} to face detection queue (position: {face_detection_queue.qsize()})")
+    except asyncio.QueueFull:
+        print(f"Face detection queue full! Skipping photo {photo_id}")
+
 
 def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None):
     """Add photo to analysis queue"""
@@ -609,6 +664,25 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
 
             db.commit()
             print(f"Analysis completed for photo {photo_id}")
+
+            # Auto-trigger face detection if faces detected and user has consent
+            if analysis_result.get("detected_faces", 0) > 0:
+                # Check user consent (in separate session since we're closing current one)
+                consent_db = SessionLocal()
+                try:
+                    face_service = FaceRecognitionService(consent_db)
+                    if face_service.check_user_consent(photo.user_id):
+                        print(f"Photo {photo_id} has {analysis_result['detected_faces']} faces - enqueueing face detection")
+                        enqueue_face_detection(photo_id, file_path)
+                    else:
+                        print(f"User {photo.user_id} has not given face recognition consent - skipping face detection")
+                        photo.face_detection_status = "skipped"
+                        consent_db.merge(photo)
+                        consent_db.commit()
+                except Exception as e:
+                    print(f"Failed to check face recognition consent: {e}")
+                finally:
+                    consent_db.close()
 
         finally:
             db.close()
@@ -1268,6 +1342,9 @@ async def search_photos(
 # Update admin_routes to use our get_current_user
 admin_routes.get_current_user_dependency = get_current_user
 app.include_router(admin_routes.router)
+
+# Include face recognition routes
+app.include_router(face_routes.router)
 
 
 # ============================================================================

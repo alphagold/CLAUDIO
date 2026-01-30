@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { photosApi } from '../api/client';
+import { photosApi, facesApi } from '../api/client';
 import apiClient from '../api/client';
 import Layout from '../components/Layout';
 import PhotoMap from '../components/PhotoMap';
+import FaceOverlay from '../components/FaceOverlay';
+import type { Face, Person } from '../types';
 import {
   ArrowLeft,
   Loader,
@@ -41,6 +43,16 @@ export default function PhotoDetailPage() {
   const queryClient = useQueryClient();
   const [showModelDialog, setShowModelDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [selectedFace, setSelectedFace] = useState<Face | null>(null);
+  const [showFaceLabelDialog, setShowFaceLabelDialog] = useState(false);
+  const [labelPersonName, setLabelPersonName] = useState('');
+  const [labelPersonId, setLabelPersonId] = useState<string>('');
+
+  // Fetch all persons for labeling dropdown
+  const { data: persons = [] } = useQuery({
+    queryKey: ['persons'],
+    queryFn: () => facesApi.listPersons(),
+  });
 
   const { data: photo, isLoading } = useQuery({
     queryKey: ['photo', photoId],
@@ -105,6 +117,24 @@ export default function PhotoDetailPage() {
     },
     onError: () => {
       toast.error('Errore nell\'aggiornamento della foto');
+    },
+  });
+
+  const labelFaceMutation = useMutation({
+    mutationFn: (data: { faceId: string; personId?: string; personName?: string }) =>
+      facesApi.labelFace(data.faceId, {
+        person_id: data.personId,
+        person_name: data.personName,
+      }),
+    onSuccess: () => {
+      toast.success('Volto etichettato con successo');
+      setShowFaceLabelDialog(false);
+      setSelectedFace(null);
+      queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+    },
+    onError: () => {
+      toast.error('Errore nell\'etichettatura del volto');
     },
   });
 
@@ -275,6 +305,100 @@ export default function PhotoDetailPage() {
       </div>
     );
   };
+
+  const FaceLabelDialog = () => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold">Chi è questa persona?</h3>
+          <button onClick={() => setShowFaceLabelDialog(false)}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <p className="text-gray-600 mb-6">
+          {selectedFace?.person_name
+            ? `Attualmente etichettato come: ${selectedFace.person_name}`
+            : 'Questo volto non è ancora stato identificato'}
+        </p>
+
+        <div className="space-y-4">
+          {/* Existing person dropdown */}
+          {persons.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Seleziona persona esistente
+              </label>
+              <select
+                value={labelPersonId}
+                onChange={(e) => {
+                  setLabelPersonId(e.target.value);
+                  setLabelPersonName('');
+                }}
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- Seleziona --</option>
+                {persons.map((person: Person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name || `Person ${person.id.slice(0, 8)}`} ({person.photo_count} foto)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* OR divider */}
+          {persons.length > 0 && (
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">OPPURE</span>
+              </div>
+            </div>
+          )}
+
+          {/* New person name input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nome nuova persona
+            </label>
+            <input
+              type="text"
+              value={labelPersonName}
+              onChange={(e) => {
+                setLabelPersonName(e.target.value);
+                setLabelPersonId('');
+              }}
+              placeholder="Es: Mario Rossi"
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Submit button */}
+          <button
+            onClick={() => {
+              if (!selectedFace) return;
+              if (!labelPersonId && !labelPersonName.trim()) {
+                toast.error('Seleziona una persona o inserisci un nome');
+                return;
+              }
+              labelFaceMutation.mutate({
+                faceId: selectedFace.id,
+                personId: labelPersonId || undefined,
+                personName: labelPersonName.trim() || undefined,
+              });
+            }}
+            disabled={labelFaceMutation.isPending || (!labelPersonId && !labelPersonName.trim())}
+            className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
+          >
+            {labelFaceMutation.isPending ? 'Salvataggio...' : 'Salva Etichetta'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   const ModelSelectionDialog = () => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -453,11 +577,26 @@ export default function PhotoDetailPage() {
           {/* Photo */}
           <div className="lg:col-span-3 bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200 animate-fade-in">
             <div className="relative w-full">
-              <img
-                src={photosApi.getPhotoUrl(photo.id)}
-                alt={photo.analysis?.description_short || 'Photo'}
-                className={`w-full h-auto object-contain max-h-[80vh] ${getOrientationClass(photo.exif_data?.Orientation)}`}
-              />
+              {photo.analysis?.detected_faces && photo.analysis.detected_faces > 0 ? (
+                <FaceOverlay
+                  photoId={photo.id}
+                  imageUrl={photosApi.getPhotoUrl(photo.id)}
+                  onFaceClick={(face) => {
+                    setSelectedFace(face);
+                    setLabelPersonId(face.person_id || '');
+                    setLabelPersonName('');
+                    setShowFaceLabelDialog(true);
+                  }}
+                  showLabels={true}
+                  className={getOrientationClass(photo.exif_data?.Orientation)}
+                />
+              ) : (
+                <img
+                  src={photosApi.getPhotoUrl(photo.id)}
+                  alt={photo.analysis?.description_short || 'Photo'}
+                  className={`w-full h-auto object-contain max-h-[80vh] ${getOrientationClass(photo.exif_data?.Orientation)}`}
+                />
+              )}
             </div>
           </div>
 
@@ -787,6 +926,7 @@ export default function PhotoDetailPage() {
         </div>
 
         {/* Dialogs */}
+        {showFaceLabelDialog && <FaceLabelDialog />}
         {showModelDialog && <ModelSelectionDialog />}
         {showEditDialog && <EditPhotoDialog />}
       </div>

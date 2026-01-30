@@ -104,3 +104,67 @@ export interface SearchQuery {
   limit?: number;
   skip?: number;
 }
+
+// Face Recognition types
+export interface Face {
+  id: string;
+  person_id: string | null;
+  person_name: string | null;
+  bbox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  quality_score: number | null;
+  cluster_id: number | null;
+}
+
+export interface Person {
+  id: string;
+  name: string | null;
+  notes: string | null;
+  photo_count: number;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  is_verified: boolean;
+  representative_face_id: string | null;
+}
+
+export interface PersonUpdateRequest {
+  name?: string;
+  notes?: string;
+  is_verified?: boolean;
+}
+
+export interface FaceLabelRequest {
+  person_id?: string;
+  person_name?: string;
+}
+
+export interface SimilarFace {
+  face_id: string;
+  person_id: string | null;
+  person_name: string | null;
+  similarity: number;
+  distance: number;
+}
+
+export interface Cluster {
+  cluster_id: number;
+  face_count: number;
+  faces: string[];
+  representative_face: string | null;
+}
+
+export interface ConsentResponse {
+  consent_given: boolean;
+  consent_date: string | null;
+  can_use_face_recognition: boolean;
+}
+
+export interface FaceDetectionResponse {
+  photo_id: string;
+  faces_detected: number;
+  status: string;
+}

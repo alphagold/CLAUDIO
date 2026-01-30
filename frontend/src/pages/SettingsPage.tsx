@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Layout from '../components/Layout';
-import apiClient, { remoteOllamaApi } from '../api/client';
-import { Settings, Sparkles, Zap, Save, Loader, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import apiClient, { remoteOllamaApi, facesApi } from '../api/client';
+import { Settings, Sparkles, Zap, Save, Loader, Wifi, WifiOff, RefreshCw, User, Shield, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface UserProfile {
@@ -99,6 +99,34 @@ export default function SettingsPage() {
       setRemoteModel(profile.remote_ollama_model || 'moondream');
     }
   }, [profile]);
+
+  // Face Recognition Consent
+  const { data: consentData } = useQuery({
+    queryKey: ['faces', 'consent'],
+    queryFn: () => facesApi.getConsent(),
+  });
+
+  const giveConsentMutation = useMutation({
+    mutationFn: () => facesApi.giveConsent(),
+    onSuccess: () => {
+      toast.success('Consenso concesso con successo!');
+      queryClient.invalidateQueries({ queryKey: ['faces', 'consent'] });
+    },
+    onError: () => {
+      toast.error('Errore nella concessione del consenso');
+    },
+  });
+
+  const revokeConsentMutation = useMutation({
+    mutationFn: (deleteData: boolean) => facesApi.revokeConsent(deleteData),
+    onSuccess: () => {
+      toast.success('Consenso revocato');
+      queryClient.invalidateQueries({ queryKey: ['faces', 'consent'] });
+    },
+    onError: () => {
+      toast.error('Errore nella revoca del consenso');
+    },
+  });
 
   const updateMutation = useMutation({
     mutationFn: async (data: {
@@ -420,6 +448,127 @@ export default function SettingsPage() {
                   </>
                 )}
               </div>
+            </>
+          )}
+        </div>
+
+        {/* Face Recognition Consent */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <User className="w-6 h-6 text-indigo-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Riconoscimento Facciale</h2>
+              <p className="text-sm text-gray-600">Identifica automaticamente le persone nelle tue foto</p>
+            </div>
+          </div>
+
+          {consentData?.consent_given ? (
+            <>
+              {/* Consent given */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start space-x-3">
+                  <Shield className="w-5 h-5 text-green-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-green-900 mb-1">✓ Consenso concesso</p>
+                    <p className="text-sm text-green-700">
+                      Il riconoscimento facciale è attivo. I volti nelle foto verranno rilevati e potrai etichettarli con nomi.
+                    </p>
+                    {consentData.consent_date && (
+                      <p className="text-xs text-green-600 mt-2">
+                        Consenso concesso il {new Date(consentData.consent_date).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    if (window.confirm('Revocare il consenso? Il sistema non rileverà più volti nelle nuove foto.')) {
+                      revokeConsentMutation.mutate(false);
+                    }
+                  }}
+                  disabled={revokeConsentMutation.isPending}
+                  className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 font-semibold transition-colors"
+                >
+                  {revokeConsentMutation.isPending ? 'Revoca in corso...' : 'Revoca consenso'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'ATTENZIONE: Questa azione eliminerà permanentemente tutti i dati di riconoscimento facciale (volti rilevati e persone identificate). Le foto NON verranno eliminate. Continuare?'
+                      )
+                    ) {
+                      revokeConsentMutation.mutate(true);
+                    }
+                  }}
+                  disabled={revokeConsentMutation.isPending}
+                  className="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-semibold transition-colors"
+                >
+                  {revokeConsentMutation.isPending ? 'Eliminazione in corso...' : 'Revoca ed elimina tutti i dati facciali'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* No consent */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+                <p className="text-gray-700 mb-4">
+                  Il riconoscimento facciale permette di identificare automaticamente le persone nelle tue foto.
+                  Potrai etichettare i volti con nomi e ritrovare facilmente tutte le foto di una persona.
+                </p>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <span>Rilevamento automatico dei volti nelle foto</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <span>Etichettatura con nomi personalizzati</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <span>Ricerca foto per persona</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start space-x-3">
+                  <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <h3 className="font-semibold text-blue-900 mb-2">Privacy e GDPR</h3>
+                    <ul className="space-y-1 text-sm text-blue-800">
+                      <li>✓ Tutti i dati facciali sono conservati localmente sul tuo server</li>
+                      <li>✓ Nessun dato viene inviato a servizi cloud esterni</li>
+                      <li>✓ Puoi revocare il consenso in qualsiasi momento</li>
+                      <li>✓ Opzione per eliminare tutti i dati di riconoscimento facciale</li>
+                      <li>✓ Le foto originali non vengono mai modificate</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => giveConsentMutation.mutate()}
+                disabled={giveConsentMutation.isPending}
+                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-semibold transition-colors flex items-center justify-center space-x-2"
+              >
+                {giveConsentMutation.isPending ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    <span>Concessione in corso...</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-5 h-5" />
+                    <span>Concedi consenso per riconoscimento facciale</span>
+                  </>
+                )}
+              </button>
             </>
           )}
         </div>

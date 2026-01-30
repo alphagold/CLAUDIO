@@ -5,6 +5,7 @@ from sqlalchemy import Column, String, Integer, Boolean, DECIMAL, TIMESTAMP, For
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from pgvector.sqlalchemy import Vector
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -67,12 +68,17 @@ class Photo(Base):
     width = Column(Integer)
     height = Column(Integer)
 
+    # Face detection
+    faces_detected_at = Column(TIMESTAMP(timezone=True))
+    face_detection_status = Column(String(20), default="pending")  # pending, processing, completed, failed, no_faces, skipped
+
     # Soft delete
     deleted_at = Column(TIMESTAMP(timezone=True))
 
     # Relationships
     user = relationship("User", back_populates="photos")
     analysis = relationship("PhotoAnalysis", back_populates="photo", uselist=False, cascade="all, delete-orphan")
+    faces = relationship("Face", back_populates="photo", cascade="all, delete-orphan")
 
     @property
     def elapsed_time_seconds(self) -> Optional[int]:
@@ -171,3 +177,116 @@ class Collection(Base):
 
     # Relationships
     user = relationship("User", back_populates="collections")
+
+
+# ============================================================================
+# FACE RECOGNITION MODELS
+# ============================================================================
+
+class Person(Base):
+    """Identified person (cluster of faces)"""
+    __tablename__ = "persons"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # Person information
+    name = Column(String(255))  # NULL if not yet labeled
+    notes = Column(Text)
+
+    # Representative face for display
+    representative_face_id = Column(UUID(as_uuid=True), ForeignKey("faces.id", ondelete="SET NULL"))
+
+    # Statistics
+    photo_count = Column(Integer, default=0)
+    first_seen_at = Column(TIMESTAMP(timezone=True))
+    last_seen_at = Column(TIMESTAMP(timezone=True))
+
+    # Clustering metadata
+    cluster_confidence = Column(DECIMAL(3, 2), default=0.80)
+    is_verified = Column(Boolean, default=False)
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    faces = relationship("Face", back_populates="person", foreign_keys="Face.person_id")
+    representative_face = relationship("Face", foreign_keys=[representative_face_id], post_update=True)
+
+
+class Face(Base):
+    """Individual detected face in a photo"""
+    __tablename__ = "faces"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    photo_id = Column(UUID(as_uuid=True), ForeignKey("photos.id", ondelete="CASCADE"), nullable=False)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("persons.id", ondelete="SET NULL"))
+
+    # Bounding box coordinates (pixel coordinates in original image)
+    bbox_x = Column(Integer, nullable=False)
+    bbox_y = Column(Integer, nullable=False)
+    bbox_width = Column(Integer, nullable=False)
+    bbox_height = Column(Integer, nullable=False)
+
+    # Face embedding vector (dlib 128-dimensional encoding)
+    embedding = Column(Vector(128), nullable=False)
+
+    # Detection quality
+    detection_confidence = Column(DECIMAL(3, 2), default=0.90)
+    face_quality_score = Column(DECIMAL(3, 2))
+
+    # Clustering (temporary, for auto-grouping)
+    cluster_id = Column(Integer)
+    cluster_distance = Column(DECIMAL(5, 4))
+
+    # Soft delete for GDPR
+    deleted_at = Column(TIMESTAMP(timezone=True))
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    # Relationships
+    photo = relationship("Photo", back_populates="faces")
+    person = relationship("Person", back_populates="faces", foreign_keys=[person_id])
+    labels = relationship("FaceLabel", back_populates="face", cascade="all, delete-orphan")
+
+
+class FaceLabel(Base):
+    """Labeling history for audit trail"""
+    __tablename__ = "face_labels"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    face_id = Column(UUID(as_uuid=True), ForeignKey("faces.id", ondelete="CASCADE"), nullable=False)
+    person_id = Column(UUID(as_uuid=True), ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
+    labeled_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+
+    # Label metadata
+    label_type = Column(String(20), nullable=False)  # 'manual', 'auto', 'suggestion'
+    confidence = Column(DECIMAL(3, 2), default=1.00)
+
+    # Timestamp
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    # Relationships
+    face = relationship("Face", back_populates="labels")
+
+
+class FaceRecognitionConsent(Base):
+    """GDPR compliance for face recognition"""
+    __tablename__ = "face_recognition_consent"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+
+    # Consent status
+    consent_given = Column(Boolean, nullable=False, default=False)
+    consent_date = Column(TIMESTAMP(timezone=True))
+    consent_ip = Column(String(45))  # IPv4 or IPv6
+
+    # Revocation
+    revoked_at = Column(TIMESTAMP(timezone=True))
+    revoked_reason = Column(Text)
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())

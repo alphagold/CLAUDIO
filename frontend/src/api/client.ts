@@ -9,6 +9,14 @@ import type {
   Album,
   CreateAlbumRequest,
   SearchQuery,
+  Face,
+  Person,
+  PersonUpdateRequest,
+  FaceLabelRequest,
+  SimilarFace,
+  Cluster,
+  ConsentResponse,
+  FaceDetectionResponse,
 } from '../types';
 
 // API base URL - change this to your backend URL
@@ -212,6 +220,87 @@ export const albumsApi = {
 
   removePhotoFromAlbum: async (albumId: string, photoId: string): Promise<void> => {
     await apiClient.delete(`/api/albums/${albumId}/photos/${photoId}`);
+  },
+};
+
+// Face Recognition API
+export const facesApi = {
+  // GDPR Consent
+  getConsent: async (): Promise<ConsentResponse> => {
+    const response = await apiClient.get<ConsentResponse>('/api/faces/consent');
+    return response.data;
+  },
+
+  giveConsent: async (): Promise<ConsentResponse> => {
+    const response = await apiClient.post<ConsentResponse>('/api/faces/consent/give');
+    return response.data;
+  },
+
+  revokeConsent: async (deleteData: boolean = false, reason: string = 'User request'): Promise<ConsentResponse> => {
+    const response = await apiClient.post<ConsentResponse>('/api/faces/consent/revoke', {
+      delete_data: deleteData,
+      reason,
+    });
+    return response.data;
+  },
+
+  // Face Detection
+  detectFaces: async (photoId: string, model: string = 'hog'): Promise<FaceDetectionResponse> => {
+    const response = await apiClient.post<FaceDetectionResponse>(`/api/faces/detect/${photoId}`, null, {
+      params: { model },
+    });
+    return response.data;
+  },
+
+  getPhotoFaces: async (photoId: string): Promise<Face[]> => {
+    const response = await apiClient.get<Face[]>(`/api/faces/photo/${photoId}`);
+    return response.data;
+  },
+
+  // Person Management
+  listPersons: async (): Promise<Person[]> => {
+    const response = await apiClient.get<Person[]>('/api/faces/persons');
+    return response.data;
+  },
+
+  getPerson: async (personId: string): Promise<Person> => {
+    const response = await apiClient.get<Person>(`/api/faces/persons/${personId}`);
+    return response.data;
+  },
+
+  updatePerson: async (personId: string, data: PersonUpdateRequest): Promise<Person> => {
+    const response = await apiClient.patch<Person>(`/api/faces/persons/${personId}`, data);
+    return response.data;
+  },
+
+  deletePerson: async (personId: string): Promise<void> => {
+    await apiClient.delete(`/api/faces/persons/${personId}`);
+  },
+
+  // Face Labeling
+  labelFace: async (faceId: string, data: FaceLabelRequest): Promise<Face> => {
+    const response = await apiClient.post<Face>(`/api/faces/label/${faceId}`, data);
+    return response.data;
+  },
+
+  getSimilarFaces: async (faceId: string, threshold: number = 0.6, limit: number = 10): Promise<SimilarFace[]> => {
+    const response = await apiClient.get<SimilarFace[]>(`/api/faces/similar/${faceId}`, {
+      params: { threshold, limit },
+    });
+    return response.data;
+  },
+
+  // Clustering
+  getClusters: async (): Promise<Cluster[]> => {
+    const response = await apiClient.get<Cluster[]>('/api/faces/clusters');
+    return response.data;
+  },
+
+  labelCluster: async (clusterId: number, personName: string): Promise<{ message: string; person_id: string }> => {
+    const response = await apiClient.post(`/api/faces/clusters/${clusterId}/label`, null, {
+      params: { person_name: personName },
+    });
+    return response.data;
   },
 };
 

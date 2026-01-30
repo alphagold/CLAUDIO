@@ -2,13 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies including Docker CLI
+# Install system dependencies including Docker CLI and face_recognition deps
 RUN apt-get update && apt-get install -y \
     curl \
     gcc \
     g++ \
     libpq-dev \
     docker.io \
+    cmake \
+    build-essential \
+    libopenblas-dev \
+    liblapack-dev \
+    libx11-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
