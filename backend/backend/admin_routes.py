@@ -672,7 +672,7 @@ async def get_remote_ollama_models(
 
 @router.get("/ollama/remote/test")
 async def test_remote_ollama_connection(
-    url: str = Query(..., description="URL del server Ollama remoto"),
+    url: str,
     current_user: User = Depends(get_current_user_dependency)
 ):
     """
@@ -680,19 +680,21 @@ async def test_remote_ollama_connection(
     Disponibile a tutti gli utenti autenticati (non solo admin)
     """
     import httpx
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, unquote
 
-    print(f"[REMOTE TEST] Received URL: {url!r}")
+    # Decode URL in case it's URL-encoded
+    decoded_url = unquote(url)
+    print(f"[REMOTE TEST] Received URL: {url!r}, Decoded: {decoded_url!r}")
 
     # Validate URL format
     try:
-        parsed = urlparse(url)
+        parsed = urlparse(decoded_url)
         if not parsed.scheme or not parsed.netloc:
             raise HTTPException(status_code=400, detail="Formato URL non valido")
     except Exception:
         raise HTTPException(status_code=400, detail="Formato URL non valido")
 
-    clean_url = url.rstrip('/')
+    clean_url = decoded_url.rstrip('/')
 
     try:
         async with httpx.AsyncClient() as client:

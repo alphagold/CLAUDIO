@@ -204,7 +204,19 @@ export default function SettingsPage() {
       }
     } catch (error: any) {
       console.error('Test connection error:', error);
-      const errorMsg = error.response?.data?.detail || error.message || 'Errore di connessione';
+      let errorMsg = 'Errore di connessione';
+
+      if (error.response?.data?.detail) {
+        // FastAPI validation errors are arrays
+        if (Array.isArray(error.response.data.detail)) {
+          errorMsg = error.response.data.detail.map((e: any) => e.msg).join(', ');
+        } else if (typeof error.response.data.detail === 'string') {
+          errorMsg = error.response.data.detail;
+        }
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+
       toast.error(errorMsg);
       setConnectionTested(false);
     } finally {
