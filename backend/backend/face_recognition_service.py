@@ -13,13 +13,17 @@ import numpy as np
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 
-# Face recognition
-import face_recognition
-from PIL import Image
-import cv2
-
-# Clustering
-from sklearn.cluster import DBSCAN
+# Face recognition (optional)
+try:
+    import face_recognition
+    from PIL import Image
+    import cv2
+    from sklearn.cluster import DBSCAN
+    FACE_RECOGNITION_AVAILABLE = True
+except ImportError as e:
+    FACE_RECOGNITION_AVAILABLE = False
+    print(f"WARNING: face_recognition not available: {e}")
+    print("Face recognition features will be disabled")
 
 # Models
 from models import Face, Person, FaceLabel, FaceRecognitionConsent, Photo
@@ -159,6 +163,8 @@ class FaceRecognitionService:
         """
         Rileva tutti i volti in una foto e genera embeddings.
 
+        Returns empty list if face_recognition library not available.
+
         Args:
             photo_id: ID foto nel database
             image_path: Path assoluto al file immagine
@@ -170,6 +176,11 @@ class FaceRecognitionService:
         Raises:
             ValueError: Se foto non esiste o utente non ha consenso
         """
+        # Check if face_recognition is available
+        if not FACE_RECOGNITION_AVAILABLE:
+            logger.warning("face_recognition library not available - skipping face detection")
+            return []
+
         # Fetch photo and check consent
         photo = self.db.query(Photo).filter(Photo.id == photo_id).first()
         if not photo:

@@ -26,8 +26,18 @@ from models import User, Photo, PhotoAnalysis, SearchHistory
 import schemas
 from vision import vision_client
 import admin_routes
-import face_routes
-from face_recognition_service import FaceRecognitionService
+
+# Face recognition (optional)
+try:
+    import face_routes
+    from face_recognition_service import FaceRecognitionService
+    FACE_RECOGNITION_AVAILABLE = True
+except ImportError as e:
+    FACE_RECOGNITION_AVAILABLE = False
+    print(f"WARNING: face_recognition not available: {e}")
+    print("Face recognition features will be disabled")
+    face_routes = None
+    FaceRecognitionService = None
 
 # Security
 from passlib.context import CryptContext
@@ -257,6 +267,11 @@ async def analysis_worker():
 async def face_detection_worker():
     """Worker dedicato per face detection in background"""
     global face_detection_worker_started
+
+    if not FACE_RECOGNITION_AVAILABLE:
+        print("Face detection worker NOT started - face_recognition library not available")
+        return
+
     print("Face detection worker started")
     while True:
         try:
@@ -666,7 +681,7 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             print(f"Analysis completed for photo {photo_id}")
 
             # Auto-trigger face detection if faces detected and user has consent
-            if analysis_result.get("detected_faces", 0) > 0:
+            if FACE_RECOGNITION_AVAILABLE and analysis_result.get("detected_faces", 0) > 0:
                 # Check user consent (in separate session since we're closing current one)
                 consent_db = SessionLocal()
                 try:
@@ -683,6 +698,8 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                     print(f"Failed to check face recognition consent: {e}")
                 finally:
                     consent_db.close()
+            elif not FACE_RECOGNITION_AVAILABLE and analysis_result.get("detected_faces", 0) > 0:
+                print(f"Photo {photo_id} has {analysis_result['detected_faces']} faces but face_recognition library not available")
 
         finally:
             db.close()
@@ -1343,8 +1360,12 @@ async def search_photos(
 admin_routes.get_current_user_dependency = get_current_user
 app.include_router(admin_routes.router)
 
-# Include face recognition routes
-app.include_router(face_routes.router)
+# Include face recognition routes (if available)
+if FACE_RECOGNITION_AVAILABLE and face_routes:
+    app.include_router(face_routes.router)
+    print("Face recognition routes registered")
+else:
+    print("Face recognition routes NOT available - feature disabled")
 
 
 # ============================================================================

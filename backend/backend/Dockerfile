@@ -29,11 +29,14 @@ COPY requirements.txt .
 # Upgrade pip and install build tools
 RUN pip install --upgrade pip setuptools wheel
 
-# Install dlib with verbose output to see errors
-RUN pip install --no-cache-dir --verbose dlib==19.24.0
+# Install dependencies WITHOUT face_recognition (problematic)
+# Face recognition will be optional feature
+RUN grep -v "face_recognition\|dlib\|scikit-learn\|opencv-python" requirements.txt > requirements_base.txt && \
+    pip install --no-cache-dir -r requirements_base.txt
 
-# Install remaining dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Try to install face_recognition deps (optional - app works without)
+RUN pip install --no-cache-dir scikit-learn opencv-python || echo "WARNING: ML dependencies optional install failed"
+RUN pip install --no-cache-dir dlib face_recognition || echo "WARNING: face_recognition not available - feature disabled"
 
 # Copy application code
 COPY . .
