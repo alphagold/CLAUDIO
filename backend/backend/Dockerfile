@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     gcc \
     g++ \
+    make \
     libpq-dev \
     docker.io \
     cmake \
@@ -16,12 +17,22 @@ RUN apt-get update && apt-get install -y \
     libx11-dev \
     python3-dev \
     libboost-all-dev \
+    pkg-config \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
 COPY requirements.txt .
 
-# Install Python dependencies
+# Upgrade pip and install build tools
+RUN pip install --upgrade pip setuptools wheel
+
+# Install dlib with verbose output to see errors
+RUN pip install --no-cache-dir --verbose dlib==19.24.0
+
+# Install remaining dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
