@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev \
     liblapack-dev \
     libx11-dev \
+    python3-dev \
+    libboost-all-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
