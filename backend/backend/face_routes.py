@@ -8,6 +8,7 @@ import logging
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,17 @@ router = APIRouter(prefix="/api/faces", tags=["Face Recognition"])
 
 # Dependency injection - will be set by main.py to avoid circular imports
 get_current_user_dependency = None
+
+
+def get_current_user_wrapper(
+    token: str = Depends(OAuth2PasswordBearer(tokenUrl="/api/auth/login")),
+    db: Session = Depends(get_db)
+) -> User:
+    """Wrapper to call get_current_user_dependency at runtime"""
+    from fastapi import HTTPException
+    if get_current_user_dependency is None:
+        raise HTTPException(status_code=500, detail="Authentication not initialized")
+    return get_current_user_dependency(token=token, db=db)
 
 
 # ============================================================================
@@ -110,7 +122,7 @@ class ClusterResponse(BaseModel):
 
 @router.get("/consent", response_model=ConsentResponse)
 async def get_consent_status(
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -133,7 +145,7 @@ async def get_consent_status(
 @router.post("/consent/give", response_model=ConsentResponse)
 async def give_consent(
     request: Request,
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -157,7 +169,7 @@ async def give_consent(
 @router.post("/consent/revoke", response_model=ConsentResponse)
 async def revoke_consent(
     body: ConsentRevokeRequest,
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -190,7 +202,7 @@ async def revoke_consent(
 async def detect_faces(
     photo_id: UUID,
     model: str = "hog",  # 'hog' (CPU) or 'cnn' (GPU)
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -240,7 +252,7 @@ async def detect_faces(
 @router.get("/photo/{photo_id}", response_model=List[FaceResponse])
 async def get_photo_faces(
     photo_id: UUID,
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -285,7 +297,7 @@ async def get_photo_faces(
 
 @router.get("/persons", response_model=List[PersonResponse])
 async def list_persons(
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -313,7 +325,7 @@ async def list_persons(
 @router.get("/persons/{person_id}", response_model=PersonResponse)
 async def get_person(
     person_id: UUID,
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -343,7 +355,7 @@ async def get_person(
 async def update_person(
     person_id: UUID,
     body: PersonUpdateRequest,
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -383,7 +395,7 @@ async def update_person(
 @router.delete("/persons/{person_id}")
 async def delete_person(
     person_id: UUID,
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -414,7 +426,7 @@ async def delete_person(
 async def label_face(
     face_id: UUID,
     body: FaceLabelRequest,
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -467,7 +479,7 @@ async def get_similar_faces(
     face_id: UUID,
     threshold: float = 0.6,
     limit: int = 10,
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -501,7 +513,7 @@ async def get_similar_faces(
 
 @router.get("/clusters", response_model=List[ClusterResponse])
 async def get_clusters(
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
@@ -518,7 +530,7 @@ async def get_clusters(
 async def label_cluster(
     cluster_id: int,
     person_name: str,
-    current_user: User = Depends(get_current_user_dependency),
+    current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """

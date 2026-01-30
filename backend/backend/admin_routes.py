@@ -33,6 +33,16 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 get_current_user_dependency = None
 
 
+def get_current_user_wrapper(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> User:
+    """Wrapper to call get_current_user_dependency at runtime"""
+    if get_current_user_dependency is None:
+        raise HTTPException(status_code=500, detail="Authentication not initialized")
+    return get_current_user_dependency(token=token, db=db)
+
+
 def require_admin(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
@@ -598,7 +608,7 @@ async def get_ollama_status(
 @router.get("/ollama/remote/models")
 async def get_remote_ollama_models(
     url: str,
-    current_user: User = Depends(get_current_user_dependency)
+    current_user: User = Depends(get_current_user_wrapper)
 ):
     """
     Interroga server Ollama remoto per ottenere lista modelli disponibili
@@ -673,7 +683,7 @@ async def get_remote_ollama_models(
 @router.get("/ollama/remote/test")
 async def test_remote_ollama_connection(
     ollama_url: str,
-    current_user: User = Depends(get_current_user_dependency)
+    current_user: User = Depends(get_current_user_wrapper)
 ):
     """
     Test connessione a server Ollama remoto
