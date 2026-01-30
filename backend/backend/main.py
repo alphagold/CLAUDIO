@@ -1362,6 +1362,7 @@ app.include_router(admin_routes.router)
 
 # Include face recognition routes (if available)
 if FACE_RECOGNITION_AVAILABLE and face_routes:
+    face_routes.get_current_user_dependency = get_current_user
     app.include_router(face_routes.router)
     print("Face recognition routes registered")
 else:
