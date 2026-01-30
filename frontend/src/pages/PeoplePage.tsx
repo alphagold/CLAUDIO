@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Trash2, Edit2, Check, X } from 'lucide-react';
-import { facesApi, photosApi } from '../api/client';
-import { Person } from '../types';
+import { facesApi } from '../api/client';
+import type { Person } from '../types';
 import toast from 'react-hot-toast';
 
 /**

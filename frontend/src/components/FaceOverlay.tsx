@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Face } from '../types';
+import type { Face } from '../types';
 import { facesApi } from '../api/client';
 
 interface FaceOverlayProps {
