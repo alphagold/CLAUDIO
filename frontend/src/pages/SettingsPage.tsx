@@ -100,10 +100,17 @@ export default function SettingsPage() {
     }
   }, [profile]);
 
-  // Face Recognition Consent
-  const { data: consentData } = useQuery({
+  // Face Recognition Consent (optional - may not be available)
+  const { data: consentData, error: consentError } = useQuery({
     queryKey: ['faces', 'consent'],
     queryFn: () => facesApi.getConsent(),
+    retry: false,
+    // Ignore 404 errors (face recognition not available)
+    onError: (error: any) => {
+      if (error?.response?.status === 404) {
+        console.log('Face recognition feature not available (404)');
+      }
+    },
   });
 
   const giveConsentMutation = useMutation({
@@ -462,7 +469,23 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {consentData?.consent_given ? (
+          {consentError?.response?.status === 404 ? (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                <div>
+                  <p className="font-medium text-yellow-900 mb-1">Feature Non Disponibile</p>
+                  <p className="text-sm text-yellow-700">
+                    Il riconoscimento facciale non è attualmente disponibile su questo server.
+                    La libreria <code className="bg-yellow-100 px-1 rounded">face_recognition</code> non è stata installata durante il deployment.
+                  </p>
+                  <p className="text-xs text-yellow-600 mt-2">
+                    Contatta l'amministratore per abilitare questa funzionalità.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : consentData?.consent_given ? (
             <>
               {/* Consent given */}
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">

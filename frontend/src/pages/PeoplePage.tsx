@@ -17,6 +17,7 @@ export const PeoplePage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [featureNotAvailable, setFeatureNotAvailable] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,9 +29,14 @@ export const PeoplePage: React.FC = () => {
       setLoading(true);
       const data = await facesApi.listPersons();
       setPersons(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch persons:', error);
-      toast.error('Failed to load people');
+      if (error?.response?.status === 404) {
+        setFeatureNotAvailable(true);
+        toast.error('Face recognition feature not available on this server');
+      } else {
+        toast.error('Failed to load people');
+      }
     } finally {
       setLoading(false);
     }
@@ -84,6 +90,30 @@ export const PeoplePage: React.FC = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-gray-500">Loading people...</div>
+      </div>
+    );
+  }
+
+  if (featureNotAvailable) {
+    return (
+      <div className="max-w-4xl mx-auto p-8">
+        <h1 className="text-3xl font-bold mb-6">People</h1>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8">
+          <User className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
+          <h2 className="text-xl font-semibold mb-2 text-center">Feature Not Available</h2>
+          <p className="text-gray-600 mb-4 text-center">
+            Face recognition is not currently available on this server.
+            The <code className="bg-yellow-100 px-1 rounded">face_recognition</code> library was not installed during deployment.
+          </p>
+          <div className="text-center">
+            <button
+              onClick={() => navigate('/gallery')}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+              Go to Gallery
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
