@@ -1,7 +1,7 @@
 """
 Admin-only routes for system monitoring and logs
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -672,7 +672,7 @@ async def get_remote_ollama_models(
 
 @router.get("/ollama/remote/test")
 async def test_remote_ollama_connection(
-    url: str,
+    url: str = Query(..., description="URL del server Ollama remoto"),
     current_user: User = Depends(get_current_user_dependency)
 ):
     """
@@ -681,6 +681,8 @@ async def test_remote_ollama_connection(
     """
     import httpx
     from urllib.parse import urlparse
+
+    print(f"[REMOTE TEST] Received URL: {url!r}")
 
     # Validate URL format
     try:
