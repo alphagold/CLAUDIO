@@ -593,3 +593,130 @@ async def get_ollama_status(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error checking Ollama status: {str(e)}")
+
+
+@router.get("/ollama/remote/models")
+async def get_remote_ollama_models(
+    url: str,
+    current_user: User = Depends(get_current_user_dependency)
+):
+    """
+    Interroga server Ollama remoto per ottenere lista modelli disponibili
+    Disponibile a tutti gli utenti autenticati (non solo admin)
+    """
+    import httpx
+    from urllib.parse import urlparse
+
+    # Validate URL format
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            raise HTTPException(
+                status_code=400,
+                detail="URL non valido. Deve includere schema (http/https) e host."
+            )
+    except Exception:
+        raise HTTPException(status_code=400, detail="Formato URL non valido")
+
+    # Ensure URL doesn't have trailing slash
+    clean_url = url.rstrip('/')
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{clean_url}/api/tags", timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+
+            # Filtra solo modelli vision (hanno "families" con clip/mllama/qwen)
+            vision_models = []
+            all_models = []
+
+            for model in data.get("models", []):
+                model_info = {
+                    "name": model.get("name"),
+                    "size": model.get("size", 0),
+                    "modified_at": model.get("modified_at"),
+                }
+
+                all_models.append(model_info)
+
+                # Check if it's a vision model
+                families = model.get("details", {}).get("families")
+                if families and any(f in families for f in ["clip", "mllama", "qwen"]):
+                    vision_models.append(model_info)
+
+            return {
+                "models": vision_models if vision_models else all_models,
+                "all_models": all_models,
+                "vision_only": len(vision_models) > 0,
+                "server_url": clean_url,
+                "count": len(vision_models) if vision_models else len(all_models)
+            }
+
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Timeout connessione. Il server {clean_url} non ha risposto entro 10 secondi."
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Impossibile contattare server Ollama: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore nel recupero modelli: {str(e)}"
+        )
+
+
+@router.get("/ollama/remote/test")
+async def test_remote_ollama_connection(
+    url: str,
+    current_user: User = Depends(get_current_user_dependency)
+):
+    """
+    Test connessione a server Ollama remoto
+    Disponibile a tutti gli utenti autenticati (non solo admin)
+    """
+    import httpx
+    from urllib.parse import urlparse
+
+    # Validate URL format
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            raise HTTPException(status_code=400, detail="Formato URL non valido")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Formato URL non valido")
+
+    clean_url = url.rstrip('/')
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{clean_url}/api/tags", timeout=5.0)
+            response.raise_for_status()
+
+            return {
+                "status": "ok",
+                "message": f"Connessione riuscita a Ollama su {clean_url}",
+                "url": clean_url
+            }
+    except httpx.TimeoutException:
+        return {
+            "status": "error",
+            "message": f"Timeout dopo 5 secondi",
+            "url": clean_url
+        }
+    except httpx.RequestError as e:
+        return {
+            "status": "error",
+            "message": f"Impossibile connettersi: {str(e)}",
+            "url": clean_url
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Errore imprevisto: {str(e)}",
+            "url": clean_url
+        }

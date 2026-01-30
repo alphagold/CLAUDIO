@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Layout from '../components/Layout';
-import apiClient from '../api/client';
-import { Settings, Sparkles, Zap, Save, Loader } from 'lucide-react';
+import apiClient, { remoteOllamaApi } from '../api/client';
+import { Settings, Sparkles, Zap, Save, Loader, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface UserProfile {
@@ -83,6 +83,12 @@ export default function SettingsPage() {
   const [remoteUrl, setRemoteUrl] = useState(profile?.remote_ollama_url || 'http://localhost:11434');
   const [remoteModel, setRemoteModel] = useState(profile?.remote_ollama_model || 'moondream');
 
+  // Stati per remote server
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [availableModels, setAvailableModels] = useState<Array<{ name: string; size: number }>>([]);
+  const [connectionTested, setConnectionTested] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
+
   // Sync local state with profile data when it loads or changes
   useEffect(() => {
     if (profile) {
@@ -120,6 +126,60 @@ export default function SettingsPage() {
       toast.error('Errore nel salvataggio delle impostazioni');
     },
   });
+
+  const handleTestConnection = async () => {
+    if (!remoteUrl.trim()) {
+      toast.error('Inserisci un URL valido');
+      return;
+    }
+
+    setTestingConnection(true);
+    setConnectionTested(false);
+    setAvailableModels([]);
+
+    try {
+      // Test connessione
+      const testResult = await remoteOllamaApi.testConnection(remoteUrl);
+
+      if (testResult.status === 'ok') {
+        toast.success('Connessione riuscita!');
+        setConnectionTested(true);
+
+        // Fetch modelli disponibili
+        setLoadingModels(true);
+        try {
+          const modelsData = await remoteOllamaApi.fetchModels(remoteUrl);
+          setAvailableModels(modelsData.models);
+
+          if (modelsData.models.length === 0) {
+            toast.error('Nessun modello disponibile sul server remoto');
+          } else {
+            toast.success(`Trovati ${modelsData.models.length} modelli disponibili`);
+            // Auto-select first model if current selection not in list
+            const currentModelExists = modelsData.models.some((m) => m.name === remoteModel);
+            if (!currentModelExists && modelsData.models.length > 0) {
+              setRemoteModel(modelsData.models[0].name);
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching models:', err);
+          toast.error('Errore nel recupero dei modelli');
+        } finally {
+          setLoadingModels(false);
+        }
+      } else {
+        toast.error(testResult.message || 'Connessione fallita');
+        setConnectionTested(false);
+      }
+    } catch (error: any) {
+      console.error('Test connection error:', error);
+      const errorMsg = error.response?.data?.detail || error.message || 'Errore di connessione';
+      toast.error(errorMsg);
+      setConnectionTested(false);
+    } finally {
+      setTestingConnection(false);
+    }
+  };
 
   const handleSave = () => {
     updateMutation.mutate({
@@ -264,7 +324,11 @@ export default function SettingsPage() {
                 <input
                   type="text"
                   value={remoteUrl}
-                  onChange={(e) => setRemoteUrl(e.target.value)}
+                  onChange={(e) => {
+                    setRemoteUrl(e.target.value);
+                    setConnectionTested(false); // Reset test status on URL change
+                    setAvailableModels([]);
+                  }}
                   placeholder="http://192.168.1.100:11434"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
@@ -273,25 +337,88 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* Remote Model Selection */}
+              {/* Test Connection Button */}
+              <div className="mb-4">
+                <button
+                  type="button"
+                  onClick={handleTestConnection}
+                  disabled={testingConnection || !remoteUrl.trim()}
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {testingConnection ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      <span>Test connessione in corso...</span>
+                    </>
+                  ) : connectionTested ? (
+                    <>
+                      <Wifi className="w-5 h-5" />
+                      <span>Connessione OK - Riprova</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="w-5 h-5" />
+                      <span>Test Connessione</span>
+                    </>
+                  )}
+                </button>
+
+                {connectionTested && (
+                  <p className="text-xs text-green-600 mt-2 flex items-center space-x-1">
+                    <Wifi className="w-4 h-4" />
+                    <span>Server raggiungibile - {availableModels.length} modelli disponibili</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Remote Model Selection - Dynamic or Fallback */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Modello sul Server Remoto
                 </label>
-                <select
-                  value={remoteModel}
-                  onChange={(e) => setRemoteModel(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  {MODELS.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name} ({model.size})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Seleziona il modello installato sul tuo PC locale
-                </p>
+
+                {loadingModels ? (
+                  <div className="flex items-center justify-center py-4 text-gray-500">
+                    <Loader className="w-5 h-5 animate-spin mr-2" />
+                    <span>Caricamento modelli...</span>
+                  </div>
+                ) : availableModels.length > 0 ? (
+                  <>
+                    <select
+                      value={remoteModel}
+                      onChange={(e) => setRemoteModel(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                      {availableModels.map((model) => (
+                        <option key={model.name} value={model.name}>
+                          {model.name} ({(model.size / 1024 / 1024 / 1024).toFixed(1)} GB)
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Seleziona il modello installato sul server remoto
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <select
+                      value={remoteModel}
+                      onChange={(e) => setRemoteModel(e.target.value)}
+                      disabled={!connectionTested}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {MODELS.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name} ({model.size})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-yellow-600 mt-1 flex items-center space-x-1">
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Testa la connessione per vedere i modelli realmente disponibili</span>
+                    </p>
+                  </>
+                )}
               </div>
             </>
           )}

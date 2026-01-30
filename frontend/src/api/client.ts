@@ -152,6 +152,29 @@ export const photosApi = {
   },
 };
 
+// Remote Ollama API
+export const remoteOllamaApi = {
+  fetchModels: async (url: string): Promise<{
+    models: Array<{ name: string; size: number; modified_at?: string }>;
+    all_models: Array<{ name: string; size: number; modified_at?: string }>;
+    vision_only: boolean;
+    count: number;
+    server_url: string;
+  }> => {
+    const response = await apiClient.get('/api/admin/ollama/remote/models', {
+      params: { url },
+    });
+    return response.data;
+  },
+
+  testConnection: async (url: string): Promise<{ status: string; message: string; url: string }> => {
+    const response = await apiClient.get('/api/admin/ollama/remote/test', {
+      params: { url },
+    });
+    return response.data;
+  },
+};
+
 // Albums API
 export const albumsApi = {
   getAlbums: async (): Promise<Album[]> => {

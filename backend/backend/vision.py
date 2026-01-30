@@ -9,6 +9,13 @@ from pathlib import Path
 from config import settings
 import time
 
+# Blacklist tag troppo generici
+GENERIC_TAGS_BLACKLIST = {
+    "oggetto", "cosa", "elemento", "foto", "immagine", "scena",
+    "ambiente", "spazio", "luogo", "area", "zona", "parte",
+    "vista", "dettaglio", "sezione", "componente"
+}
+
 
 class OllamaVisionClient:
     """Client for Ollama Vision models"""
@@ -27,7 +34,8 @@ class OllamaVisionClient:
         self,
         image_path: str,
         model: Optional[str] = None,
-        detailed: bool = False
+        detailed: bool = False,
+        location_name: Optional[str] = None
     ) -> Dict:
         """
         Analyze photo with Vision AI
@@ -36,6 +44,7 @@ class OllamaVisionClient:
             image_path: Path to image file
             model: Ollama model to use (default: moondream)
             detailed: Use detailed model (llama3.2-vision) if True
+            location_name: Location name from GPS EXIF data (for geo-aware tags)
 
         Returns:
             Analysis results dict
@@ -50,8 +59,8 @@ class OllamaVisionClient:
         # Encode image
         image_b64 = self._encode_image(image_path)
 
-        # Prepare prompt
-        prompt = self._get_analysis_prompt()
+        # Prepare prompt WITH location context
+        prompt = self._get_analysis_prompt(location_name=location_name)
 
         # Call Ollama API
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -95,21 +104,35 @@ class OllamaVisionClient:
                 print(f"Ollama API error: {e}")
                 return self._get_fallback_analysis(processing_time)
 
-    def _get_analysis_prompt(self) -> str:
+    def _get_analysis_prompt(self, location_name: Optional[str] = None) -> str:
         """Get analysis prompt for Vision AI"""
-        return """Analizza questa foto e rispondi SOLO con un oggetto JSON valido (no markdown, no testo extra).
 
+        # Aggiungi contesto geolocalizzazione se disponibile
+        location_context = ""
+        if location_name:
+            location_context = f"""
+INFORMAZIONE IMPORTANTE - GEOLOCALIZZAZIONE:
+Questa foto è stata scattata a: {location_name}
+Usa questa informazione per generare tag di luogo appropriati e specifici.
+"""
+
+        return f"""Analizza questa foto e rispondi SOLO con un oggetto JSON valido (no markdown, no testo extra).
+{location_context}
 Struttura JSON richiesta:
-{
+{{
   "description_full": "Descrizione dettagliata in italiano di tutto ciò che vedi (3-5 frasi complete)",
   "description_short": "Riassunto in italiano in una frase (max 100 caratteri)",
   "extracted_text": "Qualsiasi testo visibile nell'immagine (stringa vuota se non c'è testo)",
   "detected_objects": ["oggetto1", "oggetto2", "oggetto3"],
   "scene_category": "food/document/receipt/outdoor/indoor/people/other",
   "scene_subcategory": "restaurant/home/office/street/nature/etc",
-  "tags": ["tag1", "tag2", "tag3"],
+  "tags": [
+    {{"tag": "tag1", "confidence": 0.95}},
+    {{"tag": "tag2", "confidence": 0.88}},
+    {{"tag": "tag3", "confidence": 0.82}}
+  ],
   "confidence_score": 0.85
-}
+}}
 
 Istruzioni importanti:
 - description_full: Descrivi dettagliatamente cosa vedi, i colori, le azioni, l'ambiente, gli oggetti principali
@@ -117,7 +140,7 @@ Istruzioni importanti:
 - extracted_text: Copia esattamente qualsiasi testo/scritta visibile (lascia vuoto "" se non c'è testo)
 - detected_objects: Lista degli oggetti principali visibili (in italiano)
 - scene_category: Scegli la categoria più appropriata tra: food, document, receipt, outdoor, indoor, people, other
-- tags: Solo 3-5 tag principali ad alta confidenza - oggetti/persone realmente presenti e riconoscibili (in italiano)
+- tags: Array di oggetti con 'tag' (nome) e 'confidence' (0.0-1.0). Solo 3-5 tag ALTAMENTE SPECIFICI (confidence minima 0.8) - oggetti/persone/luoghi chiaramente identificabili. Evita tag generici come 'oggetto', 'cosa', 'elemento'. Preferisci tag concreti come 'tavolo', 'sedia', 'montagna', 'pizza', 'smartphone'. Se disponibile geolocalizzazione, includi tag di luogo con alta confidenza
 - confidence_score: Quanto sei sicuro dell'analisi (0.0-1.0)
 
 Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
@@ -134,9 +157,45 @@ Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
 
             data = json.loads(clean_text)
 
-            # Filter and limit tags to max 5 high-quality tags
+            # Parse tags con confidence
             raw_tags = data.get("tags", [])
-            filtered_tags = [tag for tag in raw_tags if len(tag) > 2][:5]
+            high_confidence_tags = []
+
+            for tag_item in raw_tags:
+                # Supporta sia formato nuovo che vecchio
+                if isinstance(tag_item, dict):
+                    tag_name = tag_item.get("tag", "")
+                    confidence = tag_item.get("confidence", 0.0)
+                else:
+                    # Fallback: tag è stringa semplice (formato vecchio)
+                    tag_name = str(tag_item)
+                    confidence = 0.7  # Default confidence
+
+                # Filtra tag con alta confidenza (>0.8) e min 3 caratteri
+                # Rimuovi tag in blacklist
+                if (confidence > 0.8 and
+                    len(tag_name.strip()) > 2 and
+                    tag_name.strip().lower() not in GENERIC_TAGS_BLACKLIST):
+                    high_confidence_tags.append(tag_name.strip())
+
+            # Se dopo il filtro restano meno di 3 tag, mantieni comunque i tag originali
+            # con confidence >0.7 per evitare foto senza tag
+            if len(high_confidence_tags) < 3:
+                for tag_item in raw_tags:
+                    if isinstance(tag_item, dict):
+                        tag_name = tag_item.get("tag", "")
+                        confidence = tag_item.get("confidence", 0.0)
+                    else:
+                        tag_name = str(tag_item)
+                        confidence = 0.7
+
+                    if (confidence > 0.7 and
+                        len(tag_name.strip()) > 2 and
+                        tag_name.strip() not in high_confidence_tags):
+                        high_confidence_tags.append(tag_name.strip())
+
+            # Limita a max 5 tag
+            filtered_tags = high_confidence_tags[:5]
 
             # Validate and normalize
             return {

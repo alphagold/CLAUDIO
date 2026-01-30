@@ -509,11 +509,17 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
         # Mark analysis start time immediately and get user preferences
         db = SessionLocal()
         user_config = None
+        location_name = None  # Per passare al vision client
         try:
             photo = db.query(Photo).filter(Photo.id == photo_id).first()
             if not photo:
                 print(f"Photo {photo_id} not found")
                 return
+
+            # Get location name for AI context
+            location_name = photo.location_name
+            if location_name:
+                print(f"Photo location: {location_name}")
 
             # Get user preferences for remote server
             user = db.query(User).filter(User.id == photo.user_id).first()
@@ -540,10 +546,18 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             remote_client = OllamaVisionClient(host=user_config["remote_url"])
             actual_model = user_config["remote_model"]
             print(f"Using remote Ollama server: {user_config['remote_url']} with model {actual_model}")
-            analysis_result = await remote_client.analyze_photo(file_path, model=actual_model)
+            analysis_result = await remote_client.analyze_photo(
+                file_path,
+                model=actual_model,
+                location_name=location_name
+            )
         else:
             # Use local Ollama server
-            analysis_result = await vision_client.analyze_photo(file_path, model=model)
+            analysis_result = await vision_client.analyze_photo(
+                file_path,
+                model=model,
+                location_name=location_name
+            )
 
         # Create new DB session for background task
         db = SessionLocal()
@@ -648,6 +662,35 @@ async def update_user_preferences(
 
     if auto_analyze is not None:
         current_user.auto_analyze = auto_analyze
+
+    # Validazione server remoto se abilitato
+    if remote_ollama_enabled and remote_ollama_url and remote_ollama_model:
+        import httpx
+        print(f"[PREFERENCES] Validating remote server: {remote_ollama_url} with model {remote_ollama_model}")
+
+        try:
+            # Test connessione al server remoto
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{remote_ollama_url}/api/tags")
+                response.raise_for_status()
+                data = response.json()
+
+                # Verifica che il modello esista
+                model_names = [m["name"] for m in data.get("models", [])]
+                if remote_ollama_model not in model_names:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Modello '{remote_ollama_model}' non trovato sul server remoto. Modelli disponibili: {', '.join(model_names)}"
+                    )
+
+                print(f"[PREFERENCES] Remote server validation OK - model {remote_ollama_model} found")
+
+        except httpx.HTTPError as e:
+            print(f"[PREFERENCES] Remote server validation failed: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Impossibile contattare server Ollama a {remote_ollama_url}. Verifica che il server sia in esecuzione."
+            )
 
     if remote_ollama_enabled is not None:
         current_user.remote_ollama_enabled = remote_ollama_enabled
