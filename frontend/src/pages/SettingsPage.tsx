@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import Layout from '../components/Layout';
 import apiClient, { remoteOllamaApi, facesApi } from '../api/client';
+import type { ConsentResponse } from '../types';
 import { Settings, Sparkles, Zap, Save, Loader, Wifi, WifiOff, RefreshCw, User, Shield, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -101,16 +103,10 @@ export default function SettingsPage() {
   }, [profile]);
 
   // Face Recognition Consent (optional - may not be available)
-  const { data: consentData, error: consentError } = useQuery({
+  const { data: consentData, error: consentError } = useQuery<ConsentResponse>({
     queryKey: ['faces', 'consent'],
     queryFn: () => facesApi.getConsent(),
     retry: false,
-    // Ignore 404 errors (face recognition not available)
-    onError: (error: any) => {
-      if (error?.response?.status === 404) {
-        console.log('Face recognition feature not available (404)');
-      }
-    },
   });
 
   const giveConsentMutation = useMutation({
@@ -469,7 +465,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {consentError?.response?.status === 404 ? (
+          {consentError && axios.isAxiosError(consentError) && consentError.response?.status === 404 ? (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <div className="flex items-start space-x-3">
                 <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
