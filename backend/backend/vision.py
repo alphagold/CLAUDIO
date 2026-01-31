@@ -73,6 +73,10 @@ class OllamaVisionClient:
         print(f"[VISION] Image size: {len(image_b64)} bytes (base64)")
         print(f"[VISION] Prompt length: {len(prompt)} characters")
 
+        # Adjust parameters based on model
+        # qwen3-vl needs more tokens for detailed responses
+        num_predict = 1500 if "qwen" in selected_model.lower() else 500
+
         payload = {
             "model": selected_model,
             "messages": [
@@ -87,9 +91,10 @@ class OllamaVisionClient:
             "options": {
                 "temperature": 0.3,
                 "top_p": 0.9,
-                "num_predict": 500,
+                "num_predict": num_predict,
             }
         }
+        print(f"[VISION] Model-specific params: num_predict={num_predict}")
         payload_size = len(json.dumps(payload))
         print(f"[VISION] Total payload size: {payload_size} bytes ({payload_size/1024/1024:.2f} MB)")
 
