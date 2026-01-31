@@ -68,8 +68,18 @@ class OllamaVisionClient:
         print(f"[VISION] Making request to: {target_url} with model: {selected_model}")
         print(f"[VISION] self.host = {self.host!r}")
         print(f"[VISION] Timeout: {self.timeout} seconds")
+        print(f"[VISION] Image size: {len(image_b64)} bytes (base64)")
         print(f"[VISION] About to create httpx.AsyncClient and POST...")
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+
+        # Use httpx.Timeout with all timeout components set
+        timeout_config = httpx.Timeout(
+            connect=30.0,      # 30 seconds to connect
+            read=self.timeout, # 900 seconds to read response
+            write=30.0,        # 30 seconds to send data
+            pool=30.0          # 30 seconds to get connection from pool
+        )
+
+        async with httpx.AsyncClient(timeout=timeout_config) as client:
             try:
                 print(f"[VISION] Sending POST request to {target_url}...")
                 response = await client.post(
