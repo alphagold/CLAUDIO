@@ -478,6 +478,50 @@ Ricordami i comandi fa eseguire sul server remoto
 
 ## Changelog / Ultime Modifiche
 
+### Sessione 2026-01-31: Fix Face Recognition, Server Remoto, GPS Debug
+
+**Fix Critici Face Recognition**
+- ✅ Risolto circular import `face_routes.py` ↔ `main.py` usando dependency injection
+- ✅ Creato `get_current_user_wrapper()` in `admin_routes.py` e `face_routes.py`
+- ✅ Face recognition routes ora registrate correttamente (se dlib disponibile)
+- Commit: `9c270a8`, `68eaf78`
+
+**Fix Errore 422 su API**
+- ✅ Risolto `Depends(get_current_user_dependency)` valutato a import-time quando None
+- ✅ Wrapper chiamato a runtime invece che import-time
+- ✅ Test connessione server remoto ora funziona
+- Commit: `450a04d`, `d79faa7`, `b2d6c4d`
+
+**Fix Filtro Modelli Vision**
+- ✅ Filtro modelli server remoto migliorato per substring matching
+- ✅ Supporta families come stringa ("qwen3vl") o lista (["llama", "clip"])
+- ✅ Aggiunta keyword "vision" per catturare llama3.2-vision
+- ✅ Ora rileva tutti i 6 modelli sul PC Windows remoto
+- Commit: `7c4f5ad`
+
+**Debug GPS Extraction (IN CORSO)**
+- ⚠️ GPS IFD trovato ma coordinate non estratte (lat/lon = None)
+- ✅ Aggiunto logging dettagliato: GPS IFD contents, conversione DMS, traceback errori
+- ✅ Try/except separati per lat/lon per identificare punto esatto di fallimento
+- 🔍 Debug attivo: identificare perché conversione DMS→decimal fallisce silenziosamente
+- Commit: `b315e41`, `8f26bdb`
+
+**Debug Server Remoto (IN CORSO)**
+- ⚠️ "Server Remoto" selezionato ma esegue su server locale (CPU 100%)
+- ✅ Log mostrano: selezione corretta, user_config OK, URL remoto corretto
+- ✅ Aggiunto logging HTTP: endpoint chiamato, timeout, successo/errore
+- 🔍 Debug attivo: verificare se richiesta HTTP arriva al PC Windows o fallisce
+- Commit: `84ca156`, `a82b396`
+
+**Fix Minori**
+- ✅ Build frontend TypeScript: rimosso `onError` deprecato React Query v5
+- ✅ Gestione errori validazione FastAPI come array
+- Commit: `8667f7e`, `dfb9f4e`
+
+**Totale**: 12 commit, 3 fix completi, 2 debug in corso
+
+---
+
 ### Sessione 2026-01-30: Face Recognition Implementation (Graceful Degradation)
 
 **Implementazione Completa Sistema Face Recognition**
