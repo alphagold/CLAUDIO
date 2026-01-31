@@ -652,19 +652,31 @@ async def get_remote_ollama_models(
 
                 # Check if it's a vision model
                 families = model.get("details", {}).get("families")
+                print(f"[REMOTE MODELS] Model: {model.get('name')}, families: {families}")
+
                 if families:
                     # families can be a string or a list
                     families_str = " ".join(families) if isinstance(families, list) else str(families)
                     # Check for vision-related keywords
                     if any(keyword in families_str.lower() for keyword in ["clip", "mllama", "qwen", "vision"]):
+                        print(f"[REMOTE MODELS]   ✓ Vision model detected")
                         vision_models.append(model_info)
+                    else:
+                        print(f"[REMOTE MODELS]   ✗ Not a vision model (families: {families_str})")
+
+            # Se non ci sono vision models, mostra tutti (il server potrebbe non avere families)
+            models_to_return = vision_models if vision_models else all_models
+
+            print(f"[REMOTE MODELS] URL: {clean_url}")
+            print(f"[REMOTE MODELS] Total models: {len(all_models)}, Vision models: {len(vision_models)}")
+            print(f"[REMOTE MODELS] Returning: {len(models_to_return)} models")
 
             return {
-                "models": vision_models if vision_models else all_models,
+                "models": models_to_return,
                 "all_models": all_models,
                 "vision_only": len(vision_models) > 0,
                 "server_url": clean_url,
-                "count": len(vision_models) if vision_models else len(all_models)
+                "count": len(models_to_return)
             }
 
     except httpx.TimeoutException:
