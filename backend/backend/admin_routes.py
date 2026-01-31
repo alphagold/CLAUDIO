@@ -652,8 +652,12 @@ async def get_remote_ollama_models(
 
                 # Check if it's a vision model
                 families = model.get("details", {}).get("families")
-                if families and any(f in families for f in ["clip", "mllama", "qwen"]):
-                    vision_models.append(model_info)
+                if families:
+                    # families can be a string or a list
+                    families_str = " ".join(families) if isinstance(families, list) else str(families)
+                    # Check for vision-related keywords
+                    if any(keyword in families_str.lower() for keyword in ["clip", "mllama", "qwen", "vision"]):
+                        vision_models.append(model_info)
 
             return {
                 "models": vision_models if vision_models else all_models,
