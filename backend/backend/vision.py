@@ -62,8 +62,8 @@ class OllamaVisionClient:
         # Encode image
         image_b64 = self._encode_image(image_path)
 
-        # Prepare prompt WITH location context
-        prompt = self._get_analysis_prompt(location_name=location_name)
+        # Prepare prompt WITH location context and model-specific optimizations
+        prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model)
 
         # Call Ollama API
         target_url = f"{self.host}/api/chat"
@@ -181,7 +181,7 @@ class OllamaVisionClient:
             print(f"[VISION] Returning fallback analysis")
             return self._get_fallback_analysis(processing_time)
 
-    def _get_analysis_prompt(self, location_name: Optional[str] = None) -> str:
+    def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None) -> str:
         """Get analysis prompt for Vision AI"""
 
         # Aggiungi contesto geolocalizzazione se disponibile
@@ -192,6 +192,28 @@ INFORMAZIONE IMPORTANTE - GEOLOCALIZZAZIONE:
 Questa foto è stata scattata a: {location_name}
 Usa questa informazione per generare tag di luogo appropriati e specifici.
 """
+
+        # qwen3-vl funziona meglio con prompt semplici e risposta libera
+        if model and "qwen" in model.lower():
+            return f"""Analizza questa foto e descrivi dettagliatamente in italiano cosa vedi.
+{location_context}
+Includi:
+1. Una descrizione completa e dettagliata (3-5 frasi) di tutto ciò che vedi: oggetti, colori, azioni, ambiente
+2. Un riassunto breve (max 100 caratteri)
+3. Eventuali testi visibili nell'immagine
+4. Lista degli oggetti principali
+5. Tipo di scena (cibo/documento/outdoor/indoor/persone/altro)
+6. Alcuni tag descrittivi
+
+Rispondi in formato JSON:
+{{
+  "description_full": "descrizione dettagliata...",
+  "description_short": "riassunto breve",
+  "extracted_text": "testo visibile o stringa vuota",
+  "detected_objects": ["oggetto1", "oggetto2"],
+  "scene_category": "tipo scena",
+  "tags": ["tag1", "tag2", "tag3"]
+}}"""
 
         return f"""Analizza questa foto e rispondi SOLO con un oggetto JSON valido (no markdown, no testo extra).
 {location_context}
@@ -239,18 +261,17 @@ Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
             high_confidence_tags = []
 
             for tag_item in raw_tags:
-                # Supporta sia formato nuovo che vecchio
+                # Supporta sia formato con dict che formato semplice (stringhe)
                 if isinstance(tag_item, dict):
                     tag_name = tag_item.get("tag", "")
                     confidence = tag_item.get("confidence", 0.0)
                 else:
-                    # Fallback: tag è stringa semplice (formato vecchio)
+                    # Tag è stringa semplice (usato da qwen3-vl)
                     tag_name = str(tag_item)
-                    confidence = 0.7  # Default confidence
+                    confidence = 0.9  # Default high confidence per tag semplici
 
-                # Filtra tag con alta confidenza (>0.8) e min 3 caratteri
-                # Rimuovi tag in blacklist
-                if (confidence > 0.8 and
+                # Filtra tag validi
+                if (confidence > 0.7 and  # Soglia più bassa per tag semplici
                     len(tag_name.strip()) > 2 and
                     tag_name.strip().lower() not in GENERIC_TAGS_BLACKLIST):
                     high_confidence_tags.append(tag_name.strip())
