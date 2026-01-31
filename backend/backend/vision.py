@@ -99,20 +99,33 @@ class OllamaVisionClient:
 
         def _sync_post():
             """Synchronous POST using requests library"""
-            print(f"[VISION] Sending POST request to {target_url}...")
-            resp = requests.post(
-                target_url,
-                json=payload,
-                timeout=(30, self.timeout),  # (connect, read) timeouts
-                headers={"Content-Type": "application/json"}
-            )
-            print(f"[VISION] POST completed, status: {resp.status_code}")
-            resp.raise_for_status()
-            return resp.json()
+            import threading
+            print(f"[VISION] _sync_post called in thread: {threading.current_thread().name}")
+            print(f"[VISION] Target URL: {target_url}")
+            print(f"[VISION] About to call requests.post()...")
+
+            try:
+                resp = requests.post(
+                    target_url,
+                    json=payload,
+                    timeout=(30, self.timeout),  # (connect, read) timeouts
+                    headers={"Content-Type": "application/json"}
+                )
+                print(f"[VISION] requests.post() returned!")
+                print(f"[VISION] POST completed, status: {resp.status_code}")
+                resp.raise_for_status()
+                result = resp.json()
+                print(f"[VISION] Response parsed as JSON successfully")
+                return result
+            except Exception as e:
+                print(f"[VISION] ❌ Exception in _sync_post: {type(e).__name__}: {e}")
+                raise
 
         try:
             # Run synchronous requests call in thread pool
+            print(f"[VISION] Calling asyncio.to_thread(_sync_post)...")
             result = await asyncio.to_thread(_sync_post)
+            print(f"[VISION] asyncio.to_thread() completed!")
             print(f"[VISION] ✅ Response received successfully from {self.host}")
 
             # Parse response (chat format)
