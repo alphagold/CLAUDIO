@@ -22,6 +22,15 @@ interface UserProfile {
 
 const MODELS = [
   {
+    id: 'remote',
+    name: 'Server Remoto',
+    description: 'Usa il tuo PC locale con GPU',
+    size: 'Variabile',
+    speed: 'Ultra-rapido',
+    icon: Zap,
+    color: 'orange'
+  },
+  {
     id: 'moondream',
     name: 'Moondream',
     description: 'Ultraleggero e velocissimo',
@@ -291,14 +300,28 @@ export default function SettingsPage() {
               const Icon = model.icon;
               const isSelected = preferredModel === model.id;
               const colorClasses = {
+                orange: 'border-orange-300 bg-orange-50',
                 green: 'border-green-300 bg-green-50',
                 blue: 'border-blue-300 bg-blue-50',
-                purple: 'border-purple-300 bg-purple-50'
+                purple: 'border-purple-300 bg-purple-50',
+                indigo: 'border-indigo-300 bg-indigo-50',
+                cyan: 'border-cyan-300 bg-cyan-50'
               };
               const selectedColor = {
+                orange: 'border-orange-500 bg-orange-100',
                 green: 'border-green-500 bg-green-100',
                 blue: 'border-blue-500 bg-blue-100',
-                purple: 'border-purple-500 bg-purple-100'
+                purple: 'border-purple-500 bg-purple-100',
+                indigo: 'border-indigo-500 bg-indigo-100',
+                cyan: 'border-cyan-500 bg-cyan-100'
+              };
+              const iconColorClasses = {
+                orange: 'text-orange-600',
+                green: 'text-green-600',
+                blue: 'text-blue-600',
+                purple: 'text-purple-600',
+                indigo: 'text-indigo-600',
+                cyan: 'text-cyan-600'
               };
 
               return (
@@ -312,7 +335,7 @@ export default function SettingsPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
-                        <Icon className={`w-5 h-5 text-${model.color}-600`} />
+                        <Icon className={`w-5 h-5 ${iconColorClasses[model.color as keyof typeof iconColorClasses]}`} />
                         <span className="font-semibold text-gray-900">{model.name}</span>
                         {isSelected && (
                           <span className="text-xs bg-green-500 text-white px-2 py-1 rounded-full">Selezionato</span>
