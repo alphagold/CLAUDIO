@@ -414,6 +414,7 @@ def extract_exif_data(file_path: str) -> dict:
                     print(f"[EXIF] GPS IFD found: {gps_info is not None}")
                     if gps_info:
                         print(f"[EXIF] GPS tags count: {len(gps_info)}")
+                        print(f"[EXIF] GPS IFD contents: {dict(gps_info)}")
                         from PIL.ExifTags import GPSTAGS
 
                         # Store raw GPS data
@@ -466,28 +467,42 @@ def extract_exif_data(file_path: str) -> dict:
                                 return None
 
                         # Extract and convert latitude
-                        gps_lat = gps_info.get(2)  # GPSLatitude
-                        gps_lat_ref = gps_info.get(1)  # GPSLatitudeRef
-                        print(f"[EXIF] GPS Lat raw: {gps_lat}, Ref: {gps_lat_ref}")
-                        if gps_lat and gps_lat_ref:
-                            if isinstance(gps_lat_ref, bytes):
-                                gps_lat_ref = gps_lat_ref.decode('utf-8')
-                            lat_decimal = dms_to_decimal(gps_lat, gps_lat_ref)
-                            print(f"[EXIF] GPS Lat decimal: {lat_decimal}")
-                            if lat_decimal is not None:
-                                exif_data['GPS_Latitude_Decimal'] = lat_decimal
+                        try:
+                            gps_lat = gps_info.get(2)  # GPSLatitude
+                            gps_lat_ref = gps_info.get(1)  # GPSLatitudeRef
+                            print(f"[EXIF] GPS Lat raw: {gps_lat}, Ref: {gps_lat_ref}")
+                            if gps_lat and gps_lat_ref:
+                                if isinstance(gps_lat_ref, bytes):
+                                    gps_lat_ref = gps_lat_ref.decode('utf-8')
+                                lat_decimal = dms_to_decimal(gps_lat, gps_lat_ref)
+                                print(f"[EXIF] GPS Lat decimal: {lat_decimal}")
+                                if lat_decimal is not None:
+                                    exif_data['GPS_Latitude_Decimal'] = lat_decimal
+                            else:
+                                print(f"[EXIF] GPS Lat missing: lat={gps_lat}, ref={gps_lat_ref}")
+                        except Exception as lat_error:
+                            print(f"[EXIF] GPS Latitude extraction error: {lat_error}")
+                            import traceback
+                            traceback.print_exc()
 
                         # Extract and convert longitude
-                        gps_lon = gps_info.get(4)  # GPSLongitude
-                        gps_lon_ref = gps_info.get(3)  # GPSLongitudeRef
-                        print(f"[EXIF] GPS Lon raw: {gps_lon}, Ref: {gps_lon_ref}")
-                        if gps_lon and gps_lon_ref:
-                            if isinstance(gps_lon_ref, bytes):
-                                gps_lon_ref = gps_lon_ref.decode('utf-8')
-                            lon_decimal = dms_to_decimal(gps_lon, gps_lon_ref)
-                            print(f"[EXIF] GPS Lon decimal: {lon_decimal}")
-                            if lon_decimal is not None:
-                                exif_data['GPS_Longitude_Decimal'] = lon_decimal
+                        try:
+                            gps_lon = gps_info.get(4)  # GPSLongitude
+                            gps_lon_ref = gps_info.get(3)  # GPSLongitudeRef
+                            print(f"[EXIF] GPS Lon raw: {gps_lon}, Ref: {gps_lon_ref}")
+                            if gps_lon and gps_lon_ref:
+                                if isinstance(gps_lon_ref, bytes):
+                                    gps_lon_ref = gps_lon_ref.decode('utf-8')
+                                lon_decimal = dms_to_decimal(gps_lon, gps_lon_ref)
+                                print(f"[EXIF] GPS Lon decimal: {lon_decimal}")
+                                if lon_decimal is not None:
+                                    exif_data['GPS_Longitude_Decimal'] = lon_decimal
+                            else:
+                                print(f"[EXIF] GPS Lon missing: lon={gps_lon}, ref={gps_lon_ref}")
+                        except Exception as lon_error:
+                            print(f"[EXIF] GPS Longitude extraction error: {lon_error}")
+                            import traceback
+                            traceback.print_exc()
 
                 except Exception as gps_error:
                     print(f"GPS extraction error: {gps_error}")
@@ -651,10 +666,16 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 db.flush()
                 print(f"Deleted existing analysis for photo {photo_id}")
 
+            # Verify analysis_result is a dict
+            print(f"[ANALYSIS] Result type: {type(analysis_result)}, content: {analysis_result}")
+            if not isinstance(analysis_result, dict):
+                print(f"ERROR: analysis_result is not a dict, it's {type(analysis_result)}")
+                raise ValueError(f"Invalid analysis result type: {type(analysis_result)}")
+
             # Save new analysis
             analysis = PhotoAnalysis(
                 photo_id=photo.id,
-                description_full=analysis_result["description_full"],
+                description_full=analysis_result.get("description_full", "Analisi non disponibile"),
                 description_short=analysis_result["description_short"],
                 extracted_text=analysis_result.get("extracted_text"),
                 detected_objects=analysis_result.get("detected_objects", []),
