@@ -647,7 +647,8 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             analysis_result = await remote_client.analyze_photo(
                 file_path,
                 model=actual_model,
-                location_name=location_name
+                location_name=location_name,
+                allow_fallback=False  # No fallback for remote - must succeed or fail clearly
             )
             print(f"[ANALYSIS] Remote analyze_photo returned, result keys: {list(analysis_result.keys()) if isinstance(analysis_result, dict) else 'NOT A DICT'}")
         else:
@@ -743,6 +744,23 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
 
     except Exception as e:
         print(f"Background analysis failed for photo {photo_id}: {e}")
+        import traceback
+        traceback.print_exc()
+
+        # Reset photo state on failure
+        db = SessionLocal()
+        try:
+            photo = db.query(Photo).filter(Photo.id == photo_id).first()
+            if photo:
+                photo.analysis_started_at = None
+                photo.analyzed_at = None
+                photo.analysis_duration_seconds = None
+                db.commit()
+                print(f"[ANALYSIS] ❌ Photo {photo_id} state reset after failure")
+        except Exception as reset_error:
+            print(f"Failed to reset photo state: {reset_error}")
+        finally:
+            db.close()
 
 
 # ============================================================================

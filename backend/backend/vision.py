@@ -35,7 +35,8 @@ class OllamaVisionClient:
         image_path: str,
         model: Optional[str] = None,
         detailed: bool = False,
-        location_name: Optional[str] = None
+        location_name: Optional[str] = None,
+        allow_fallback: bool = True
     ) -> Dict:
         """
         Analyze photo with Vision AI
@@ -110,6 +111,11 @@ class OllamaVisionClient:
             except httpx.HTTPError as e:
                 processing_time = int((time.time() - start_time) * 1000)
                 print(f"[VISION] ❌ Ollama API error from {self.host}: {type(e).__name__}: {e}")
+
+                if not allow_fallback:
+                    print(f"[VISION] Fallback disabled - propagating error")
+                    raise  # Re-raise exception for remote server failures
+
                 print(f"[VISION] Returning fallback analysis")
                 return self._get_fallback_analysis(processing_time)
 
