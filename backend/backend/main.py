@@ -411,7 +411,9 @@ def extract_exif_data(file_path: str) -> dict:
                 # Extract GPS info separately if available
                 try:
                     gps_info = exif.get_ifd(0x8825)  # GPS IFD
+                    print(f"[EXIF] GPS IFD found: {gps_info is not None}")
                     if gps_info:
+                        print(f"[EXIF] GPS tags count: {len(gps_info)}")
                         from PIL.ExifTags import GPSTAGS
 
                         # Store raw GPS data
@@ -466,20 +468,24 @@ def extract_exif_data(file_path: str) -> dict:
                         # Extract and convert latitude
                         gps_lat = gps_info.get(2)  # GPSLatitude
                         gps_lat_ref = gps_info.get(1)  # GPSLatitudeRef
+                        print(f"[EXIF] GPS Lat raw: {gps_lat}, Ref: {gps_lat_ref}")
                         if gps_lat and gps_lat_ref:
                             if isinstance(gps_lat_ref, bytes):
                                 gps_lat_ref = gps_lat_ref.decode('utf-8')
                             lat_decimal = dms_to_decimal(gps_lat, gps_lat_ref)
+                            print(f"[EXIF] GPS Lat decimal: {lat_decimal}")
                             if lat_decimal is not None:
                                 exif_data['GPS_Latitude_Decimal'] = lat_decimal
 
                         # Extract and convert longitude
                         gps_lon = gps_info.get(4)  # GPSLongitude
                         gps_lon_ref = gps_info.get(3)  # GPSLongitudeRef
+                        print(f"[EXIF] GPS Lon raw: {gps_lon}, Ref: {gps_lon_ref}")
                         if gps_lon and gps_lon_ref:
                             if isinstance(gps_lon_ref, bytes):
                                 gps_lon_ref = gps_lon_ref.decode('utf-8')
                             lon_decimal = dms_to_decimal(gps_lon, gps_lon_ref)
+                            print(f"[EXIF] GPS Lon decimal: {lon_decimal}")
                             if lon_decimal is not None:
                                 exif_data['GPS_Longitude_Decimal'] = lon_decimal
 
@@ -871,12 +877,16 @@ async def upload_photo(
 
     # Get location name from coordinates (non-blocking, can fail silently)
     location_name = None
+    print(f"[UPLOAD] GPS coordinates: lat={latitude}, lon={longitude}")
     if latitude and longitude:
         try:
             location_name = await reverse_geocode(latitude, longitude)
+            print(f"[UPLOAD] Geocoding result: {location_name}")
         except Exception as e:
             print(f"Geocoding failed (non-critical): {e}")
             location_name = None
+    else:
+        print("[UPLOAD] No GPS coordinates found in EXIF")
 
     # Create photo record
     photo = Photo(
