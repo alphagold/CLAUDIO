@@ -595,7 +595,9 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
     """Analyze photo in background with Vision AI"""
     try:
         model_name = model or "llama3.2-vision"
-        print(f"Starting background analysis for photo {photo_id} with {model_name}...")
+        print(f"[ANALYSIS] Starting background analysis for photo {photo_id}")
+        print(f"[ANALYSIS] Received model parameter: {model!r}")
+        print(f"[ANALYSIS] Model name resolved: {model_name}")
 
         # Mark analysis start time immediately and get user preferences
         db = SessionLocal()
@@ -631,12 +633,13 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             db.close()
 
         # Determine which server to use
+        print(f"[ANALYSIS] Checking remote server: model={model!r}, user_config={user_config}")
         if model == "remote" and user_config and user_config["remote_enabled"]:
             # Use remote Ollama server
             from vision import OllamaVisionClient
             remote_client = OllamaVisionClient(host=user_config["remote_url"])
             actual_model = user_config["remote_model"]
-            print(f"Using remote Ollama server: {user_config['remote_url']} with model {actual_model}")
+            print(f"[ANALYSIS] ✅ Using REMOTE Ollama server: {user_config['remote_url']} with model {actual_model}")
             analysis_result = await remote_client.analyze_photo(
                 file_path,
                 model=actual_model,
@@ -644,6 +647,8 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             )
         else:
             # Use local Ollama server
+            print(f"[ANALYSIS] ❌ Using LOCAL Ollama server with model: {model}")
+            print(f"[ANALYSIS] Reason: model==remote? {model == 'remote'}, user_config? {user_config is not None}, remote_enabled? {user_config.get('remote_enabled') if user_config else 'N/A'}")
             analysis_result = await vision_client.analyze_photo(
                 file_path,
                 model=model,
