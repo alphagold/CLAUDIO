@@ -115,17 +115,17 @@ class OllamaVisionClient:
             result = await asyncio.to_thread(_sync_post)
             print(f"[VISION] ✅ Response received successfully from {self.host}")
 
-                # Parse response (chat format)
-                analysis_text = result.get("message", {}).get("content", "")
-                processing_time = int((time.time() - start_time) * 1000)
-                print(f"[VISION] Analysis completed in {processing_time}ms")
+            # Parse response (chat format)
+            analysis_text = result.get("message", {}).get("content", "")
+            processing_time = int((time.time() - start_time) * 1000)
+            print(f"[VISION] Analysis completed in {processing_time}ms")
 
-                # Parse JSON from response
-                analysis_data = self._parse_analysis_response(analysis_text)
-                analysis_data["processing_time_ms"] = processing_time
-                analysis_data["model_version"] = selected_model
+            # Parse JSON from response
+            analysis_data = self._parse_analysis_response(analysis_text)
+            analysis_data["processing_time_ms"] = processing_time
+            analysis_data["model_version"] = selected_model
 
-                return analysis_data
+            return analysis_data
 
         except requests.exceptions.Timeout as e:
             processing_time = int((time.time() - start_time) * 1000)
