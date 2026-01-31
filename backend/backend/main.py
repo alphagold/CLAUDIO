@@ -637,14 +637,19 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
         if model == "remote" and user_config and user_config["remote_enabled"]:
             # Use remote Ollama server
             from vision import OllamaVisionClient
-            remote_client = OllamaVisionClient(host=user_config["remote_url"])
+            remote_url = user_config["remote_url"]
             actual_model = user_config["remote_model"]
-            print(f"[ANALYSIS] ✅ Using REMOTE Ollama server: {user_config['remote_url']} with model {actual_model}")
+            print(f"[ANALYSIS] Creating remote client with URL: {remote_url!r}")
+            remote_client = OllamaVisionClient(host=remote_url)
+            print(f"[ANALYSIS] Remote client created, client.host = {remote_client.host!r}")
+            print(f"[ANALYSIS] ✅ Using REMOTE Ollama server: {remote_url} with model {actual_model}")
+            print(f"[ANALYSIS] Calling analyze_photo on remote client...")
             analysis_result = await remote_client.analyze_photo(
                 file_path,
                 model=actual_model,
                 location_name=location_name
             )
+            print(f"[ANALYSIS] Remote analyze_photo returned, result keys: {list(analysis_result.keys()) if isinstance(analysis_result, dict) else 'NOT A DICT'}")
         else:
             # Use local Ollama server
             print(f"[ANALYSIS] ❌ Using LOCAL Ollama server with model: {model}")

@@ -63,12 +63,16 @@ class OllamaVisionClient:
         prompt = self._get_analysis_prompt(location_name=location_name)
 
         # Call Ollama API
-        print(f"[VISION] Making request to: {self.host}/api/chat with model: {selected_model}")
+        target_url = f"{self.host}/api/chat"
+        print(f"[VISION] Making request to: {target_url} with model: {selected_model}")
+        print(f"[VISION] self.host = {self.host!r}")
         print(f"[VISION] Timeout: {self.timeout} seconds")
+        print(f"[VISION] About to create httpx.AsyncClient and POST...")
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
+                print(f"[VISION] Sending POST request to {target_url}...")
                 response = await client.post(
-                    f"{self.host}/api/chat",
+                    target_url,
                     json={
                         "model": selected_model,
                         "messages": [
