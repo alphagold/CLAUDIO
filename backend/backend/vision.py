@@ -137,6 +137,8 @@ class OllamaVisionClient:
             analysis_text = result.get("message", {}).get("content", "")
             processing_time = int((time.time() - start_time) * 1000)
             print(f"[VISION] Analysis completed in {processing_time}ms")
+            print(f"[VISION] Response text length: {len(analysis_text)} chars")
+            print(f"[VISION] Response text preview: {analysis_text[:500]}")
 
             # Parse JSON from response
             analysis_data = self._parse_analysis_response(analysis_text)
