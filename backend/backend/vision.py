@@ -2,8 +2,10 @@
 Ollama Vision AI client for photo analysis
 """
 import httpx
+import requests  # For large payload compatibility
 import base64
 import json
+import asyncio
 from typing import Dict, Optional, List
 from pathlib import Path
 from config import settings
@@ -70,46 +72,48 @@ class OllamaVisionClient:
         print(f"[VISION] Timeout: {self.timeout} seconds")
         print(f"[VISION] Image size: {len(image_b64)} bytes (base64)")
         print(f"[VISION] Prompt length: {len(prompt)} characters")
-        print(f"[VISION] About to create httpx.AsyncClient and POST...")
 
-        # Use httpx.Timeout with all timeout components set
-        # Write timeout needs to be long enough to send large image payload
-        timeout_config = httpx.Timeout(
-            connect=30.0,      # 30 seconds to connect
-            read=self.timeout, # 900 seconds to read response
-            write=120.0,       # 120 seconds to send data (large base64 images)
-            pool=30.0          # 30 seconds to get connection from pool
-        )
-
-        async with httpx.AsyncClient(timeout=timeout_config) as client:
-            try:
-                payload = {
-                    "model": selected_model,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": prompt,
-                            "images": [image_b64]
-                        }
-                    ],
-                    "stream": False,
-                    "keep_alive": "5m",
-                    "options": {
-                        "temperature": 0.3,
-                        "top_p": 0.9,
-                        "num_predict": 500,
-                    }
+        payload = {
+            "model": selected_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                    "images": [image_b64]
                 }
-                payload_size = len(json.dumps(payload))
-                print(f"[VISION] Total payload size: {payload_size} bytes ({payload_size/1024/1024:.2f} MB)")
-                print(f"[VISION] Sending POST request to {target_url}...")
+            ],
+            "stream": False,
+            "keep_alive": "5m",
+            "options": {
+                "temperature": 0.3,
+                "top_p": 0.9,
+                "num_predict": 500,
+            }
+        }
+        payload_size = len(json.dumps(payload))
+        print(f"[VISION] Total payload size: {payload_size} bytes ({payload_size/1024/1024:.2f} MB)")
 
-                response = await client.post(target_url, json=payload)
+        # Use requests library in thread for better large payload handling
+        # httpx has issues with large payloads (4+ MB)
+        print(f"[VISION] Using requests library for large payload compatibility...")
 
-                print(f"[VISION] POST completed, status: {response.status_code}")
-                response.raise_for_status()
-                result = response.json()
-                print(f"[VISION] ✅ Response received successfully from {self.host}")
+        def _sync_post():
+            """Synchronous POST using requests library"""
+            print(f"[VISION] Sending POST request to {target_url}...")
+            resp = requests.post(
+                target_url,
+                json=payload,
+                timeout=(30, self.timeout),  # (connect, read) timeouts
+                headers={"Content-Type": "application/json"}
+            )
+            print(f"[VISION] POST completed, status: {resp.status_code}")
+            resp.raise_for_status()
+            return resp.json()
+
+        try:
+            # Run synchronous requests call in thread pool
+            result = await asyncio.to_thread(_sync_post)
+            print(f"[VISION] ✅ Response received successfully from {self.host}")
 
                 # Parse response (chat format)
                 analysis_text = result.get("message", {}).get("content", "")
@@ -123,31 +127,41 @@ class OllamaVisionClient:
 
                 return analysis_data
 
-            except httpx.TimeoutException as e:
-                processing_time = int((time.time() - start_time) * 1000)
-                print(f"[VISION] ❌ Timeout error from {self.host}: {type(e).__name__}: {e}")
-                print(f"[VISION] Timeout occurred during: {e.__class__.__name__}")
+        except requests.exceptions.Timeout as e:
+            processing_time = int((time.time() - start_time) * 1000)
+            print(f"[VISION] ❌ Timeout error from {self.host}: {type(e).__name__}: {e}")
 
-                if not allow_fallback:
-                    print(f"[VISION] Fallback disabled - propagating timeout error")
-                    raise
+            if not allow_fallback:
+                print(f"[VISION] Fallback disabled - propagating timeout error")
+                raise
 
-                print(f"[VISION] Returning fallback analysis")
-                return self._get_fallback_analysis(processing_time)
+            print(f"[VISION] Returning fallback analysis")
+            return self._get_fallback_analysis(processing_time)
 
-            except httpx.HTTPError as e:
-                processing_time = int((time.time() - start_time) * 1000)
-                print(f"[VISION] ❌ HTTP error from {self.host}: {type(e).__name__}: {e}")
-                if hasattr(e, 'response') and e.response:
-                    print(f"[VISION] Response status: {e.response.status_code}")
-                    print(f"[VISION] Response body: {e.response.text[:500]}")
+        except requests.exceptions.HTTPError as e:
+            processing_time = int((time.time() - start_time) * 1000)
+            print(f"[VISION] ❌ HTTP error from {self.host}: {type(e).__name__}: {e}")
+            if e.response is not None:
+                print(f"[VISION] Response status: {e.response.status_code}")
+                print(f"[VISION] Response body: {e.response.text[:500]}")
 
-                if not allow_fallback:
-                    print(f"[VISION] Fallback disabled - propagating HTTP error")
-                    raise
+            if not allow_fallback:
+                print(f"[VISION] Fallback disabled - propagating HTTP error")
+                raise
 
-                print(f"[VISION] Returning fallback analysis")
-                return self._get_fallback_analysis(processing_time)
+            print(f"[VISION] Returning fallback analysis")
+            return self._get_fallback_analysis(processing_time)
+
+        except Exception as e:
+            processing_time = int((time.time() - start_time) * 1000)
+            print(f"[VISION] ❌ Unexpected error from {self.host}: {type(e).__name__}: {e}")
+
+            if not allow_fallback:
+                print(f"[VISION] Fallback disabled - propagating error")
+                raise
+
+            print(f"[VISION] Returning fallback analysis")
+            return self._get_fallback_analysis(processing_time)
 
     def _get_analysis_prompt(self, location_name: Optional[str] = None) -> str:
         """Get analysis prompt for Vision AI"""

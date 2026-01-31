@@ -30,7 +30,7 @@ Pillow==11.0.0
 
 # HTTP client
 httpx==0.28.1
-# requests==2.32.3  # Not used, httpx is sufficient
+requests==2.32.3  # Needed for large payload compatibility (httpx fails with 4+ MB)
 
 # Pydantic
 pydantic==2.10.3
