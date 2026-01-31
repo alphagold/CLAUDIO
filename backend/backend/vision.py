@@ -63,6 +63,8 @@ class OllamaVisionClient:
         prompt = self._get_analysis_prompt(location_name=location_name)
 
         # Call Ollama API
+        print(f"[VISION] Making request to: {self.host}/api/chat with model: {selected_model}")
+        print(f"[VISION] Timeout: {self.timeout} seconds")
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(
@@ -87,10 +89,12 @@ class OllamaVisionClient:
                 )
                 response.raise_for_status()
                 result = response.json()
+                print(f"[VISION] ✅ Response received successfully from {self.host}")
 
                 # Parse response (chat format)
                 analysis_text = result.get("message", {}).get("content", "")
                 processing_time = int((time.time() - start_time) * 1000)
+                print(f"[VISION] Analysis completed in {processing_time}ms")
 
                 # Parse JSON from response
                 analysis_data = self._parse_analysis_response(analysis_text)
@@ -101,7 +105,8 @@ class OllamaVisionClient:
 
             except httpx.HTTPError as e:
                 processing_time = int((time.time() - start_time) * 1000)
-                print(f"Ollama API error: {e}")
+                print(f"[VISION] ❌ Ollama API error from {self.host}: {type(e).__name__}: {e}")
+                print(f"[VISION] Returning fallback analysis")
                 return self._get_fallback_analysis(processing_time)
 
     def _get_analysis_prompt(self, location_name: Optional[str] = None) -> str:
