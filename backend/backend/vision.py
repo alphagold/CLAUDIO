@@ -340,6 +340,15 @@ TAG: [lista separata da virgole]"""
         """Parse structured text format from qwen3-vl (non-JSON response)"""
         import re
 
+        # Verify minimum required sections are present
+        required_sections = ["DESCRIZIONE DETTAGLIATA:", "DESCRIZIONE BREVE:", "CATEGORIA:"]
+        has_required = all(section.lower() in text.lower() for section in required_sections)
+
+        if not has_required:
+            print(f"[VISION] ⚠️ Structured format incomplete, using text extraction fallback")
+            print(f"[VISION] Text preview (first 200 chars): {text[:200]}")
+            raise ValueError("Structured format incomplete - missing required sections")
+
         # Extract each section using regex
         desc_full_match = re.search(r'DESCRIZIONE DETTAGLIATA:\s*(.+?)(?=DESCRIZIONE BREVE:|$)', text, re.DOTALL | re.IGNORECASE)
         desc_short_match = re.search(r'DESCRIZIONE BREVE:\s*(.+?)(?=TESTO VISIBILE:|$)', text, re.DOTALL | re.IGNORECASE)
@@ -351,6 +360,8 @@ TAG: [lista separata da virgole]"""
         # Extract and clean
         desc_full = desc_full_match.group(1).strip() if desc_full_match else "Immagine analizzata"
         desc_short = desc_short_match.group(1).strip() if desc_short_match else "Foto"
+
+        print(f"[VISION] ✅ Parsed structured format - desc_full length: {len(desc_full)}, desc_short: {desc_short[:50]}")
         extracted_text = text_match.group(1).strip() if text_match else ""
 
         # Parse objects list (comma or newline separated)
