@@ -85,8 +85,10 @@ class OllamaVisionClient:
         }
 
         # qwen3-vl: disable thinking mode to get response in content field
+        # Try multiple parameters (qwen3-vl has inconsistent behavior)
         if is_qwen:
             options["enable_thinking"] = False
+            options["thinking"] = False
 
         payload = {
             "model": selected_model,
