@@ -208,21 +208,13 @@ class OllamaVisionClient:
             return self._get_fallback_analysis(processing_time)
 
     def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None) -> str:
-        """Get analysis prompt for Vision AI"""
+        """Get analysis prompt for Vision AI (simplified text format for all models)"""
 
         # Aggiungi contesto geolocalizzazione se disponibile
-        location_context = ""
-        if location_name:
-            location_context = f"""
-INFORMAZIONE IMPORTANTE - GEOLOCALIZZAZIONE:
-Questa foto è stata scattata a: {location_name}
-Usa questa informazione per generare tag di luogo appropriati e specifici.
-"""
+        location_hint = f" La foto è stata scattata a: {location_name}." if location_name else ""
 
-        # qwen3-vl funziona meglio con prompt semplici senza JSON strutturato
-        if model and "qwen" in model.lower():
-            location_hint = f" La foto è stata scattata a: {location_name}." if location_name else ""
-            return f"""Descrivi questa immagine in italiano.{location_hint}
+        # Prompt semplificato testuale - funziona meglio di JSON per tutti i modelli vision
+        return f"""Descrivi questa immagine in italiano.{location_hint}
 
 Fornisci:
 1. DESCRIZIONE DETTAGLIATA (3-5 frasi): Descrivi tutto ciò che vedi - oggetti, colori, azioni, ambiente, contesto
@@ -230,49 +222,28 @@ Fornisci:
 3. TESTO VISIBILE: Trascrivi qualsiasi testo/scritta nell'immagine (scrivi "Nessuno" se non c'è testo)
 4. OGGETTI PRINCIPALI: Lista 3-5 oggetti principali visibili
 5. CATEGORIA SCENA: indoor/outdoor/cibo/documento/persone/altro
-6. TAG (confidenza alta): Massimo 5 parole chiave specifiche e rilevanti
+6. TAG (confidenza alta): Massimo 5 parole chiave specifiche e rilevanti{f", includi tag di luogo per {location_name}" if location_name else ""}
 
 Rispondi in italiano in questo formato:
 DESCRIZIONE DETTAGLIATA: [testo]
 DESCRIZIONE BREVE: [testo]
 TESTO VISIBILE: [testo]
-OGGETTI: [lista]
+OGGETTI: [lista separata da virgole]
 CATEGORIA: [categoria]
-TAG: [lista tag]"""
-
-        return f"""Analizza questa foto e rispondi SOLO con un oggetto JSON valido (no markdown, no testo extra).
-{location_context}
-Struttura JSON richiesta:
-{{
-  "description_full": "Descrizione dettagliata in italiano di tutto ciò che vedi (3-5 frasi complete)",
-  "description_short": "Riassunto in italiano in una frase (max 100 caratteri)",
-  "extracted_text": "Qualsiasi testo visibile nell'immagine (stringa vuota se non c'è testo)",
-  "detected_objects": ["oggetto1", "oggetto2", "oggetto3"],
-  "scene_category": "food/document/receipt/outdoor/indoor/people/other",
-  "scene_subcategory": "restaurant/home/office/street/nature/etc",
-  "tags": [
-    {{"tag": "tag1", "confidence": 0.95}},
-    {{"tag": "tag2", "confidence": 0.88}},
-    {{"tag": "tag3", "confidence": 0.82}}
-  ],
-  "confidence_score": 0.85
-}}
-
-Istruzioni importanti:
-- description_full: Descrivi dettagliatamente cosa vedi, i colori, le azioni, l'ambiente, gli oggetti principali
-- description_short: Un riassunto breve e conciso
-- extracted_text: Copia esattamente qualsiasi testo/scritta visibile (lascia vuoto "" se non c'è testo)
-- detected_objects: Lista degli oggetti principali visibili (in italiano)
-- scene_category: Scegli la categoria più appropriata tra: food, document, receipt, outdoor, indoor, people, other
-- tags: Array di oggetti con 'tag' (nome) e 'confidence' (0.0-1.0). Solo 3-5 tag ALTAMENTE SPECIFICI (confidence minima 0.8) - oggetti/persone/luoghi chiaramente identificabili. Evita tag generici come 'oggetto', 'cosa', 'elemento'. Preferisci tag concreti come 'tavolo', 'sedia', 'montagna', 'pizza', 'smartphone'. Se disponibile geolocalizzazione, includi tag di luogo con alta confidenza
-- confidence_score: Quanto sei sicuro dell'analisi (0.0-1.0)
-
-Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
+TAG: [lista separata da virgole]"""
 
     def _parse_analysis_response(self, response_text: str) -> Dict:
         """Parse Vision AI response into structured data"""
+
+        # Try structured text format first (new default format)
+        if "DESCRIZIONE DETTAGLIATA:" in response_text or "DESCRIZIONE BREVE:" in response_text:
+            try:
+                return self._parse_structured_text(response_text)
+            except Exception as e:
+                print(f"Structured text parsing failed: {e}, trying JSON fallback...")
+
+        # Try JSON format (fallback for models that might still use it)
         try:
-            # Try to parse as JSON
             clean_text = response_text.strip()
             if clean_text.startswith("```"):
                 # Extract JSON from markdown
@@ -334,15 +305,9 @@ Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
             }
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            print(f"JSON parsing failed: {e}, trying structured text parsing...")
-
-            # Try to parse structured text format (qwen3-vl)
-            try:
-                return self._parse_structured_text(response_text)
-            except Exception as parse_error:
-                print(f"Structured text parsing failed: {parse_error}, using fallback extraction")
-                # Last fallback: extract useful info from malformed response
-                return self._extract_from_text(response_text)
+            print(f"JSON parsing failed: {e}, using text extraction fallback")
+            # Last fallback: extract useful info from malformed response
+            return self._extract_from_text(response_text)
 
     def _parse_structured_text(self, text: str) -> Dict:
         """Parse structured text format from qwen3-vl (non-JSON response)"""
