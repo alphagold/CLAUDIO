@@ -69,11 +69,20 @@ class OllamaVisionClient:
         is_qwen = "qwen" in selected_model.lower()
         num_predict = 1500 if is_qwen else 500
 
-        options = {
-            "temperature": 0.3,
-            "top_p": 0.9,
-            "num_predict": num_predict,
-        }
+        # qwen3-vl: match Modelfile defaults (temp=1, top_p=0.95, top_k=20)
+        if is_qwen:
+            options = {
+                "temperature": 1.0,
+                "top_p": 0.95,
+                "top_k": 20,
+                "num_predict": num_predict,
+            }
+        else:
+            options = {
+                "temperature": 0.3,
+                "top_p": 0.9,
+                "num_predict": num_predict,
+            }
 
         # qwen3-vl: use /api/generate endpoint (no thinking mode)
         # Other models: use /api/chat endpoint
