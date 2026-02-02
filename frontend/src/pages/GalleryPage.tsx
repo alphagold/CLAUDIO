@@ -9,6 +9,7 @@ import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter,
 import type { Photo } from '../types';
 import PhotoSkeleton from '../components/PhotoSkeleton';
 import toast from 'react-hot-toast';
+import { AnalysisQueueWidget } from '../components/AnalysisQueueWidget';
 
 type SortOption = 'date' | 'year' | 'month' | 'day';
 type ViewMode = 'grid-small' | 'grid-large' | 'list' | 'details';
@@ -293,10 +294,17 @@ export default function GalleryPage() {
                     <span>{formatRelativeTime(photo.taken_at || photo.uploaded_at)}</span>
                   </div>
                   {photo.analyzed_at && (
-                    <div className="flex items-center space-x-1">
-                      <Eye className="w-3 h-3" />
-                      <span>Analizzata</span>
-                    </div>
+                    <>
+                      <div className="flex items-center space-x-1 text-green-600">
+                        <Eye className="w-3 h-3" />
+                        <span>Analizzata {formatDate(photo.analyzed_at)}</span>
+                      </div>
+                      {photo.analysis?.model_version && (
+                        <div className="text-gray-400 text-[10px]">
+                          {photo.analysis.model_version}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -373,9 +381,15 @@ export default function GalleryPage() {
                 <span>{formatRelativeTime(photo.taken_at || photo.uploaded_at)}</span>
               </div>
               {photo.analyzed_at ? (
-                <div className="flex items-center space-x-1 text-green-600">
-                  <Eye className="w-3 h-3" />
-                  <span>Analizzata</span>
+                <div className="flex flex-col items-end space-y-0.5 text-xs">
+                  <div className="flex items-center space-x-1 text-green-600 font-medium">
+                    <Eye className="w-3 h-3" />
+                    <span>Analizzata</span>
+                  </div>
+                  <div className="text-gray-500">{formatDate(photo.analyzed_at)}</div>
+                  {photo.analysis?.model_version && (
+                    <div className="text-gray-400 text-[10px]">{photo.analysis.model_version}</div>
+                  )}
                 </div>
               ) : photo.analysis_started_at ? (
                 <div className="flex items-center space-x-1 text-yellow-600">
@@ -687,6 +701,9 @@ export default function GalleryPage() {
           </div>
         )}
 
+        {/* Analysis Queue Status Widget */}
+        <AnalysisQueueWidget />
+
         {/* Photo Grid with Groups */}
         {!isLoading && photos.length > 0 && (
           <div className="space-y-8">
@@ -757,9 +774,16 @@ export default function GalleryPage() {
                               <div className="flex items-center justify-between text-white/80">
                                 <span>{formatDate(photo.uploaded_at)}</span>
                                 {photo.analyzed_at && (
-                                  <div className="flex items-center space-x-1 bg-green-500/20 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                                    <Eye className="w-3 h-3" />
-                                    <span>Analizzata</span>
+                                  <div className="flex flex-col items-end space-y-0.5">
+                                    <div className="flex items-center space-x-1 bg-green-500/20 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                                      <Eye className="w-3 h-3" />
+                                      <span>{formatDate(photo.analyzed_at)}</span>
+                                    </div>
+                                    {photo.analysis?.model_version && (
+                                      <div className="text-white/50 text-[10px] bg-black/20 px-1.5 py-0.5 rounded">
+                                        {photo.analysis.model_version}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -836,9 +860,16 @@ export default function GalleryPage() {
                               <div className="flex items-center justify-between text-white/80">
                                 <span>{formatDate(photo.uploaded_at)}</span>
                                 {photo.analyzed_at && (
-                                  <div className="flex items-center space-x-1 bg-green-500/20 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                                    <Eye className="w-3 h-3" />
-                                    <span>Analizzata</span>
+                                  <div className="flex flex-col items-end space-y-0.5">
+                                    <div className="flex items-center space-x-1 bg-green-500/20 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                                      <Eye className="w-3 h-3" />
+                                      <span>{formatDate(photo.analyzed_at)}</span>
+                                    </div>
+                                    {photo.analysis?.model_version && (
+                                      <div className="text-white/50 text-[10px] bg-black/20 px-1.5 py-0.5 rounded">
+                                        {photo.analysis.model_version}
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>

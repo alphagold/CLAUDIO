@@ -217,6 +217,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 analysis_queue = asyncio.Queue()
 analysis_worker_started = False
 stop_all_requested = False
+current_analyzing_photo_id = None  # Track current photo being analyzed
 
 # Global queue for face detection tasks
 face_detection_queue = asyncio.Queue()
@@ -224,7 +225,7 @@ face_detection_worker_started = False
 
 async def analysis_worker():
     """Worker that processes analysis tasks one at a time"""
-    global stop_all_requested
+    global stop_all_requested, current_analyzing_photo_id
     print("Analysis worker started")
     while True:
         try:
@@ -252,14 +253,18 @@ async def analysis_worker():
 
                 print(f"Cleared {cleared} photos from queue")
                 stop_all_requested = False
+                current_analyzing_photo_id = None
                 continue
 
             photo_id, file_path, model = await analysis_queue.get()
+            current_analyzing_photo_id = photo_id  # Set current photo
             print(f"Processing analysis for photo {photo_id} (queue size: {analysis_queue.qsize()})")
             await analyze_photo_background(photo_id, file_path, model)
+            current_analyzing_photo_id = None  # Reset after completion
             analysis_queue.task_done()
         except Exception as e:
             print(f"Analysis worker error: {e}")
+            current_analyzing_photo_id = None  # Reset on error
             # Continue processing next item
             analysis_queue.task_done()
 
@@ -975,12 +980,27 @@ async def upload_photo(
 
 @app.get("/api/photos/queue-status")
 async def get_queue_status(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Get analysis queue status"""
+    """Get analysis queue status with details"""
+    # Get current photo being analyzed
+    current_photo = None
+    if current_analyzing_photo_id:
+        photo = db.query(Photo).filter(Photo.id == current_analyzing_photo_id).first()
+        if photo:
+            current_photo = {
+                "id": str(photo.id),
+                "filename": photo.filename,
+                "analysis_started_at": photo.analysis_started_at.isoformat() if photo.analysis_started_at else None,
+                "elapsed_seconds": photo.elapsed_time_seconds if photo.analysis_started_at else 0
+            }
+
     return {
         "queue_size": analysis_queue.qsize(),
-        "worker_running": analysis_worker_started
+        "worker_running": analysis_worker_started,
+        "current_photo": current_photo,
+        "total_in_progress": 1 if current_analyzing_photo_id else 0
     }
 
 

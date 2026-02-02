@@ -77,6 +77,18 @@ export interface PhotosResponse {
   limit: number;
 }
 
+export interface QueueStatus {
+  queue_size: number;
+  worker_running: boolean;
+  current_photo: {
+    id: string;
+    filename: string;
+    analysis_started_at: string | null;
+    elapsed_seconds: number;
+  } | null;
+  total_in_progress: number;
+}
+
 // Album types
 export interface Album {
   id: string;
