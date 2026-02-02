@@ -164,13 +164,20 @@ class OllamaVisionClient:
                 # /api/generate format (qwen3-vl)
                 analysis_text = result.get("response", "")
                 print(f"[VISION] Using /api/generate response format")
+
+                # Fallback to "thinking" field if response is empty
+                if not analysis_text.strip() and "thinking" in result:
+                    thinking_text = result.get("thinking", "")
+                    print(f"[VISION] ⚠️ Response empty, using 'thinking' field as fallback")
+                    print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
+                    analysis_text = thinking_text
             else:
                 # /api/chat format (llava, llama)
                 message = result.get("message", {})
                 analysis_text = message.get("content", "")
                 print(f"[VISION] Using /api/chat response format")
 
-                # Fallback to "thinking" field if content is empty (shouldn't happen with /api/generate)
+                # Fallback to "thinking" field if content is empty
                 if not analysis_text.strip() and "thinking" in message:
                     thinking_text = message.get("thinking", "")
                     print(f"[VISION] ⚠️ Content empty, using 'thinking' field")
