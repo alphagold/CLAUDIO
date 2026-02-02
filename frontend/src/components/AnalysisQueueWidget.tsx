@@ -5,11 +5,18 @@ import type { QueueStatus } from '../types';
 
 export function AnalysisQueueWidget() {
   // Poll queue status every 1s
-  const { data: queueStatus, isLoading, error } = useQuery<QueueStatus>({
+  const { data: queueStatus, isLoading, error, isError } = useQuery<QueueStatus>({
     queryKey: ['queueStatus'],
     queryFn: async () => {
-      const response = await apiClient.get('/api/photos/queue-status');
-      return response.data;
+      console.log('[AnalysisQueueWidget] Fetching queue status...');
+      try {
+        const response = await apiClient.get('/api/photos/queue-status');
+        console.log('[AnalysisQueueWidget] Response received:', response.data);
+        return response.data;
+      } catch (err) {
+        console.error('[AnalysisQueueWidget] Fetch error:', err);
+        throw err;
+      }
     },
     refetchInterval: 1000, // Poll every 1s
     staleTime: 0,
@@ -17,18 +24,33 @@ export function AnalysisQueueWidget() {
   });
 
   // Debug logging
+  console.log('[AnalysisQueueWidget] Render - isLoading:', isLoading, 'isError:', isError, 'queueStatus:', queueStatus);
+
   if (error) {
     console.error('[AnalysisQueueWidget] Error fetching queue status:', error);
+    // Show error state instead of hiding
+    return (
+      <div className="bg-red-100 border border-red-300 text-red-800 rounded-lg p-4 mb-6">
+        <p className="font-semibold">Errore caricamento stato coda</p>
+        <p className="text-sm">{error instanceof Error ? error.message : 'Errore sconosciuto'}</p>
+      </div>
+    );
   }
 
-  if (isLoading || !queueStatus) return null;
+  if (isLoading || !queueStatus) {
+    console.log('[AnalysisQueueWidget] Loading or no data, returning null');
+    return null;
+  }
 
   const hasActivity = queueStatus.total_in_progress > 0 || queueStatus.queue_size > 0;
 
   // Debug logging
   console.log('[AnalysisQueueWidget] Queue status:', queueStatus, 'hasActivity:', hasActivity);
 
-  if (!hasActivity) return null;
+  if (!hasActivity) {
+    console.log('[AnalysisQueueWidget] No activity, hiding widget');
+    return null;
+  }
 
   const formatElapsedTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

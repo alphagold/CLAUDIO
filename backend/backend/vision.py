@@ -166,11 +166,26 @@ class OllamaVisionClient:
                 print(f"[VISION] Using /api/generate response format")
 
                 # Fallback to "thinking" field if response is empty
+                # BUT ONLY if thinking contains structured format (not just reasoning)
                 if not analysis_text.strip() and "thinking" in result:
                     thinking_text = result.get("thinking", "")
-                    print(f"[VISION] ⚠️ Response empty, using 'thinking' field as fallback")
+                    print(f"[VISION] ⚠️ Response empty, checking 'thinking' field")
                     print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
-                    analysis_text = thinking_text
+
+                    # Check if thinking contains structured format (Italian sections)
+                    has_structured_format = (
+                        "DESCRIZIONE DETTAGLIATA:" in thinking_text and
+                        "CATEGORIA:" in thinking_text
+                    )
+
+                    if has_structured_format:
+                        print(f"[VISION] ✅ Thinking field contains structured format, using it")
+                        analysis_text = thinking_text
+                    else:
+                        print(f"[VISION] ❌ Thinking field is just reasoning (English), NOT using it")
+                        print(f"[VISION] Thinking preview: {thinking_text[:200]}")
+                        # Return error - force model recreation on client
+                        raise ValueError("qwen3-vl still using thinking mode - please recreate model without RENDERER/PARSER")
             else:
                 # /api/chat format (llava, llama)
                 message = result.get("message", {})
@@ -178,11 +193,26 @@ class OllamaVisionClient:
                 print(f"[VISION] Using /api/chat response format")
 
                 # Fallback to "thinking" field if content is empty
+                # BUT ONLY if thinking contains structured format (not just reasoning)
                 if not analysis_text.strip() and "thinking" in message:
                     thinking_text = message.get("thinking", "")
-                    print(f"[VISION] ⚠️ Content empty, using 'thinking' field")
+                    print(f"[VISION] ⚠️ Content empty, checking 'thinking' field")
                     print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
-                    analysis_text = thinking_text
+
+                    # Check if thinking contains structured format (Italian sections)
+                    has_structured_format = (
+                        "DESCRIZIONE DETTAGLIATA:" in thinking_text and
+                        "CATEGORIA:" in thinking_text
+                    )
+
+                    if has_structured_format:
+                        print(f"[VISION] ✅ Thinking field contains structured format, using it")
+                        analysis_text = thinking_text
+                    else:
+                        print(f"[VISION] ❌ Thinking field is just reasoning (English), NOT using it")
+                        print(f"[VISION] Thinking preview: {thinking_text[:200]}")
+                        # Return error - force model recreation on client
+                        raise ValueError("Model still using thinking mode - please recreate model without RENDERER/PARSER")
 
             processing_time = int((time.time() - start_time) * 1000)
             print(f"[VISION] Analysis completed in {processing_time}ms")
