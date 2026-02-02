@@ -534,6 +534,48 @@ Ricordami i comandi fa eseguire sul server remoto
 
 ## Changelog / Ultime Modifiche
 
+### Sessione 2026-02-02: Fix qwen3-vl Thinking Mode + Widget Coda Analisi
+
+**Fix qwen3-vl Thinking Mode (CRITICO)**
+- ❌ Problema: qwen3-vl con Modelfile `RENDERER qwen3-vl-thinking` mette output in campo `thinking` invece di `response`
+- ✅ Soluzione Modelfile (PC Windows): Rimosso `RENDERER qwen3-vl-thinking` e `PARSER qwen3-vl-thinking`
+- ✅ Creato modello pulito: `ollama create qwen3-vl-clean -f Modelfile.qwen3-vl`
+- ✅ Fallback backend: Campo `thinking` usato se `response` vuoto (sia `/api/chat` che `/api/generate`)
+- ✅ Risultato: Descrizioni complete in italiano, 100% successo analisi bulk
+- Commit: `6086f48`
+
+**Widget Coda Analisi (NUOVO)**
+- ✅ Backend: Variabile globale `current_analyzing_photo_id` per tracciare foto corrente
+- ✅ Backend: Endpoint `/api/photos/queue-status` migliorato con dettagli:
+  - Foto corrente (id, filename, elapsed_seconds)
+  - Queue size e total_in_progress
+- ✅ Frontend: Componente `AnalysisQueueWidget.tsx`:
+  - Polling 1s dello stato coda
+  - Mostra foto corrente, tempo trascorso, numero in coda
+  - Progress bar visuale per avanzamento
+- ✅ GalleryPage: Widget mostrato prima della griglia foto
+- Commit: `117adc9`
+
+**Visualizzazione Data e Modello Analisi**
+- ✅ Card foto mostrano data analisi (`analyzed_at`) formattata
+- ✅ Card foto mostrano modello usato (`model_version` da PhotoAnalysis)
+- ✅ Modifiche applicate a tutti i layout:
+  - List view: data + modello inline
+  - Grid-large: badge con data + chip modello
+  - Grid-small: badge con data + chip modello
+- Commit: `117adc9`
+
+**File Modificati**:
+- `backend/backend/main.py` - Worker coda + endpoint queue-status
+- `backend/backend/vision.py` - Fallback thinking field
+- `frontend/src/types/index.ts` - Tipo QueueStatus
+- `frontend/src/components/AnalysisQueueWidget.tsx` - Widget nuovo
+- `frontend/src/pages/GalleryPage.tsx` - Widget + data/modello visualizzati
+
+**Totale**: 3 commit, 1 problema critico risolto, 2 feature maggiori implementate
+
+---
+
 ### Sessione 2026-01-31: Fix Face Recognition, Server Remoto, GPS Debug
 
 **Fix Critici Face Recognition**
