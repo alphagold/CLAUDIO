@@ -133,6 +133,10 @@ class OllamaVisionClient:
             print(f"[VISION] asyncio.to_thread() completed!")
             print(f"[VISION] ✅ Response received successfully from {self.host}")
 
+            # Debug: log entire Ollama response structure
+            print(f"[VISION] Full Ollama response keys: {list(result.keys())}")
+            print(f"[VISION] Full Ollama response: {json.dumps(result, indent=2, ensure_ascii=False)[:2000]}")
+
             # Parse response (chat format)
             analysis_text = result.get("message", {}).get("content", "")
             processing_time = int((time.time() - start_time) * 1000)
