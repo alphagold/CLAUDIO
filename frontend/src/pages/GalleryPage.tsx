@@ -54,7 +54,7 @@ export default function GalleryPage() {
       // Auto-refresh if any photo is being analyzed
       const photos = query.state.data?.photos || [];
       const hasAnalyzing = photos.some(p => !p.analyzed_at && p.analysis_started_at);
-      return hasAnalyzing ? 3000 : false; // Refresh every 3s if analyzing
+      return hasAnalyzing ? 1000 : false; // Refresh every 1s if analyzing (più reattivo)
     },
   });
 

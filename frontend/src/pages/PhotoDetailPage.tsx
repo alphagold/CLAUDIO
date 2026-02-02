@@ -61,7 +61,7 @@ export default function PhotoDetailPage() {
     refetchInterval: (query) => {
       // Auto-refresh only while analysis is truly in progress
       const photo = query.state.data;
-      return photo && !photo.analyzed_at && photo.analysis_started_at ? 2000 : false;
+      return photo && !photo.analyzed_at && photo.analysis_started_at ? 1000 : false; // 1s per reattività
     },
   });
 
