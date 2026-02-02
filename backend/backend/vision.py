@@ -219,27 +219,26 @@ Questa foto è stata scattata a: {location_name}
 Usa questa informazione per generare tag di luogo appropriati e specifici.
 """
 
-        # qwen3-vl funziona meglio con prompt semplici e risposta libera
+        # qwen3-vl funziona meglio con prompt semplici senza JSON strutturato
         if model and "qwen" in model.lower():
-            return f"""Analizza questa foto e descrivi dettagliatamente in italiano cosa vedi.
-{location_context}
-Includi:
-1. Una descrizione completa e dettagliata (3-5 frasi) di tutto ciò che vedi: oggetti, colori, azioni, ambiente
-2. Un riassunto breve (max 100 caratteri)
-3. Eventuali testi visibili nell'immagine
-4. Lista degli oggetti principali
-5. Tipo di scena (cibo/documento/outdoor/indoor/persone/altro)
-6. Alcuni tag descrittivi
+            location_hint = f" La foto è stata scattata a: {location_name}." if location_name else ""
+            return f"""Descrivi questa immagine in italiano.{location_hint}
 
-Rispondi in formato JSON:
-{{
-  "description_full": "descrizione dettagliata...",
-  "description_short": "riassunto breve",
-  "extracted_text": "testo visibile o stringa vuota",
-  "detected_objects": ["oggetto1", "oggetto2"],
-  "scene_category": "tipo scena",
-  "tags": ["tag1", "tag2", "tag3"]
-}}"""
+Fornisci:
+1. DESCRIZIONE DETTAGLIATA (3-5 frasi): Descrivi tutto ciò che vedi - oggetti, colori, azioni, ambiente, contesto
+2. DESCRIZIONE BREVE (max 100 caratteri): Riassunto conciso
+3. TESTO VISIBILE: Trascrivi qualsiasi testo/scritta nell'immagine (scrivi "Nessuno" se non c'è testo)
+4. OGGETTI PRINCIPALI: Lista 3-5 oggetti principali visibili
+5. CATEGORIA SCENA: indoor/outdoor/cibo/documento/persone/altro
+6. TAG (confidenza alta): Massimo 5 parole chiave specifiche e rilevanti
+
+Rispondi in italiano in questo formato:
+DESCRIZIONE DETTAGLIATA: [testo]
+DESCRIZIONE BREVE: [testo]
+TESTO VISIBILE: [testo]
+OGGETTI: [lista]
+CATEGORIA: [categoria]
+TAG: [lista tag]"""
 
         return f"""Analizza questa foto e rispondi SOLO con un oggetto JSON valido (no markdown, no testo extra).
 {location_context}
@@ -335,9 +334,74 @@ Rispondi SOLO con l'oggetto JSON, senza markdown né altro testo."""
             }
 
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            print(f"JSON parsing failed, extracting info from text: {e}")
-            # Fallback: extract useful info from malformed response
-            return self._extract_from_text(response_text)
+            print(f"JSON parsing failed: {e}, trying structured text parsing...")
+
+            # Try to parse structured text format (qwen3-vl)
+            try:
+                return self._parse_structured_text(response_text)
+            except Exception as parse_error:
+                print(f"Structured text parsing failed: {parse_error}, using fallback extraction")
+                # Last fallback: extract useful info from malformed response
+                return self._extract_from_text(response_text)
+
+    def _parse_structured_text(self, text: str) -> Dict:
+        """Parse structured text format from qwen3-vl (non-JSON response)"""
+        import re
+
+        # Extract each section using regex
+        desc_full_match = re.search(r'DESCRIZIONE DETTAGLIATA:\s*(.+?)(?=DESCRIZIONE BREVE:|$)', text, re.DOTALL | re.IGNORECASE)
+        desc_short_match = re.search(r'DESCRIZIONE BREVE:\s*(.+?)(?=TESTO VISIBILE:|$)', text, re.DOTALL | re.IGNORECASE)
+        text_match = re.search(r'TESTO VISIBILE:\s*(.+?)(?=OGGETTI:|$)', text, re.DOTALL | re.IGNORECASE)
+        objects_match = re.search(r'OGGETTI:\s*(.+?)(?=CATEGORIA:|$)', text, re.DOTALL | re.IGNORECASE)
+        category_match = re.search(r'CATEGORIA:\s*(.+?)(?=TAG:|$)', text, re.DOTALL | re.IGNORECASE)
+        tags_match = re.search(r'TAG:\s*(.+?)$', text, re.DOTALL | re.IGNORECASE)
+
+        # Extract and clean
+        desc_full = desc_full_match.group(1).strip() if desc_full_match else "Immagine analizzata"
+        desc_short = desc_short_match.group(1).strip() if desc_short_match else "Foto"
+        extracted_text = text_match.group(1).strip() if text_match else ""
+
+        # Parse objects list (comma or newline separated)
+        objects_raw = objects_match.group(1).strip() if objects_match else ""
+        objects = [obj.strip() for obj in re.split(r'[,\n-]', objects_raw) if obj.strip() and len(obj.strip()) > 2][:5]
+
+        # Parse category
+        category = category_match.group(1).strip().lower() if category_match else "other"
+        # Map to valid categories
+        if "cibo" in category or "food" in category:
+            category = "food"
+        elif "documento" in category or "document" in category:
+            category = "document"
+        elif "outdoor" in category or "esterno" in category:
+            category = "outdoor"
+        elif "indoor" in category or "interno" in category:
+            category = "indoor"
+        elif "person" in category or "persone" in category:
+            category = "people"
+        else:
+            category = "other"
+
+        # Parse tags (comma or newline separated)
+        tags_raw = tags_match.group(1).strip() if tags_match else ""
+        tags = [tag.strip() for tag in re.split(r'[,\n-]', tags_raw) if tag.strip() and len(tag.strip()) > 2][:5]
+
+        # Handle "Nessuno" for extracted text
+        if extracted_text.lower() in ["nessuno", "nessun testo", "non presente", "none"]:
+            extracted_text = None
+        elif not extracted_text:
+            extracted_text = None
+
+        return {
+            "description_full": desc_full[:500],
+            "description_short": desc_short[:200],
+            "extracted_text": extracted_text,
+            "detected_objects": objects,
+            "detected_faces": 0,
+            "scene_category": category,
+            "scene_subcategory": None,
+            "tags": tags,
+            "confidence_score": 0.8,
+        }
 
     def _extract_from_text(self, text: str) -> Dict:
         """Extract structured data from free-form text response"""
