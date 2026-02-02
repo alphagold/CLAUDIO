@@ -75,7 +75,18 @@ class OllamaVisionClient:
 
         # Adjust parameters based on model
         # qwen3-vl needs more tokens for detailed responses
-        num_predict = 1500 if "qwen" in selected_model.lower() else 500
+        is_qwen = "qwen" in selected_model.lower()
+        num_predict = 1500 if is_qwen else 500
+
+        options = {
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "num_predict": num_predict,
+        }
+
+        # qwen3-vl: disable thinking mode to get response in content field
+        if is_qwen:
+            options["enable_thinking"] = False
 
         payload = {
             "model": selected_model,
@@ -88,13 +99,9 @@ class OllamaVisionClient:
             ],
             "stream": False,
             "keep_alive": "5m",
-            "options": {
-                "temperature": 0.3,
-                "top_p": 0.9,
-                "num_predict": num_predict,
-            }
+            "options": options
         }
-        print(f"[VISION] Model-specific params: num_predict={num_predict}")
+        print(f"[VISION] Model-specific params: num_predict={num_predict}, enable_thinking={options.get('enable_thinking', 'default')}")
         payload_size = len(json.dumps(payload))
         print(f"[VISION] Total payload size: {payload_size} bytes ({payload_size/1024/1024:.2f} MB)")
 
