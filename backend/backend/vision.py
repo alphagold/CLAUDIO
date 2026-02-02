@@ -138,7 +138,15 @@ class OllamaVisionClient:
             print(f"[VISION] Full Ollama response: {json.dumps(result, indent=2, ensure_ascii=False)[:2000]}")
 
             # Parse response (chat format)
-            analysis_text = result.get("message", {}).get("content", "")
+            # qwen3-vl uses "thinking" field instead of "content" - try both
+            message = result.get("message", {})
+            analysis_text = message.get("content", "")
+
+            # Fallback to "thinking" field if content is empty (qwen3-vl behavior)
+            if not analysis_text.strip() and "thinking" in message:
+                print(f"[VISION] ⚠️ Content empty, using 'thinking' field (qwen3-vl)")
+                analysis_text = message.get("thinking", "")
+
             processing_time = int((time.time() - start_time) * 1000)
             print(f"[VISION] Analysis completed in {processing_time}ms")
             print(f"[VISION] Response text length: {len(analysis_text)} chars")
