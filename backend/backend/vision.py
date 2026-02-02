@@ -65,16 +65,7 @@ class OllamaVisionClient:
         # Prepare prompt WITH location context and model-specific optimizations
         prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model)
 
-        # Call Ollama API
-        target_url = f"{self.host}/api/chat"
-        print(f"[VISION] Making request to: {target_url} with model: {selected_model}")
-        print(f"[VISION] self.host = {self.host!r}")
-        print(f"[VISION] Timeout: {self.timeout} seconds")
-        print(f"[VISION] Image size: {len(image_b64)} bytes (base64)")
-        print(f"[VISION] Prompt length: {len(prompt)} characters")
-
         # Adjust parameters based on model
-        # qwen3-vl needs more tokens for detailed responses
         is_qwen = "qwen" in selected_model.lower()
         num_predict = 1500 if is_qwen else 500
 
@@ -84,26 +75,39 @@ class OllamaVisionClient:
             "num_predict": num_predict,
         }
 
-        # qwen3-vl: disable thinking mode to get response in content field
-        # Try multiple parameters (qwen3-vl has inconsistent behavior)
+        # qwen3-vl: use /api/generate endpoint (no thinking mode)
+        # Other models: use /api/chat endpoint
         if is_qwen:
-            options["enable_thinking"] = False
-            options["thinking"] = False
+            target_url = f"{self.host}/api/generate"
+            payload = {
+                "model": selected_model,
+                "prompt": prompt,
+                "images": [image_b64],
+                "stream": False,
+                "options": options
+            }
+        else:
+            target_url = f"{self.host}/api/chat"
+            payload = {
+                "model": selected_model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt,
+                        "images": [image_b64]
+                    }
+                ],
+                "stream": False,
+                "keep_alive": "5m",
+                "options": options
+            }
 
-        payload = {
-            "model": selected_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,
-                    "images": [image_b64]
-                }
-            ],
-            "stream": False,
-            "keep_alive": "5m",
-            "options": options
-        }
-        print(f"[VISION] Model-specific params: num_predict={num_predict}, enable_thinking={options.get('enable_thinking', 'default')}")
+        print(f"[VISION] Making request to: {target_url} with model: {selected_model}")
+        print(f"[VISION] self.host = {self.host!r}")
+        print(f"[VISION] Timeout: {self.timeout} seconds")
+        print(f"[VISION] Image size: {len(image_b64)} bytes (base64)")
+        print(f"[VISION] Prompt length: {len(prompt)} characters")
+        print(f"[VISION] API endpoint: {target_url.split('/')[-1]}, num_predict={num_predict}")
         payload_size = len(json.dumps(payload))
         print(f"[VISION] Total payload size: {payload_size} bytes ({payload_size/1024/1024:.2f} MB)")
 
@@ -146,18 +150,23 @@ class OllamaVisionClient:
             print(f"[VISION] Full Ollama response keys: {list(result.keys())}")
             print(f"[VISION] Full Ollama response: {json.dumps(result, indent=2, ensure_ascii=False)[:2000]}")
 
-            # Parse response (chat format)
-            # qwen3-vl uses "thinking" field instead of "content" - try both
-            message = result.get("message", {})
-            analysis_text = message.get("content", "")
+            # Parse response - different format for /api/generate vs /api/chat
+            if "response" in result:
+                # /api/generate format (qwen3-vl)
+                analysis_text = result.get("response", "")
+                print(f"[VISION] Using /api/generate response format")
+            else:
+                # /api/chat format (llava, llama)
+                message = result.get("message", {})
+                analysis_text = message.get("content", "")
+                print(f"[VISION] Using /api/chat response format")
 
-            # Fallback to "thinking" field if content is empty (qwen3-vl behavior)
-            if not analysis_text.strip() and "thinking" in message:
-                thinking_text = message.get("thinking", "")
-                print(f"[VISION] ⚠️ Content empty, using 'thinking' field (qwen3-vl)")
-                print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
-                print(f"[VISION] Thinking FULL TEXT:\n{thinking_text}")
-                analysis_text = thinking_text
+                # Fallback to "thinking" field if content is empty (shouldn't happen with /api/generate)
+                if not analysis_text.strip() and "thinking" in message:
+                    thinking_text = message.get("thinking", "")
+                    print(f"[VISION] ⚠️ Content empty, using 'thinking' field")
+                    print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
+                    analysis_text = thinking_text
 
             processing_time = int((time.time() - start_time) * 1000)
             print(f"[VISION] Analysis completed in {processing_time}ms")
