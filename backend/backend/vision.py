@@ -214,7 +214,9 @@ class OllamaVisionClient:
         location_hint = f" La foto è stata scattata a: {location_name}." if location_name else ""
 
         # Prompt semplificato testuale - funziona meglio di JSON per tutti i modelli vision
-        return f"""Descrivi questa immagine in italiano.{location_hint}
+        return f"""IMPORTANTE: Rispondi DIRETTAMENTE senza ragionare o pensare ad alta voce. Non usare "thinking mode".
+
+Descrivi questa immagine in italiano.{location_hint}
 
 Fornisci:
 1. DESCRIZIONE DETTAGLIATA (3-5 frasi): Descrivi tutto ciò che vedi - oggetti, colori, azioni, ambiente, contesto
