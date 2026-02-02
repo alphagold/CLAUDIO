@@ -144,8 +144,11 @@ class OllamaVisionClient:
 
             # Fallback to "thinking" field if content is empty (qwen3-vl behavior)
             if not analysis_text.strip() and "thinking" in message:
+                thinking_text = message.get("thinking", "")
                 print(f"[VISION] ⚠️ Content empty, using 'thinking' field (qwen3-vl)")
-                analysis_text = message.get("thinking", "")
+                print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
+                print(f"[VISION] Thinking FULL TEXT:\n{thinking_text}")
+                analysis_text = thinking_text
 
             processing_time = int((time.time() - start_time) * 1000)
             print(f"[VISION] Analysis completed in {processing_time}ms")
