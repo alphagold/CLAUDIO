@@ -565,14 +565,24 @@ Ricordami i comandi fa eseguire sul server remoto
   - Grid-small: badge con data + chip modello
 - Commit: `117adc9`
 
+**Miglioramenti Widget e PhotoDetailPage**
+- ✅ Widget coda: Aggiunto logging, error handling, retry logic
+- ✅ Widget coda: Spostato prima del loading state (sempre visibile)
+- ✅ PhotoDetailPage: Sezione "Analisi completata" espansa con grid 3 colonne:
+  - Modello AI (font mono)
+  - Data e ora analisi (formatDateTime)
+  - Tempo elaborazione
+- Commit: `3db3bd5` (fix TypeScript), `4ba8e9c` (migliorie)
+
 **File Modificati**:
 - `backend/backend/main.py` - Worker coda + endpoint queue-status
 - `backend/backend/vision.py` - Fallback thinking field
 - `frontend/src/types/index.ts` - Tipo QueueStatus
-- `frontend/src/components/AnalysisQueueWidget.tsx` - Widget nuovo
-- `frontend/src/pages/GalleryPage.tsx` - Widget + data/modello visualizzati
+- `frontend/src/components/AnalysisQueueWidget.tsx` - Widget con logging
+- `frontend/src/pages/GalleryPage.tsx` - Widget posizionamento + data/modello
+- `frontend/src/pages/PhotoDetailPage.tsx` - Dettagli analisi espansi
 
-**Totale**: 3 commit, 1 problema critico risolto, 2 feature maggiori implementate
+**Totale**: 5 commit, 1 problema critico risolto, 2 feature maggiori implementate
 
 ---
 
