@@ -688,6 +688,11 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 print(f"ERROR: analysis_result is not a dict, it's {type(analysis_result)}")
                 raise ValueError(f"Invalid analysis result type: {type(analysis_result)}")
 
+            # Determine server type for model_version display
+            base_model = analysis_result.get("model_version", "unknown")
+            is_remote = model == "remote" and user_config and user_config["remote_enabled"]
+            model_display = f"{base_model} (Remoto)" if is_remote else f"{base_model} (Locale)"
+
             # Save new analysis
             analysis = PhotoAnalysis(
                 photo_id=photo.id,
@@ -699,7 +704,7 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 scene_category=analysis_result.get("scene_category"),
                 scene_subcategory=analysis_result.get("scene_subcategory"),
                 tags=analysis_result.get("tags", []),
-                model_version=analysis_result.get("model_version"),
+                model_version=model_display,
                 processing_time_ms=analysis_result.get("processing_time_ms"),
                 confidence_score=analysis_result.get("confidence_score"),
             )
