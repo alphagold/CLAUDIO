@@ -727,6 +727,73 @@ ollama serve
 
 ---
 
+### Sessione 2026-02-02: Fix Definitivo qwen3-vl - API Generate + Prompt Testuale
+
+**Problema Principale**: qwen3-vl usava thinking mode, content vuoto, risposte in inglese
+
+**Phase 1: Scoperta Renderer Thinking**
+- 🔍 Analisi Modelfile qwen3-vl: `RENDERER qwen3-vl-thinking`, `PARSER qwen3-vl-thinking`
+- ❌ `/api/chat` attiva automaticamente thinking mode (risposta in `thinking` field, `content` vuoto)
+- ❌ Parametri `enable_thinking=false` ignorati dal renderer
+
+**Phase 2: Switch a /api/generate**
+- ✅ Switchato da `/api/chat` a `/api/generate` per qwen3-vl
+- ✅ `/api/generate` bypassa il renderer thinking (risposta diretta in `response` field)
+- ✅ llava/llama continuano a usare `/api/chat` (nessun thinking mode)
+- ✅ Parser adattato per gestire entrambi i formati
+- Commit: `cfa56e8`
+
+**Phase 3: Parametri Modelfile**
+- ✅ Adattati parametri al Modelfile originale qwen3-vl:
+  - `temperature: 1.0` (era 0.3)
+  - `top_p: 0.95` (era 0.9)
+  - `top_k: 20` (nuovo)
+  - `num_predict: 1500`
+- ✅ Replica esattamente comportamento interfaccia Ollama locale
+- Commit: `f3d0656`
+
+**Phase 4: Prompt Semplificato Testuale**
+- ✅ Sostituito prompt JSON strutturato con formato testuale semplice
+- ✅ Formato: `DESCRIZIONE DETTAGLIATA:`, `DESCRIZIONE BREVE:`, `TAG:`, etc.
+- ✅ Esteso a TUTTI i modelli (llava, llama, qwen) per uniformità
+- ✅ Parser strutturato testuale con regex per estrarre sezioni
+- ✅ Codice semplificato: -50 righe, un solo codepath
+- Commit: `4bce822`, `0418ad3`, `d599b1f`
+
+**Phase 5: UI Più Reattiva**
+- ✅ Polling interval ridotto: 3s→1s (GalleryPage), 2s→1s (PhotoDetailPage)
+- ✅ Interfaccia aggiorna stato analisi più rapidamente
+- Commit: `2fbb291`
+
+**Vantaggi Soluzione Finale**:
+- 🚀 **qwen3-vl funziona perfettamente** (singola foto)
+- ✅ **Prompt naturale** - più affidabile di JSON strutturato
+- ✅ **Uniformità** - stesso prompt per tutti i modelli
+- ✅ **Codice più semplice** - meno duplicazione
+- ✅ **UI più reattiva** - aggiornamenti in 1 secondo
+
+**Configurazione qwen3-vl (Modelfile)**:
+```
+TEMPLATE {{ .Prompt }}
+RENDERER qwen3-vl-thinking
+PARSER qwen3-vl-thinking
+PARAMETER top_k 20
+PARAMETER top_p 0.95
+PARAMETER temperature 1
+```
+
+**Architettura API**:
+- qwen3-vl → `/api/generate` (prompt + response, no thinking)
+- llava/llama → `/api/chat` (messages + message.content)
+
+**Problemi Noti**:
+- ⚠️ Analisi multipla da galleria: da testare (possibili problemi concorrenza)
+- ✅ Analisi singola: funziona perfettamente per tutti i modelli
+
+**Totale**: 8 commit, 1 problema critico risolto, codice semplificato
+
+---
+
 ## Quick Reference
 
 ### URLs Importanti
