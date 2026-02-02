@@ -666,6 +666,9 @@ export default function GalleryPage() {
           </div>
         )}
 
+        {/* Analysis Queue Status Widget - Always visible if active */}
+        <AnalysisQueueWidget />
+
         {/* Loading State */}
         {isLoading && (
           <div className={getGridClasses()}>
@@ -700,9 +703,6 @@ export default function GalleryPage() {
             </button>
           </div>
         )}
-
-        {/* Analysis Queue Status Widget */}
-        <AnalysisQueueWidget />
 
         {/* Photo Grid with Groups */}
         {!isLoading && photos.length > 0 && (

@@ -5,18 +5,28 @@ import type { QueueStatus } from '../types';
 
 export function AnalysisQueueWidget() {
   // Poll queue status every 1s
-  const { data: queueStatus } = useQuery<QueueStatus>({
+  const { data: queueStatus, isLoading, error } = useQuery<QueueStatus>({
     queryKey: ['queueStatus'],
     queryFn: async () => {
       const response = await apiClient.get('/api/photos/queue-status');
       return response.data;
     },
     refetchInterval: 1000, // Poll every 1s
+    staleTime: 0,
+    retry: 3,
   });
 
-  if (!queueStatus) return null;
+  // Debug logging
+  if (error) {
+    console.error('[AnalysisQueueWidget] Error fetching queue status:', error);
+  }
+
+  if (isLoading || !queueStatus) return null;
 
   const hasActivity = queueStatus.total_in_progress > 0 || queueStatus.queue_size > 0;
+
+  // Debug logging
+  console.log('[AnalysisQueueWidget] Queue status:', queueStatus, 'hasActivity:', hasActivity);
 
   if (!hasActivity) return null;
 

@@ -158,6 +158,18 @@ export default function PhotoDetailPage() {
     });
   };
 
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('it-IT', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }) + ', ' + date.toLocaleTimeString('it-IT', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const EditPhotoDialog = () => {
     const [formData, setFormData] = useState({
       taken_at: photo?.taken_at ? new Date(photo.taken_at).toISOString().slice(0, 16) : '',
@@ -648,14 +660,11 @@ export default function PhotoDetailPage() {
               </div>
             ) : (
               <div className="bg-green-50 border border-green-200 rounded-xl p-6 animate-fade-in">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">
                     <Sparkles className="w-6 h-6 text-green-600" />
                     <div>
                       <h3 className="font-semibold text-green-900">Analisi completata</h3>
-                      <p className="text-sm text-green-700">
-                        Modello: {photo.analysis?.model_version} • {photo.analysis?.processing_time_ms ? (photo.analysis.processing_time_ms / 1000).toFixed(1) : '0'}s
-                      </p>
                     </div>
                   </div>
                   <button
@@ -667,6 +676,20 @@ export default function PhotoDetailPage() {
                     <RefreshCw className={`w-4 h-4 ${reanalyzeMutation.isPending ? 'animate-spin' : ''}`} />
                     <span>{reanalyzeMutation.isPending ? 'Avviando...' : 'Rianalizza'}</span>
                   </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                  <div className="bg-white/50 rounded-lg p-3">
+                    <div className="text-green-600 font-medium mb-1">Modello AI</div>
+                    <div className="text-green-900 font-mono text-xs">{photo.analysis?.model_version || 'N/A'}</div>
+                  </div>
+                  <div className="bg-white/50 rounded-lg p-3">
+                    <div className="text-green-600 font-medium mb-1">Data Analisi</div>
+                    <div className="text-green-900">{photo.analyzed_at ? formatDateTime(photo.analyzed_at) : 'N/A'}</div>
+                  </div>
+                  <div className="bg-white/50 rounded-lg p-3">
+                    <div className="text-green-600 font-medium mb-1">Tempo Elaborazione</div>
+                    <div className="text-green-900">{photo.analysis?.processing_time_ms ? (photo.analysis.processing_time_ms / 1000).toFixed(1) : '0'}s</div>
+                  </div>
                 </div>
               </div>
             )}
