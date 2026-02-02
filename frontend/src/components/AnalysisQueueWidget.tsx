@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { Loader, CheckCircle, Clock } from 'lucide-react';
-import { apiClient } from '../api/client';
-import { QueueStatus } from '../types';
+import { Loader, Clock } from 'lucide-react';
+import apiClient from '../api/client';
+import type { QueueStatus } from '../types';
 
 export function AnalysisQueueWidget() {
   // Poll queue status every 1s
