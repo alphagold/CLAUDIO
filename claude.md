@@ -370,6 +370,62 @@ embedding = DeepFace.represent(img_path, model_name="Facenet512")
 
 **Stato**: Feature IMPLEMENTATA ma NON ATTIVA (waiting deployment fix)
 
+### 11. Server Remoto - httpx Payload Blocking
+**Problema**: Analisi eseguita in locale nonostante "Server Remoto" selezionato (2026-01-31)
+
+**Sintomi**:
+- User seleziona "Server Remoto" ma CPU locale al 100%
+- Log mostrano "Using REMOTE" ma richiesta non arriva mai al PC Windows
+- curl manuale funziona, solo httpx fallisce
+- Payload >4MB (immagine base64 + JSON)
+
+**Causa Root**:
+- httpx.AsyncClient si blocca su POST con payload >4MB
+- Timeout non gestito correttamente per large payloads
+- httpx inadatto per trasferimento immagini grandi
+
+**Soluzione**: ✅ RISOLTO (2026-01-31)
+- ✅ Sostituito httpx con requests library
+- ✅ Usato asyncio.to_thread() per compatibilità async FastAPI
+- ✅ Timeout separati: connect=30s, read=900s (per analisi lunghe)
+- ✅ Logging dettagliato: URL, payload size, status code
+- ✅ Server remoto ora funziona perfettamente con llava e llama3.2-vision
+- File: `backend/backend/vision.py:105-128`, `backend/requirements.txt:33`
+- Commit: `9c4c601`, `514db3f`, `2399eae`
+
+**Configurazione PC Windows Remoto**:
+```powershell
+$env:OLLAMA_HOST = "0.0.0.0:11434"
+$env:OLLAMA_ORIGINS = "*"
+$env:OLLAMA_NUM_PARALLEL = "1"  # Richiesto per qwen3-vl
+ollama serve
+```
+
+### 12. qwen3-vl - Parsing JSON Failed
+**Problema**: qwen3-vl remoto risponde ma JSON invalido (2026-01-31)
+
+**Sintomi**:
+- qwen3-vl usato direttamente: risposta eccellente (200+ parole dettagliate)
+- qwen3-vl tramite app: risposta generica (50 parole) + parsing error
+- Error: "Expecting value: line 1 column 1 (char 0)"
+- HTTP 200, risposta arriva, ma formato non JSON
+
+**Cause Identificate**:
+1. `num_predict=500` troppo basso → aumentato a 1500 per qwen
+2. Prompt JSON strutturato troppo complesso → semplificato per qwen
+3. qwen3-vl preferisce risposta libera invece di schema rigido
+
+**Soluzione**: 🔍 IN CORSO (2026-01-31)
+- ✅ `num_predict=1500` per modelli qwen (3x token)
+- ✅ Prompt semplificato: meno struttura, più naturale
+- ✅ Parsing adattato: accetta tag stringhe semplici (no confidence object)
+- ✅ Logging risposta: preview primi 500 caratteri per debug
+- 🔍 Attesa test: verificare formato risposta effettiva qwen3-vl
+- File: `backend/backend/vision.py:78-97`, `backend/backend/vision.py:186-218`, `backend/backend/vision.py:261-279`
+- Commit: `e695a78`, `615647d`, `6cda33f`
+
+**Stato**: Awaiting user test con nuovo logging
+
 ---
 
 ## Architettura e Decisioni Tecniche
@@ -611,6 +667,64 @@ Ricordami i comandi fa eseguire sul server remoto
 
 **Totale**: 18 commit, 9 problemi risolti, 1 feature maggiore implementata
 
+### Sessione 2026-01-31: Debug e Fix Server Remoto Ollama
+
+**Problema Principale**: Server remoto configurato ma analisi eseguita in locale
+
+**Phase 1: Debug Face Recognition + Model Filtering**
+- ✅ Fix circular import face_routes.py ↔ main.py (dependency injection)
+- ✅ Fix 422 errori API endpoints (wrapper functions runtime)
+- ✅ Fix model filtering server remoto (substring matching per families)
+- Commit: `9c270a8`, `68eaf78`, `450a04d`, `7c4f5ad`
+
+**Phase 2: Debug GPS Extraction**
+- ✅ Aggiunto logging dettagliato DMS→decimal conversion
+- ✅ Logging GPS IFD contents, lat/lon separati
+- 🔍 In corso: coordinate trovate ma conversione fallisce
+- Commit: `b315e41`, `8f26bdb`
+
+**Phase 3: Debug Server Remoto - httpx Fallisce con Payload Grandi**
+- ❌ **Bug critico**: httpx si blocca inviando payload >4MB al server remoto
+- ❌ curl funziona perfettamente, solo httpx fallisce
+- ❌ Richiesta non arriva mai al PC Windows remoto
+- ✅ **Soluzione**: Sostituito httpx con requests + asyncio.to_thread()
+- ✅ requests gestisce correttamente payload 4+ MB
+- ✅ Timeout separati: connect=30s, read=900s, write=120s
+- Commit: `84ca156`, `a82b396`, `a264dcc`, `9c4c601`, `514db3f`, `2399eae`
+
+**Phase 4: Indirizzo Server Remoto Errato**
+- ❌ Utente usava `192.168.52.15` (se stesso) invece di `192.168.52.4` (PC Windows)
+- ✅ Correzione manuale URL → analisi finalmente raggiunge PC remoto
+- ✅ Aggiunto logging dettagliato modelli vision + fallback a tutti i modelli
+- Commit: `8857959`
+
+**Phase 5: Fix qwen3-vl Qualità Analisi**
+- ❌ **Problema**: qwen3-vl remoto dava risposte pessime (50 parole generiche)
+- ❌ Stesso modello usato direttamente dava risposte eccellenti (200+ parole)
+- 🔍 **Causa 1**: `num_predict=500` troppo basso limitava i token
+- 🔍 **Causa 2**: Prompt JSON strutturato troppo complesso per qwen3-vl
+- ✅ **Fix 1**: `num_predict=1500` per modelli qwen (3x più token)
+- ✅ **Fix 2**: Prompt semplificato per qwen3-vl (no confidence, no subcategory)
+- ✅ Parsing adattato: accetta tag sia con confidence che come stringhe semplici
+- 🔍 **In corso**: qwen3-vl non ritorna JSON valido, aggiunto logging risposta
+- Commit: `e695a78`, `615647d`, `6cda33f`
+
+**Configurazione Server Remoto Corretta**:
+```powershell
+# Sul PC Windows (192.168.52.4)
+$env:OLLAMA_HOST = "0.0.0.0:11434"
+$env:OLLAMA_ORIGINS = "*"
+$env:OLLAMA_NUM_PARALLEL = "1"  # Richiesto per qwen3-vl
+ollama serve
+```
+
+**Modelli Testati sul Server Remoto**:
+- ✅ llava:latest - Funziona perfettamente
+- ✅ llama3.2-vision:latest - Funziona perfettamente
+- 🔍 qwen3-vl:latest - Funziona ma parsing JSON in corso
+
+**Totale**: 15+ commit, 5 problemi critici risolti, 1 debug in corso
+
 ---
 
 ## Quick Reference
@@ -636,9 +750,9 @@ Ricordami i comandi fa eseguire sul server remoto
 
 ---
 
-**Ultimo aggiornamento**: 2026-01-30 (Face Recognition implementato - graceful degradation)
+**Ultimo aggiornamento**: 2026-01-31 (Server Remoto Ollama funzionante - qwen3-vl debug in corso)
 **Versione Claude Code**: Sonnet 4.5
-**Stato Progetto**: In sviluppo attivo - Face Recognition disponibile ma non attiva (dlib issue)
+**Stato Progetto**: In sviluppo attivo - Server Remoto Ollama operativo, Face Recognition disponibile
 
 ### File Importanti da Consultare
 - **CLAUDE.md** (questo file) - Documentazione completa progetto
