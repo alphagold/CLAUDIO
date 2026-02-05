@@ -534,6 +534,77 @@ Ricordami i comandi fa eseguire sul server remoto
 
 ## Changelog / Ultime Modifiche
 
+### Sessione 2026-02-05: Fix Definitivo qwen3-vl - Prompt Semplificato
+
+**Problema Critico: Campo `response` Vuoto (0 chars)**
+- ❌ qwen3-vl-clean restituiva sempre response vuoto
+- ❌ Backend usava fallback generico: "Immagine analizzata"
+- ❌ Nessuna descrizione utile nelle foto
+
+**Debug e Scoperta (Grazie a Test Utente!)**
+- 🔍 Test diretto PC Windows: `ollama run qwen3-vl-clean "Descrivi in italiano questa immagine"`
+- ✅ Risposta perfetta: 200+ parole in italiano dettagliato
+- 💡 Insight utente: "ma dai impegnati" → Prompt backend troppo complesso!
+- 🎯 Test utente vincente: "Descrivi in italiano questa immagine, descrizione breve massimo 100 parole"
+
+**Root Cause**
+- Prompt backend strutturato con 6 sezioni: DESCRIZIONE DETTAGLIATA, BREVE, TESTO, OGGETTI, CATEGORIA, TAG
+- qwen3-vl confuso da formato rigido → generava solo thinking/ragionamento
+- Modello preferisce istruzioni naturali semplici
+
+**Soluzione: Prompt Ultra-Semplice**
+```
+Prima (non funzionava):
+"IMPORTANTE: Rispondi DIRETTAMENTE senza ragionare...
+Formato risposta:
+DESCRIZIONE DETTAGLIATA: [testo]
+DESCRIZIONE BREVE: [testo]
+..."
+
+Dopo (funziona perfettamente):
+"Descrivi in italiano questa immagine. La foto è stata scattata a: {location}.
+Includi:
+- Descrizione dettagliata (3-5 frasi)
+- Oggetti principali visibili
+- Categoria scena
+- Eventuali testi scritti"
+```
+
+**Parser Migliorato per Testo Libero**
+- ✅ Cleanup markdown headers: `### Descrizione dettagliata:` → rimosso
+- ✅ Rilevamento categoria da keywords IT/EN (cibo, documento, indoor, outdoor, persone)
+- ✅ Estrazione oggetti dal testo (laptop, schermo, tavolo, finestra, etc)
+- ✅ Prima frase come descrizione breve (max 200 chars)
+
+**Risultato Finale**
+- ✅ Response text length: **5929 chars** (prima: 0!)
+- ✅ Descrizione completa in italiano
+- ✅ Oggetti rilevati: `['laptop', 'schermo', 'tavolo', 'finestra', 'documento']`
+- ✅ Categoria automatica: `indoor/outdoor/food/document/people`
+- ✅ Tempo analisi: ~50 secondi con qwen3-vl-clean remoto
+
+**File Modificati**:
+- `backend/backend/vision.py`:
+  - Prompt qwen3-vl ultra-semplificato
+  - Parser `_extract_from_text()` migliorato per italiano
+  - Cleanup markdown formatting
+  - Debug logging (prompt preview)
+
+**Commit Totali**: 5 commit
+- `835a6a4` - Validazione formato strutturato
+- `705c13b` - Indicatore server Remoto/Locale
+- `e65277a` - Previene uso thinking mode errato
+- `d47d25a`, `76027d3` - Prompt semplificato iterazioni
+- `a2b1c1a` - Cleanup markdown formatting (FINALE)
+
+**Lesson Learned**
+- ⚠️ Prompt complessi confondono modelli vision
+- ✅ Prompt naturali semplici funzionano meglio
+- 🎯 Test utente diretto > debugging teorico
+- 📝 Parser flessibile > formato rigido
+
+---
+
 ### Sessione 2026-02-02: Fix qwen3-vl Thinking Mode + Widget Coda Analisi
 
 **Fix qwen3-vl Thinking Mode (CRITICO)**
