@@ -405,13 +405,13 @@ TAG: [lista separata da virgole]"""
             print(f"[VISION] Text preview (first 200 chars): {text[:200]}")
             raise ValueError("Structured format incomplete - missing required sections")
 
-        # Extract each section using regex
-        desc_full_match = re.search(r'DESCRIZIONE DETTAGLIATA:\s*(.+?)(?=DESCRIZIONE BREVE:|$)', text, re.DOTALL | re.IGNORECASE)
-        desc_short_match = re.search(r'DESCRIZIONE BREVE:\s*(.+?)(?=TESTO VISIBILE:|$)', text, re.DOTALL | re.IGNORECASE)
-        text_match = re.search(r'TESTO VISIBILE:\s*(.+?)(?=OGGETTI:|$)', text, re.DOTALL | re.IGNORECASE)
-        objects_match = re.search(r'OGGETTI:\s*(.+?)(?=CATEGORIA:|$)', text, re.DOTALL | re.IGNORECASE)
-        category_match = re.search(r'CATEGORIA:\s*(.+?)(?=TAG:|$)', text, re.DOTALL | re.IGNORECASE)
-        tags_match = re.search(r'TAG:\s*(.+?)$', text, re.DOTALL | re.IGNORECASE)
+        # Extract each section using regex (supports numbered format: "1. DESCRIZIONE DETTAGLIATA:")
+        desc_full_match = re.search(r'(?:\d+\.\s*)?DESCRIZIONE DETTAGLIATA:\s*(.+?)(?=\d+\.\s*DESCRIZIONE BREVE:|DESCRIZIONE BREVE:|\d+\.\s*TESTO VISIBILE:|$)', text, re.DOTALL | re.IGNORECASE)
+        desc_short_match = re.search(r'(?:\d+\.\s*)?DESCRIZIONE BREVE:\s*(.+?)(?=\d+\.\s*TESTO VISIBILE:|TESTO VISIBILE:|\d+\.\s*OGGETTI:|$)', text, re.DOTALL | re.IGNORECASE)
+        text_match = re.search(r'(?:\d+\.\s*)?TESTO VISIBILE:\s*(.+?)(?=\d+\.\s*OGGETTI:|OGGETTI PRINCIPALI:|OGGETTI:|\d+\.\s*CATEGORIA:|$)', text, re.DOTALL | re.IGNORECASE)
+        objects_match = re.search(r'(?:\d+\.\s*)?OGGETTI(?:\s+PRINCIPALI)?:\s*(.+?)(?=\d+\.\s*CATEGORIA:|CATEGORIA SCENA:|CATEGORIA:|\d+\.\s*TAG:|$)', text, re.DOTALL | re.IGNORECASE)
+        category_match = re.search(r'(?:\d+\.\s*)?CATEGORIA(?:\s+SCENA)?:\s*(.+?)(?=\d+\.\s*TAG:|TAG:|\d+\.\s*$|$)', text, re.DOTALL | re.IGNORECASE)
+        tags_match = re.search(r'(?:\d+\.\s*)?TAG.*?:\s*(.+?)$', text, re.DOTALL | re.IGNORECASE)
 
         # Extract and clean
         desc_full = desc_full_match.group(1).strip() if desc_full_match else "Immagine analizzata"
