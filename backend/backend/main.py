@@ -994,9 +994,11 @@ async def get_queue_status(
     if current_analyzing_photo_id:
         photo = db.query(Photo).filter(Photo.id == current_analyzing_photo_id).first()
         if photo:
+            from pathlib import Path
+            filename = Path(photo.original_path).name if photo.original_path else "unknown.jpg"
             current_photo = {
                 "id": str(photo.id),
-                "filename": photo.filename,
+                "filename": filename,
                 "analysis_started_at": photo.analysis_started_at.isoformat() if photo.analysis_started_at else None,
                 "elapsed_seconds": photo.elapsed_time_seconds if photo.analysis_started_at else 0
             }
