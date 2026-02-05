@@ -269,17 +269,15 @@ class OllamaVisionClient:
         # Aggiungi contesto geolocalizzazione se disponibile
         location_hint = f" La foto è stata scattata a: {location_name}." if location_name else ""
 
-        # Per qwen3-vl-clean: prompt ultra-semplice senza istruzioni complesse
+        # Per qwen3-vl-clean: prompt MINIMO (come test utente che funziona)
         if model and "qwen3-vl" in model.lower():
-            return f"""Descrivi questa immagine in italiano.{location_hint}
+            return f"""Descrivi in italiano questa immagine.{location_hint}
 
-Formato risposta:
-DESCRIZIONE DETTAGLIATA: [3-5 frasi complete]
-DESCRIZIONE BREVE: [max 100 caratteri]
-TESTO VISIBILE: [trascrivi testo o "Nessuno"]
-OGGETTI: [3-5 oggetti separati da virgole]
-CATEGORIA: [indoor/outdoor/cibo/documento/persone/altro]
-TAG: [max 5 parole chiave]"""
+Includi:
+- Descrizione dettagliata (3-5 frasi)
+- Oggetti principali visibili
+- Categoria scena (indoor/outdoor/cibo/documento/persone)
+- Eventuali testi scritti nell'immagine"""
 
         # Prompt standard per altri modelli
         return f"""Descrivi questa immagine in italiano.{location_hint}
@@ -448,40 +446,68 @@ TAG: [lista separata da virgole]"""
         }
 
     def _extract_from_text(self, text: str) -> Dict:
-        """Extract structured data from free-form text response"""
+        """Extract structured data from free-form text response (for qwen3-vl simple prompt)"""
         import re
 
         text_lower = text.lower()
 
-        # Detect food-related keywords
-        food_keywords = ["food", "plate", "dish", "meal", "restaurant", "cooking", "eat"]
-        is_food = any(keyword in text_lower for keyword in food_keywords)
+        # Use full text as description
+        description_full = text.strip() if text else "Immagine analizzata"
 
-        # Detect document keywords
-        doc_keywords = ["document", "receipt", "paper", "text", "invoice"]
-        is_document = any(keyword in text_lower for keyword in doc_keywords)
+        # Extract first sentence as short description (max 200 chars)
+        sentences = re.split(r'[.!?]+', text)
+        short_desc = sentences[0].strip()[:200] if sentences else "Foto"
 
-        # Extract simple description (first 200 chars of text)
-        description = text[:500].strip() if text else "Immagine analizzata"
-        short_desc = text[:150].strip() if text else "Foto"
+        # Detect category from keywords (Italian + English)
+        food_keywords = ["cibo", "piatto", "pasto", "ristorante", "cucina", "food", "plate", "dish", "meal"]
+        doc_keywords = ["documento", "ricevuta", "carta", "testo", "fattura", "document", "receipt", "paper", "invoice"]
+        outdoor_keywords = ["esterno", "fuori", "strada", "parco", "outdoor", "outside", "street", "park"]
+        indoor_keywords = ["interno", "dentro", "stanza", "casa", "ufficio", "indoor", "inside", "room", "office"]
+        people_keywords = ["persona", "persone", "gente", "donna", "uomo", "bambino", "person", "people", "man", "woman"]
 
-        # Try to extract objects from text (words between quotes or common nouns)
+        if any(kw in text_lower for kw in food_keywords):
+            category = "food"
+        elif any(kw in text_lower for kw in doc_keywords):
+            category = "document"
+        elif any(kw in text_lower for kw in people_keywords):
+            category = "people"
+        elif any(kw in text_lower for kw in outdoor_keywords):
+            category = "outdoor"
+        elif any(kw in text_lower for kw in indoor_keywords):
+            category = "indoor"
+        else:
+            category = "other"
+
+        # Extract common objects mentioned (Italian nouns)
+        common_objects = [
+            "laptop", "computer", "telefono", "schermo", "tastiera", "mouse",
+            "tavolo", "sedia", "finestra", "porta", "parete",
+            "auto", "macchina", "bicicletta", "strada",
+            "albero", "fiore", "pianta", "cielo", "nuvola",
+            "libro", "penna", "carta", "documento",
+            "cibo", "piatto", "tazza", "bicchiere", "bottiglia"
+        ]
+
         objects = []
-        if "plate" in text_lower or "dish" in text_lower:
-            objects.append("plate")
-        if "food" in text_lower:
-            objects.append("food")
+        for obj in common_objects:
+            if obj in text_lower and obj not in objects:
+                objects.append(obj)
+                if len(objects) >= 5:
+                    break
+
+        # Simple tags from objects + category
+        tags = objects[:5] if objects else [category]
 
         return {
-            "description_full": description,
+            "description_full": description_full[:500],
             "description_short": short_desc,
             "extracted_text": None,
             "detected_objects": objects,
             "detected_faces": 0,
-            "scene_category": "food" if is_food else ("document" if is_document else "other"),
+            "scene_category": category,
             "scene_subcategory": None,
-            "tags": objects,
-            "confidence_score": 0.6,
+            "tags": tags,
+            "confidence_score": 0.7,
         }
 
     def _get_fallback_analysis(self, processing_time: int) -> Dict:
