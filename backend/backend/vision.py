@@ -84,32 +84,16 @@ class OllamaVisionClient:
                 "num_predict": num_predict,
             }
 
-        # qwen3-vl: use /api/generate endpoint (no thinking mode)
-        # Other models: use /api/chat endpoint
-        if is_qwen:
-            target_url = f"{self.host}/api/generate"
-            payload = {
-                "model": selected_model,
-                "prompt": prompt,
-                "images": [image_b64],
-                "stream": False,
-                "options": options
-            }
-        else:
-            target_url = f"{self.host}/api/chat"
-            payload = {
-                "model": selected_model,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt,
-                        "images": [image_b64]
-                    }
-                ],
-                "stream": False,
-                "keep_alive": "5m",
-                "options": options
-            }
+        # Use /api/generate for ALL models to avoid context pollution between requests
+        # /api/chat can maintain conversation context which causes confusion in batch analysis
+        target_url = f"{self.host}/api/generate"
+        payload = {
+            "model": selected_model,
+            "prompt": prompt,
+            "images": [image_b64],
+            "stream": False,
+            "options": options
+        }
 
         print(f"[VISION] Making request to: {target_url} with model: {selected_model}")
         print(f"[VISION] self.host = {self.host!r}")
@@ -177,60 +161,31 @@ class OllamaVisionClient:
             print(f"[VISION] Full Ollama response keys: {list(result.keys())}")
             print(f"[VISION] Full Ollama response: {json.dumps(result, indent=2, ensure_ascii=False)[:2000]}")
 
-            # Parse response - different format for /api/generate vs /api/chat
-            if "response" in result:
-                # /api/generate format (qwen3-vl)
-                analysis_text = result.get("response", "")
-                print(f"[VISION] Using /api/generate response format")
+            # Parse response from /api/generate (used for all models now)
+            analysis_text = result.get("response", "")
+            print(f"[VISION] Using /api/generate response format")
 
-                # Fallback to "thinking" field if response is empty
-                # BUT ONLY if thinking contains structured format (not just reasoning)
-                if not analysis_text.strip() and "thinking" in result:
-                    thinking_text = result.get("thinking", "")
-                    print(f"[VISION] ⚠️ Response empty, checking 'thinking' field")
-                    print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
+            # Fallback to "thinking" field if response is empty
+            # BUT ONLY if thinking contains structured format (not just reasoning)
+            if not analysis_text.strip() and "thinking" in result:
+                thinking_text = result.get("thinking", "")
+                print(f"[VISION] ⚠️ Response empty, checking 'thinking' field")
+                print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
 
-                    # Check if thinking contains structured format (Italian sections)
-                    has_structured_format = (
-                        "DESCRIZIONE DETTAGLIATA:" in thinking_text and
-                        "CATEGORIA:" in thinking_text
-                    )
+                # Check if thinking contains structured format (Italian sections)
+                has_structured_format = (
+                    "DESCRIZIONE DETTAGLIATA:" in thinking_text and
+                    "CATEGORIA:" in thinking_text
+                )
 
-                    if has_structured_format:
-                        print(f"[VISION] ✅ Thinking field contains structured format, using it")
-                        analysis_text = thinking_text
-                    else:
-                        print(f"[VISION] ⚠️ Thinking field is just reasoning (English), skipping it")
-                        print(f"[VISION] Thinking preview: {thinking_text[:200]}")
-                        # Use generic fallback - don't fail the whole analysis
-                        analysis_text = "Immagine analizzata (dettagli non disponibili da questo modello)"
-            else:
-                # /api/chat format (llava, llama)
-                message = result.get("message", {})
-                analysis_text = message.get("content", "")
-                print(f"[VISION] Using /api/chat response format")
-
-                # Fallback to "thinking" field if content is empty
-                # BUT ONLY if thinking contains structured format (not just reasoning)
-                if not analysis_text.strip() and "thinking" in message:
-                    thinking_text = message.get("thinking", "")
-                    print(f"[VISION] ⚠️ Content empty, checking 'thinking' field")
-                    print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
-
-                    # Check if thinking contains structured format (Italian sections)
-                    has_structured_format = (
-                        "DESCRIZIONE DETTAGLIATA:" in thinking_text and
-                        "CATEGORIA:" in thinking_text
-                    )
-
-                    if has_structured_format:
-                        print(f"[VISION] ✅ Thinking field contains structured format, using it")
-                        analysis_text = thinking_text
-                    else:
-                        print(f"[VISION] ❌ Thinking field is just reasoning (English), NOT using it")
-                        print(f"[VISION] Thinking preview: {thinking_text[:200]}")
-                        # Return error - force model recreation on client
-                        raise ValueError("Model still using thinking mode - please recreate model without RENDERER/PARSER")
+                if has_structured_format:
+                    print(f"[VISION] ✅ Thinking field contains structured format, using it")
+                    analysis_text = thinking_text
+                else:
+                    print(f"[VISION] ⚠️ Thinking field is just reasoning (English), skipping it")
+                    print(f"[VISION] Thinking preview: {thinking_text[:200]}")
+                    # Use generic fallback - don't fail the whole analysis
+                    analysis_text = "Immagine analizzata (dettagli non disponibili da questo modello)"
 
             processing_time = int((time.time() - start_time) * 1000)
             print(f"[VISION] Analysis completed in {processing_time}ms")
