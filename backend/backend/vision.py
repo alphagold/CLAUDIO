@@ -281,59 +281,28 @@ class OllamaVisionClient:
             return self._get_fallback_analysis(processing_time)
 
     def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None) -> str:
-        """Get analysis prompt for Vision AI (simplified text format for all models)"""
+        """Get analysis prompt for Vision AI (simple natural format for all models)"""
 
         # Aggiungi contesto geolocalizzazione se disponibile
-        location_hint = f" La foto è stata scattata a: {location_name}." if location_name else ""
+        location_hint = f" La foto è stata scattata a {location_name}." if location_name else ""
 
-        # Per qwen3-vl-clean: prompt MINIMO (come test utente che funziona)
-        if model and "qwen3-vl" in model.lower():
-            return f"""Descrivi in italiano questa immagine.{location_hint}
+        # Prompt semplice e naturale per TUTTI i modelli - no formato strutturato
+        return f"""Descrivi in italiano cosa vedi in questa immagine.{location_hint}
 
-Includi:
-- Descrizione dettagliata (3-5 frasi)
-- Oggetti principali visibili
-- Categoria scena (indoor/outdoor/cibo/documento/persone)
-- Eventuali testi scritti nell'immagine"""
+Includi nella tua descrizione:
+- Cosa c'è nell'immagine (oggetti, persone, ambiente)
+- Colori e dettagli importanti
+- Se è un luogo interno (indoor) o esterno (outdoor)
+- Eventuali testi o scritte visibili nell'immagine
 
-        # Prompt standard per altri modelli
-        return f"""Descrivi questa immagine in italiano.{location_hint}
-
-Fornisci:
-1. DESCRIZIONE DETTAGLIATA (3-5 frasi): Descrivi tutto ciò che vedi - oggetti, colori, azioni, ambiente, contesto
-2. DESCRIZIONE BREVE (max 100 caratteri): Riassunto conciso
-3. TESTO VISIBILE: Trascrivi qualsiasi testo/scritta nell'immagine (scrivi "Nessuno" se non c'è testo)
-4. OGGETTI PRINCIPALI: Lista 3-5 oggetti principali visibili
-5. CATEGORIA SCENA: indoor/outdoor/cibo/documento/persone/altro
-6. TAG (confidenza alta): Massimo 5 parole chiave specifiche e rilevanti{f", includi tag di luogo per {location_name}" if location_name else ""}
-
-Rispondi in italiano in questo formato:
-DESCRIZIONE DETTAGLIATA: [testo]
-DESCRIZIONE BREVE: [testo]
-TESTO VISIBILE: [testo]
-OGGETTI: [lista separata da virgole]
-CATEGORIA: [categoria]
-TAG: [lista separata da virgole]"""
+Descrivi in modo naturale e dettagliato."""
 
     def _parse_analysis_response(self, response_text: str) -> Dict:
-        """Parse Vision AI response into structured data"""
+        """Parse Vision AI response into structured data (natural text format)"""
 
-        # Try structured text format first (new default format)
-        if "DESCRIZIONE DETTAGLIATA:" in response_text or "DESCRIZIONE BREVE:" in response_text:
-            try:
-                return self._parse_structured_text(response_text)
-            except Exception as e:
-                print(f"Structured text parsing failed: {e}, trying JSON fallback...")
-
-        # Try JSON format (fallback for models that might still use it)
-        try:
-            clean_text = response_text.strip()
-            if clean_text.startswith("```"):
-                # Extract JSON from markdown
-                lines = clean_text.split("\n")
-                clean_text = "\n".join(lines[1:-1])
-
-            data = json.loads(clean_text)
+        # Always use natural text extraction - no structured format expected
+        print(f"[VISION] Parsing natural text response (length: {len(response_text)} chars)")
+        return self._extract_from_text(response_text)
 
             # Parse tags con confidence
             raw_tags = data.get("tags", [])
@@ -463,14 +432,24 @@ TAG: [lista separata da virgole]"""
         }
 
     def _extract_from_text(self, text: str) -> Dict:
-        """Extract structured data from free-form text response (for qwen3-vl simple prompt)"""
+        """Extract structured data from free-form text response"""
         import re
 
         # Clean up markdown headers and formatting
         text_cleaned = text.strip()
-        text_cleaned = re.sub(r'^###\s+Descrizione dettagliata:\s*\n?', '', text_cleaned, flags=re.IGNORECASE)
-        text_cleaned = re.sub(r'^###\s+\w+:\s*\n?', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
-        text_cleaned = re.sub(r'^\*\*\w+:\*\*\s*', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
+        text_cleaned = re.sub(r'^###\s+.*?:\s*\n?', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
+        text_cleaned = re.sub(r'^\*\*.*?:\*\*\s*', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
+        text_cleaned = re.sub(r'^\d+\.\s+[A-Z\s]+:\s*', '', text_cleaned, flags=re.MULTILINE)
+
+        # Remove "Ecco un esempio" and example text (common issue with models)
+        if "ecco un esempio" in text_cleaned.lower() or "esempio:" in text_cleaned.lower():
+            # Try to find actual description after example
+            match = re.search(r'(?:in questo caso|nella foto|nell\'immagine)[:\s]+(.+)', text_cleaned, re.IGNORECASE | re.DOTALL)
+            if match:
+                text_cleaned = match.group(1).strip()
+            else:
+                # Remove everything up to and including the example
+                text_cleaned = re.sub(r'.*?(?:ecco un esempio|esempio).*?(?:\n\n|\.\s+(?=[A-Z]))', '', text_cleaned, flags=re.IGNORECASE | re.DOTALL)
 
         text_lower = text_cleaned.lower()
 
@@ -480,6 +459,16 @@ TAG: [lista separata da virgole]"""
         # Extract first sentence as short description (max 200 chars)
         sentences = re.split(r'[.!?]+', text_cleaned)
         short_desc = sentences[0].strip()[:200] if sentences and sentences[0].strip() else "Foto"
+
+        # Detect extracted text from image (look for mentions of text/writing)
+        extracted_text = None
+        if any(kw in text_lower for kw in ["nessun testo", "non è presente testo", "non ci sono scritte", "no text"]):
+            extracted_text = None
+        else:
+            # Look for mentions of visible text
+            text_match = re.search(r'(?:testo visibile|scritta|scritto|text)[:\s]+"?([^".]+)"?', text_cleaned, re.IGNORECASE)
+            if text_match:
+                extracted_text = text_match.group(1).strip()
 
         # Detect category from keywords (Italian + English)
         food_keywords = ["cibo", "piatto", "pasto", "ristorante", "cucina", "food", "plate", "dish", "meal"]
@@ -501,14 +490,25 @@ TAG: [lista separata da virgole]"""
         else:
             category = "other"
 
-        # Extract common objects mentioned (Italian nouns)
+        # Extract common objects mentioned (Italian + English nouns)
         common_objects = [
-            "laptop", "computer", "telefono", "schermo", "tastiera", "mouse",
-            "tavolo", "sedia", "finestra", "porta", "parete",
-            "auto", "macchina", "bicicletta", "strada",
-            "albero", "fiore", "pianta", "cielo", "nuvola",
-            "libro", "penna", "carta", "documento",
-            "cibo", "piatto", "tazza", "bicchiere", "bottiglia"
+            # Electronics
+            "laptop", "computer", "telefono", "phone", "smartphone", "schermo", "screen", "monitor",
+            "tastiera", "keyboard", "mouse", "tablet", "router", "cavo", "cable",
+            # Furniture
+            "tavolo", "table", "sedia", "chair", "scrivania", "desk", "letto", "bed",
+            "finestra", "window", "porta", "door", "parete", "wall",
+            # Vehicles
+            "auto", "car", "macchina", "bicicletta", "bicycle", "moto", "motorcycle", "strada", "road",
+            # Nature
+            "albero", "tree", "fiore", "flower", "pianta", "plant", "cielo", "sky", "nuvola", "cloud",
+            "montagna", "mountain", "mare", "sea", "lago", "lake",
+            # Objects
+            "libro", "book", "penna", "pen", "carta", "paper", "documento", "document", "foglio", "sheet",
+            "cibo", "food", "piatto", "plate", "tazza", "cup", "bicchiere", "glass", "bottiglia", "bottle",
+            "mela", "apple", "pane", "bread", "pizza", "pasta",
+            # People/body parts
+            "mano", "hand", "persona", "person", "volto", "face", "occhio", "eye"
         ]
 
         objects = []
@@ -518,13 +518,13 @@ TAG: [lista separata da virgole]"""
                 if len(objects) >= 5:
                     break
 
-        # Simple tags from objects + category
+        # Simple tags from objects + category (filter duplicates)
         tags = objects[:5] if objects else [category]
 
         return {
             "description_full": description_full[:500],
             "description_short": short_desc,
-            "extracted_text": None,
+            "extracted_text": extracted_text,
             "detected_objects": objects,
             "detected_faces": 0,
             "scene_category": category,
