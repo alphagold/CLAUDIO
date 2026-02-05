@@ -116,6 +116,7 @@ class OllamaVisionClient:
         print(f"[VISION] Timeout: {self.timeout} seconds")
         print(f"[VISION] Image size: {len(image_b64)} bytes (base64)")
         print(f"[VISION] Prompt length: {len(prompt)} characters")
+        print(f"[VISION] Prompt preview (first 200 chars): {prompt[:200]}")
         print(f"[VISION] API endpoint: {target_url.split('/')[-1]}, num_predict={num_predict}")
         payload_size = len(json.dumps(payload))
         print(f"[VISION] Total payload size: {payload_size} bytes ({payload_size/1024/1024:.2f} MB)")
@@ -268,10 +269,20 @@ class OllamaVisionClient:
         # Aggiungi contesto geolocalizzazione se disponibile
         location_hint = f" La foto è stata scattata a: {location_name}." if location_name else ""
 
-        # Prompt semplificato testuale - funziona meglio di JSON per tutti i modelli vision
-        return f"""IMPORTANTE: Rispondi DIRETTAMENTE senza ragionare o pensare ad alta voce. Non usare "thinking mode".
+        # Per qwen3-vl-clean: prompt ultra-semplice senza istruzioni complesse
+        if model and "qwen3-vl" in model.lower():
+            return f"""Descrivi questa immagine in italiano.{location_hint}
 
-Descrivi questa immagine in italiano.{location_hint}
+Formato risposta:
+DESCRIZIONE DETTAGLIATA: [3-5 frasi complete]
+DESCRIZIONE BREVE: [max 100 caratteri]
+TESTO VISIBILE: [trascrivi testo o "Nessuno"]
+OGGETTI: [3-5 oggetti separati da virgole]
+CATEGORIA: [indoor/outdoor/cibo/documento/persone/altro]
+TAG: [max 5 parole chiave]"""
+
+        # Prompt standard per altri modelli
+        return f"""Descrivi questa immagine in italiano.{location_hint}
 
 Fornisci:
 1. DESCRIZIONE DETTAGLIATA (3-5 frasi): Descrivi tutto ciò che vedi - oggetti, colori, azioni, ambiente, contesto
