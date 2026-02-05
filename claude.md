@@ -401,30 +401,57 @@ $env:OLLAMA_NUM_PARALLEL = "1"  # Richiesto per qwen3-vl
 ollama serve
 ```
 
-### 12. qwen3-vl - Parsing JSON Failed
-**Problema**: qwen3-vl remoto risponde ma JSON invalido (2026-01-31)
+### 12. qwen3-vl - Response Empty & Thinking Mode
+**Problema**: qwen3-vl remoto restituisce campo response vuoto (0 chars) (2026-01-31 → 2026-02-05)
 
 **Sintomi**:
 - qwen3-vl usato direttamente: risposta eccellente (200+ parole dettagliate)
-- qwen3-vl tramite app: risposta generica (50 parole) + parsing error
-- Error: "Expecting value: line 1 column 1 (char 0)"
-- HTTP 200, risposta arriva, ma formato non JSON
+- qwen3-vl tramite app: campo `response` vuoto, output in campo `thinking` (reasoning inglese)
+- Modelfile conteneva RENDERER/PARSER che causava thinking mode
+- Prompt troppo complesso confondeva il modello
 
-**Cause Identificate**:
-1. `num_predict=500` troppo basso → aumentato a 1500 per qwen
-2. Prompt JSON strutturato troppo complesso → semplificato per qwen
-3. qwen3-vl preferisce risposta libera invece di schema rigido
+**Soluzione**: ✅ RISOLTO (2026-02-05)
+- ✅ Creato qwen3-vl-clean senza RENDERER/PARSER in Modelfile
+- ✅ Prompt **drasticamente semplificato** basato su test utente:
+  ```python
+  # Da: prompt complesso strutturato con 6 sezioni
+  # A: "Descrivi in italiano questa immagine. Includi: descrizione, oggetti, categoria, testi"
+  ```
+- ✅ `num_predict=1500` per qwen (3x standard)
+- ✅ Fallback validato: usa thinking solo se contiene formato strutturato italiano
+- ✅ Cleanup markdown: rimuove header `### Descrizione dettagliata:`
+- ✅ Risultato: **5929 chars** di risposta italiana dettagliata!
+- File: `backend/backend/vision.py:66-97`, `backend/backend/vision.py:169-189`, `backend/backend/vision.py:287-293`
+- Commit: `1165ea2` (2026-02-05)
 
-**Soluzione**: 🔍 IN CORSO (2026-01-31)
-- ✅ `num_predict=1500` per modelli qwen (3x token)
-- ✅ Prompt semplificato: meno struttura, più naturale
-- ✅ Parsing adattato: accetta tag stringhe semplici (no confidence object)
-- ✅ Logging risposta: preview primi 500 caratteri per debug
-- 🔍 Attesa test: verificare formato risposta effettiva qwen3-vl
-- File: `backend/backend/vision.py:78-97`, `backend/backend/vision.py:186-218`, `backend/backend/vision.py:261-279`
-- Commit: `e695a78`, `615647d`, `6cda33f`
+**Key Insight**: User test rivelò che prompt semplici e naturali funzionano meglio di schemi complessi per vision models
 
-**Stato**: Awaiting user test con nuovo logging
+### 13. Connection Timeout - Large Payloads
+**Problema**: Timeout connessione con payload grandi (>4MB) (2026-02-05)
+
+**Sintomi**:
+- `ConnectionError: ('Connection aborted.', TimeoutError('timed out'))`
+- Timeout dopo ~30 secondi durante invio richiesta
+- Server Ollama remoto raggiungibile (curl test OK)
+- Fallisce con qwen3-vl:latest e llava:13b-v1.5-q4_K_M
+
+**Causa Root**:
+- Connect timeout impostato a 30 secondi
+- Immagini grandi (4-8 MB base64) richiedono più tempo per l'upload
+- Formato timeout: `(connect_timeout, read_timeout)` = `(30, 900)`
+- 30 secondi insufficienti per inviare payload completo al server remoto
+
+**Soluzione**: ✅ RISOLTO (2026-02-05)
+- ✅ Connect timeout aumentato da 30 a 120 secondi
+- ✅ Read timeout rimane 900 secondi (per analisi lunghe)
+- ✅ Formato: `timeout=(120, self.timeout)` in requests.post()
+- File: `backend/backend/vision.py:139`
+- Commit: `6e1de27` (2026-02-05)
+
+**Configurazione Finale Timeout**:
+```python
+timeout=(120, 900)  # 120s connect/upload, 900s read/analysis
+```
 
 ---
 
@@ -534,7 +561,44 @@ Ricordami i comandi fa eseguire sul server remoto
 
 ## Changelog / Ultime Modifiche
 
-### Sessione 2026-02-05: Fix Definitivo qwen3-vl - Prompt Semplificato
+### Sessione 2026-02-05 (Parte 2): Fix Connection Timeout Payload Grandi
+
+**Problema: Connection Timeout con Immagini Grandi**
+- ❌ Analisi fallisce con timeout dopo ~30 secondi
+- ❌ Error: `ConnectionError: ('Connection aborted.', TimeoutError('timed out'))`
+- ❌ Fallisce con qwen3-vl:latest e llava:13b-v1.5-q4_K_M
+- ❌ Server Ollama remoto raggiungibile (curl test OK)
+
+**Root Cause Identificata**
+- Connect timeout impostato a 30 secondi in `requests.post()`
+- Payload immagini: 4-8 MB (base64)
+- 30 secondi insufficienti per **upload** completo al server remoto
+- Formato timeout: `(connect_timeout, read_timeout)` = `(30, 900)`
+
+**Soluzione: Timeout Connect Aumentato**
+```python
+# Prima (non funzionava)
+timeout=(30, self.timeout)  # 30s troppo breve per upload 4-8MB
+
+# Dopo (funziona)
+timeout=(120, self.timeout)  # 120s per upload, 900s per analisi
+```
+
+**Risultato**
+- ✅ Connect timeout: 30s → 120s (4x)
+- ✅ Payload grandi possono essere inviati completamente
+- ✅ Analisi remota funziona con tutte le immagini
+- ✅ Read timeout rimane 900s (per modelli lenti come llama3.2-vision)
+
+**File Modificati**:
+- `backend/backend/vision.py:139` - Timeout aumentato
+- `claude.md` - Documentazione problema #13 aggiunta
+
+**Commit**: `6e1de27`
+
+---
+
+### Sessione 2026-02-05 (Parte 1): Fix Definitivo qwen3-vl - Prompt Semplificato
 
 **Problema Critico: Campo `response` Vuoto (0 chars)**
 - ❌ qwen3-vl-clean restituiva sempre response vuoto
