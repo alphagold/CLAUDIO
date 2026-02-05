@@ -304,63 +304,6 @@ Descrivi in modo naturale e dettagliato."""
         print(f"[VISION] Parsing natural text response (length: {len(response_text)} chars)")
         return self._extract_from_text(response_text)
 
-            # Parse tags con confidence
-            raw_tags = data.get("tags", [])
-            high_confidence_tags = []
-
-            for tag_item in raw_tags:
-                # Supporta sia formato con dict che formato semplice (stringhe)
-                if isinstance(tag_item, dict):
-                    tag_name = tag_item.get("tag", "")
-                    confidence = tag_item.get("confidence", 0.0)
-                else:
-                    # Tag è stringa semplice (usato da qwen3-vl)
-                    tag_name = str(tag_item)
-                    confidence = 0.9  # Default high confidence per tag semplici
-
-                # Filtra tag validi
-                if (confidence > 0.7 and  # Soglia più bassa per tag semplici
-                    len(tag_name.strip()) > 2 and
-                    tag_name.strip().lower() not in GENERIC_TAGS_BLACKLIST):
-                    high_confidence_tags.append(tag_name.strip())
-
-            # Se dopo il filtro restano meno di 3 tag, mantieni comunque i tag originali
-            # con confidence >0.7 per evitare foto senza tag
-            if len(high_confidence_tags) < 3:
-                for tag_item in raw_tags:
-                    if isinstance(tag_item, dict):
-                        tag_name = tag_item.get("tag", "")
-                        confidence = tag_item.get("confidence", 0.0)
-                    else:
-                        tag_name = str(tag_item)
-                        confidence = 0.7
-
-                    if (confidence > 0.7 and
-                        len(tag_name.strip()) > 2 and
-                        tag_name.strip() not in high_confidence_tags):
-                        high_confidence_tags.append(tag_name.strip())
-
-            # Limita a max 5 tag
-            filtered_tags = high_confidence_tags[:5]
-
-            # Validate and normalize
-            return {
-                "description_full": data.get("description_full", "Immagine analizzata"),
-                "description_short": data.get("description_short", "Foto")[:200],
-                "extracted_text": data.get("extracted_text") or None,
-                "detected_objects": data.get("detected_objects", []),
-                "detected_faces": data.get("detected_faces", 0),
-                "scene_category": data.get("scene_category", "other"),
-                "scene_subcategory": data.get("scene_subcategory"),
-                "tags": filtered_tags,
-                "confidence_score": float(data.get("confidence_score", 0.7)),
-            }
-
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
-            print(f"JSON parsing failed: {e}, using text extraction fallback")
-            # Last fallback: extract useful info from malformed response
-            return self._extract_from_text(response_text)
-
     def _parse_structured_text(self, text: str) -> Dict:
         """Parse structured text format from qwen3-vl (non-JSON response)"""
         import re
