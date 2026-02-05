@@ -67,7 +67,8 @@ class OllamaVisionClient:
 
         # Adjust parameters based on model
         is_qwen = "qwen" in selected_model.lower()
-        num_predict = 1500 if is_qwen else 500
+        # Aumentato num_predict per permettere descrizioni dettagliate (2000 token = ~2500-3000 caratteri)
+        num_predict = 2000
 
         # qwen3-vl: match Modelfile defaults (temp=1, top_p=0.95, top_k=20)
         if is_qwen:
