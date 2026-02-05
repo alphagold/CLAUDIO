@@ -200,10 +200,10 @@ class OllamaVisionClient:
                         print(f"[VISION] ✅ Thinking field contains structured format, using it")
                         analysis_text = thinking_text
                     else:
-                        print(f"[VISION] ❌ Thinking field is just reasoning (English), NOT using it")
+                        print(f"[VISION] ⚠️ Thinking field is just reasoning (English), skipping it")
                         print(f"[VISION] Thinking preview: {thinking_text[:200]}")
-                        # Return error - force model recreation on client
-                        raise ValueError("qwen3-vl still using thinking mode - please recreate model without RENDERER/PARSER")
+                        # Use generic fallback - don't fail the whole analysis
+                        analysis_text = "Immagine analizzata (dettagli non disponibili da questo modello)"
             else:
                 # /api/chat format (llava, llama)
                 message = result.get("message", {})
