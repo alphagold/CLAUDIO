@@ -449,14 +449,20 @@ TAG: [lista separata da virgole]"""
         """Extract structured data from free-form text response (for qwen3-vl simple prompt)"""
         import re
 
-        text_lower = text.lower()
+        # Clean up markdown headers and formatting
+        text_cleaned = text.strip()
+        text_cleaned = re.sub(r'^###\s+Descrizione dettagliata:\s*\n?', '', text_cleaned, flags=re.IGNORECASE)
+        text_cleaned = re.sub(r'^###\s+\w+:\s*\n?', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
+        text_cleaned = re.sub(r'^\*\*\w+:\*\*\s*', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
 
-        # Use full text as description
-        description_full = text.strip() if text else "Immagine analizzata"
+        text_lower = text_cleaned.lower()
+
+        # Use cleaned text as description
+        description_full = text_cleaned if text_cleaned else "Immagine analizzata"
 
         # Extract first sentence as short description (max 200 chars)
-        sentences = re.split(r'[.!?]+', text)
-        short_desc = sentences[0].strip()[:200] if sentences else "Foto"
+        sentences = re.split(r'[.!?]+', text_cleaned)
+        short_desc = sentences[0].strip()[:200] if sentences and sentences[0].strip() else "Foto"
 
         # Detect category from keywords (Italian + English)
         food_keywords = ["cibo", "piatto", "pasto", "ristorante", "cucina", "food", "plate", "dish", "meal"]
