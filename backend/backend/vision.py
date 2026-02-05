@@ -126,17 +126,33 @@ class OllamaVisionClient:
         print(f"[VISION] Using requests library for large payload compatibility...")
 
         def _sync_post():
-            """Synchronous POST using requests library"""
+            """Synchronous POST using requests library with aggressive timeout"""
             import threading
+            from requests.adapters import HTTPAdapter
+            from urllib3.util.retry import Retry
+
             print(f"[VISION] _sync_post called in thread: {threading.current_thread().name}")
             print(f"[VISION] Target URL: {target_url}")
             print(f"[VISION] About to call requests.post()...")
 
             try:
-                resp = requests.post(
+                # Create session with retry strategy and large timeouts
+                session = requests.Session()
+                retry_strategy = Retry(
+                    total=3,
+                    status_forcelist=[429, 500, 502, 503, 504],
+                    backoff_factor=1
+                )
+                adapter = HTTPAdapter(max_retries=retry_strategy)
+                session.mount("http://", adapter)
+                session.mount("https://", adapter)
+
+                # Timeout: 5 minuti connect, self.timeout (900s) read
+                # Necessario per payload grandi (4-8 MB) su rete remota
+                resp = session.post(
                     target_url,
                     json=payload,
-                    timeout=(120, self.timeout),  # (connect, read) timeouts - 120s per payload grandi
+                    timeout=(300, self.timeout),  # 300s connect/upload, 900s read/analysis
                     headers={"Content-Type": "application/json"}
                 )
                 print(f"[VISION] requests.post() returned!")
@@ -144,6 +160,7 @@ class OllamaVisionClient:
                 resp.raise_for_status()
                 result = resp.json()
                 print(f"[VISION] Response parsed as JSON successfully")
+                session.close()
                 return result
             except Exception as e:
                 print(f"[VISION] ❌ Exception in _sync_post: {type(e).__name__}: {e}")
