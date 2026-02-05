@@ -136,7 +136,7 @@ class OllamaVisionClient:
                 resp = requests.post(
                     target_url,
                     json=payload,
-                    timeout=(30, self.timeout),  # (connect, read) timeouts
+                    timeout=(120, self.timeout),  # (connect, read) timeouts - 120s per payload grandi
                     headers={"Content-Type": "application/json"}
                 )
                 print(f"[VISION] requests.post() returned!")
