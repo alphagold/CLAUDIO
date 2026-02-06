@@ -31,6 +31,7 @@ services:
         condition: service_started
     volumes:
       - ./uploads:/app/uploads
+      - ./migrations:/app/migrations
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - photomemory
