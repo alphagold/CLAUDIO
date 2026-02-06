@@ -182,34 +182,66 @@ npm run build  # Build per produzione
 
 ## Deployment su Server Ubuntu
 
-### Prima Volta o Dopo Modifiche al Codice
+### ✨ Sistema Auto-Inizializzante (Production-Ready)
+
+Il sistema si **auto-inizializza completamente** al primo avvio:
+- ✅ Tutte le migrations database (001, 002, 003, 004, 005 + fix)
+- ✅ Utente di default: `test@example.com` / `test123`
+- ✅ Prompt templates configurati
+- ✅ Ottimizzazioni PostgreSQL applicate
+
+### Deploy Pulito (Prima Installazione)
+
 ```bash
-# 1. Pull codice da GitHub
-cd /path/to/claudio
+# Clone o pull
+git clone https://github.com/alphagold/CLAUDIO.git
+# oppure: cd CLAUDIO && git pull origin main
+
+cd CLAUDIO/backend
+
+# Start completo (build + init automatico)
+docker compose up -d --build
+
+# Attendi 60 secondi per inizializzazione
+sleep 60
+
+# Verifica tutto OK
+docker compose ps
+docker compose logs postgres | grep "✅"
+docker compose logs api | grep "🚀"
+```
+
+**Fatto!** Il sistema è pronto. Login: `test@example.com` / `test123`
+
+### Aggiornamento Codice (Sistema Esistente)
+
+```bash
+cd CLAUDIO
 git pull origin main
 
-# 2. Esegui migration se necessario (vedi migrations/ directory)
 cd backend
-docker exec -i photomemory-postgres psql -U photomemory -d photomemory < migrations/003_add_remote_ollama.sql
-
-# 3. Restart API
-docker compose restart api
-
-# 4. Verifica log
-docker compose logs -f api
+docker compose down
+docker compose up -d --build
 ```
 
-### Reinizializzazione Completa Database
-**ATTENZIONE**: Cancella TUTTI i dati!
+Le migrations e utenti esistenti **non vengono toccati** (idempotenza).
 
-Consulta: **REINIT_DATABASE.md** per istruzioni dettagliate
+### Reset Completo (ATTENZIONE: Cancella TUTTI i Dati!)
 
 ```bash
 cd backend
-docker compose down
-docker volume rm backend_postgres_data
-docker compose up -d
+docker compose down -v  # -v cancella volumi
+docker compose up -d --build  # Re-inizializza tutto
 ```
+
+### Documentazione Completa Deploy
+
+Consulta: **backend/DEPLOY.md** per:
+- Configurazione produzione (JWT secret, password, etc.)
+- Verifica deploy
+- Troubleshooting
+- Backup/restore
+- Sicurezza
 
 ### Configurazione Server Remoto (Dopo Deployment)
 1. Sul PC Windows locale:
@@ -560,6 +592,71 @@ Ricordami i comandi fa eseguire sul server remoto
 ---
 
 ## Changelog / Ultime Modifiche
+
+### Sessione 2026-02-06: Sistema Auto-Inizializzante Production-Ready
+
+**Obiettivo**: Deploy completamente automatizzato senza comandi manuali
+
+**Implementazione Completa**:
+
+1. **Script Init Database PostgreSQL** (`backend/init-db.sh`)
+   - ✅ Esegue tutte le migrations in ordine (001-005 + fix)
+   - ✅ Crea utente di default: `test@example.com` / `test123`
+   - ✅ Verifica tabelle, utenti e prompt templates creati
+   - ✅ Eseguito automaticamente da PostgreSQL in `/docker-entrypoint-initdb.d/`
+
+2. **Docker Compose Ottimizzato** (`backend/docker-compose.yml`)
+   - ✅ Monta `init-db.sh` e `migrations/` in container postgres
+   - ✅ PostgreSQL auto-inizializza database al primo avvio
+   - ✅ Health checks per tutti i servizi
+   - ✅ Resource limits e logging configurati
+   - ✅ Production-ready out-of-the-box
+
+3. **API Init Script Semplificato** (`backend/backend/init-migrations.sh`)
+   - ✅ Rimossa logica migrations e creazione utente
+   - ✅ Solo attesa PostgreSQL pronto + avvio FastAPI
+   - ✅ Separazione responsabilità: DB init = postgres, API = solo app
+
+4. **Documentazione Deploy Completa** (`backend/DEPLOY.md`)
+   - ✅ Guida deploy pulito 3 comandi
+   - ✅ Verifica deploy con checklist
+   - ✅ Configurazione produzione (JWT secret, password, etc.)
+   - ✅ Troubleshooting e backup/restore
+   - ✅ Checklist sicurezza produzione
+
+5. **Dockerfile Aggiornato**
+   - ✅ Installato `netcat-openbsd` per health check postgres
+   - ✅ Script init semplificato
+
+**Risultato Finale**:
+```bash
+# Deploy completo in 3 comandi
+cd CLAUDIO/backend
+docker compose up -d --build
+sleep 60  # Attesa init automatico
+
+# Sistema pronto!
+# Login: test@example.com / test123
+```
+
+**Idempotenza**:
+- Init script eseguito **solo** al primo avvio (volume postgres vuoto)
+- Aggiornamenti codice: `docker compose down && docker compose up -d`
+- Reset completo: `docker compose down -v && docker compose up -d`
+
+**File Modificati/Creati**:
+- `backend/init-db.sh` - Script init PostgreSQL (NUOVO)
+- `backend/docker-compose.yml` - Mount migrations e init script
+- `backend/backend/init-migrations.sh` - Semplificato (solo wait + start)
+- `backend/backend/Dockerfile` - Aggiunto netcat
+- `backend/DEPLOY.md` - Documentazione completa (NUOVO)
+- `CLAUDE.md` - Sezione deployment aggiornata
+
+**Commit**: 7 commit totali (fix path, credenziali, mount migrations, etc.)
+
+**Stato**: ✅ **PRODUCTION-READY** - Deploy automatico funzionante
+
+---
 
 ### Sessione 2026-02-05 (Parte 2): Fix Connection Timeout Payload Grandi
 

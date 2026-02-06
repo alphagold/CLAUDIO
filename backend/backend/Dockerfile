@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system dependencies including Docker CLI and face_recognition deps
 RUN apt-get update && apt-get install -y \
     curl \
+    netcat-openbsd \
     gcc \
     g++ \
     make \
