@@ -10,14 +10,16 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
-    hashed_password VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255),
     is_admin BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     preferred_model VARCHAR(50) DEFAULT 'moondream' NOT NULL,
     auto_analyze BOOLEAN DEFAULT TRUE NOT NULL,
     remote_ollama_enabled BOOLEAN DEFAULT FALSE NOT NULL,
     remote_ollama_url VARCHAR(255),
-    remote_ollama_model VARCHAR(100)
+    remote_ollama_model VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Photos table
@@ -223,7 +225,7 @@ Scrivi in modo discorsivo e completo.',
 ON CONFLICT (name) DO NOTHING;
 
 -- Insert default test user (password: test123)
-INSERT INTO users (email, hashed_password, is_admin, preferred_model, auto_analyze)
+INSERT INTO users (email, password_hash, is_admin, preferred_model, auto_analyze)
 VALUES (
     'test@example.com',
     '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
