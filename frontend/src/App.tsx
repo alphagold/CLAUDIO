@@ -17,6 +17,7 @@ const AdminPage = lazy(() => import('./pages/AdminPage'));
 const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'));
 const SystemMonitoringPage = lazy(() => import('./pages/SystemMonitoringPage'));
 const OllamaModelsPage = lazy(() => import('./pages/OllamaModelsPage'));
+const PromptConfigurationPage = lazy(() => import('./pages/PromptConfigurationPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 // Create React Query client
@@ -184,6 +185,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <OllamaModelsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/prompts"
+            element={
+              <ProtectedRoute>
+                <PromptConfigurationPage />
               </ProtectedRoute>
             }
           />

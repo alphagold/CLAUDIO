@@ -16,7 +16,8 @@ import {
   Users,
   ChevronRight,
   Cpu,
-  MemoryStick
+  MemoryStick,
+  MessageSquare
 } from 'lucide-react';
 import apiClient from '../api/client';
 
@@ -246,7 +247,7 @@ export default function AdminPage() {
         <div className="mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Gestione Sistema</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <button
                 onClick={() => navigate('/admin/users')}
                 className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors"
@@ -290,6 +291,22 @@ export default function AdminPage() {
                   <div className="text-left">
                     <p className="font-semibold text-gray-900">Modelli Ollama</p>
                     <p className="text-sm text-gray-600">Scarica e gestisci modelli AI</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+
+              <button
+                onClick={() => navigate('/admin/prompts')}
+                className="flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg border border-gray-200 transition-colors"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <MessageSquare className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-gray-900">Configurazione Prompt</p>
+                    <p className="text-sm text-gray-600">Personalizza prompt AI</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-400" />
