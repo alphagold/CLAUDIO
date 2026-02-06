@@ -41,8 +41,7 @@ RUN pip install --no-cache-dir dlib face_recognition || echo "WARNING: face_reco
 # Copy application code
 COPY . .
 
-# Copy and make executable init script
-COPY ../init-migrations.sh /app/init-migrations.sh
+# Make init script executable
 RUN chmod +x /app/init-migrations.sh
 
 # Install postgresql-client for psql command
