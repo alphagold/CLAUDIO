@@ -29,31 +29,18 @@ done
 
 echo "✅ Migrations completate!"
 
-echo "👤 Creazione utenti di default..."
+echo "👤 Creazione utente test..."
 
-# Admin user
-psql -c "INSERT INTO users (email, hashed_password, is_admin, preferred_model, auto_analyze)
-VALUES (
-  'admin@photomemory.local',
-  '\$2b\$12\$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5oi4GXW3nz7Om',
-  true,
-  'qwen3-vl-clean:latest',
-  true
-)
-ON CONFLICT (email) DO NOTHING;" 2>/dev/null && echo "  ✅ Admin: admin@photomemory.local / password" || echo "  ℹ️ Admin già esistente"
-
-# Test user
+# Test user (password: test123)
 psql -c "INSERT INTO users (email, hashed_password, is_admin, preferred_model, auto_analyze)
 VALUES (
   'test@example.com',
-  '\$2b\$12\$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5oi4GXW3nz7Om',
+  '\$2b\$12\$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
   false,
-  'qwen3-vl-clean:latest',
+  'moondream',
   true
 )
-ON CONFLICT (email) DO NOTHING;" 2>/dev/null && echo "  ✅ Test: test@example.com / password" || echo "  ℹ️ Test già esistente"
-
-echo "✅ Utenti pronti!"
+ON CONFLICT (email) DO NOTHING;" 2>/dev/null && echo "  ✅ test@example.com / test123" || echo "  ℹ️ Utente già esistente"
 
 # Avvia l'applicazione FastAPI
 echo "🚀 Avvio FastAPI..."
