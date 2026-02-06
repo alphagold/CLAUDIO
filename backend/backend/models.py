@@ -290,3 +290,29 @@ class FaceRecognitionConsent(Base):
     # Timestamps
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ============================================================================
+# PROMPT TEMPLATES (Configurable AI Prompts)
+# ============================================================================
+
+class PromptTemplate(Base):
+    """Configurable AI prompt templates for photo analysis"""
+    __tablename__ = "prompt_templates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Template identification
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(Text)
+
+    # Prompt content (supports {variable} placeholders)
+    prompt_text = Column(Text, nullable=False)
+
+    # Flags
+    is_default = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())

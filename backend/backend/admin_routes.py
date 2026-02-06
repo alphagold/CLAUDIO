@@ -750,3 +750,264 @@ async def test_remote_ollama_connection(
             "message": f"Errore imprevisto: {str(e)}",
             "url": clean_url
         }
+
+
+# ============================================================================
+# PROMPT TEMPLATES ENDPOINTS
+# ============================================================================
+
+from models import PromptTemplate
+from pydantic import BaseModel
+
+
+class PromptTemplateUpdate(BaseModel):
+    """Schema for updating prompt template"""
+    description: str = None
+    prompt_text: str = None
+    is_default: bool = None
+    is_active: bool = None
+
+
+@router.get("/prompts")
+async def list_prompt_templates(
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db)
+):
+    """
+    List all available prompt templates
+    Available to all authenticated users (not just admin)
+    """
+    templates = db.query(PromptTemplate).filter(
+        PromptTemplate.is_active == True
+    ).order_by(PromptTemplate.is_default.desc(), PromptTemplate.name).all()
+
+    return [
+        {
+            "id": str(template.id),
+            "name": template.name,
+            "description": template.description,
+            "prompt_text": template.prompt_text,
+            "is_default": template.is_default,
+            "is_active": template.is_active,
+            "created_at": template.created_at.isoformat() if template.created_at else None,
+            "updated_at": template.updated_at.isoformat() if template.updated_at else None,
+        }
+        for template in templates
+    ]
+
+
+@router.get("/prompts/{template_id}")
+async def get_prompt_template(
+    template_id: str,
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db)
+):
+    """Get specific prompt template by ID"""
+    from uuid import UUID
+
+    try:
+        template_uuid = UUID(template_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid template ID format")
+
+    template = db.query(PromptTemplate).filter(
+        PromptTemplate.id == template_uuid
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Prompt template not found")
+
+    return {
+        "id": str(template.id),
+        "name": template.name,
+        "description": template.description,
+        "prompt_text": template.prompt_text,
+        "is_default": template.is_default,
+        "is_active": template.is_active,
+        "created_at": template.created_at.isoformat() if template.created_at else None,
+        "updated_at": template.updated_at.isoformat() if template.updated_at else None,
+    }
+
+
+@router.put("/prompts/{template_id}")
+async def update_prompt_template(
+    template_id: str,
+    update_data: PromptTemplateUpdate,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Update prompt template (admin only)
+    Can update description, prompt_text, is_default, is_active
+    """
+    from uuid import UUID
+
+    try:
+        template_uuid = UUID(template_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid template ID format")
+
+    template = db.query(PromptTemplate).filter(
+        PromptTemplate.id == template_uuid
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Prompt template not found")
+
+    # Update fields if provided
+    if update_data.description is not None:
+        template.description = update_data.description
+
+    if update_data.prompt_text is not None:
+        # Validate minimum length
+        if len(update_data.prompt_text.strip()) < 50:
+            raise HTTPException(status_code=400, detail="Prompt text troppo breve (min 50 caratteri)")
+        template.prompt_text = update_data.prompt_text
+
+    if update_data.is_default is not None:
+        # If setting as default, unset other defaults
+        if update_data.is_default:
+            db.query(PromptTemplate).filter(
+                PromptTemplate.id != template_uuid
+            ).update({"is_default": False})
+        template.is_default = update_data.is_default
+
+    if update_data.is_active is not None:
+        template.is_active = update_data.is_active
+
+    db.commit()
+    db.refresh(template)
+
+    return {
+        "id": str(template.id),
+        "name": template.name,
+        "description": template.description,
+        "prompt_text": template.prompt_text,
+        "is_default": template.is_default,
+        "is_active": template.is_active,
+        "updated_at": template.updated_at.isoformat() if template.updated_at else None,
+    }
+
+
+@router.post("/prompts/{template_id}/set-default")
+async def set_default_prompt_template(
+    template_id: str,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Set a template as the default (admin only)
+    Unsets all other templates as default
+    """
+    from uuid import UUID
+
+    try:
+        template_uuid = UUID(template_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid template ID format")
+
+    template = db.query(PromptTemplate).filter(
+        PromptTemplate.id == template_uuid
+    ).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Prompt template not found")
+
+    # Unset all other defaults
+    db.query(PromptTemplate).filter(
+        PromptTemplate.id != template_uuid
+    ).update({"is_default": False})
+
+    # Set this as default
+    template.is_default = True
+    db.commit()
+
+    return {
+        "message": f"Template '{template.name}' set as default",
+        "template_id": str(template.id)
+    }
+
+
+@router.post("/prompts/reset")
+async def reset_prompt_templates(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Reset all prompt templates to default values (admin only)
+    DANGEROUS: This will overwrite all custom prompts!
+    """
+    # Delete all existing templates
+    db.query(PromptTemplate).delete()
+
+    # Re-run the default inserts (same as migration)
+    default_templates = [
+        {
+            "name": "structured_detailed",
+            "description": "Prompt strutturato con sezioni MAIUSCOLE per analisi dettagliate (default)",
+            "prompt_text": """Analizza questa immagine in modo MOLTO DETTAGLIATO in italiano.{location_hint}
+
+Organizza la tua analisi in queste sezioni (rispetta esattamente i titoli in MAIUSCOLO):
+
+DESCRIZIONE COMPLETA:
+[Scrivi almeno 5-6 frasi molto dettagliate descrivendo:
+- Il soggetto principale e contesto generale
+- Oggetti visibili e loro posizione nello spazio
+- Colori dominanti e atmosfera
+- Dettagli importanti (materiali, texture, condizioni)
+- Se è interno (indoor) o esterno (outdoor)
+- Emozioni o sensazioni trasmesse dalla foto]
+
+OGGETTI IDENTIFICATI:
+[Lista di 8-12 oggetti/elementi visibili nell'immagine, separati da virgola.
+Includi sia oggetti principali che secondari. Es: laptop, tazza, libro, finestra, lampada, mouse, tastiera, quadro, pianta, scrivania]
+
+PERSONE E VOLTI:
+[Numero di persone visibili (anche parzialmente). Formato: "N persone" oppure "Nessuna persona visibile".
+Se ci sono persone, descrivi brevemente: età approssimativa, posizione, attività]
+
+TESTO VISIBILE:
+[Trascrivi ESATTAMENTE eventuali testi, scritte, etichette, insegne visibili nell'immagine.
+Se non c'è testo visibile, scrivi: "Nessun testo"]
+
+CATEGORIA SCENA:
+[Una sola parola tra: indoor, outdoor, food, document, people, nature, urban, vehicle, other]
+
+TAG CHIAVE:
+[5-8 tag descrittivi ad alta confidenza che riassumono l'immagine. Evita tag troppo generici.
+Separa con virgola. Es: lavoro, tecnologia, ambiente-moderno, illuminazione-naturale, minimalista]
+
+CONFIDENZA ANALISI:
+[Un numero da 0.0 a 1.0 che indica quanto sei sicuro della tua analisi. Es: 0.85]
+
+Importante: scrivi descrizioni lunghe e ricche di dettagli. Non essere sintetico.""",
+            "is_default": True,
+            "is_active": True
+        },
+        {
+            "name": "simple_natural",
+            "description": "Prompt semplice e naturale per analisi rapide",
+            "prompt_text": """Descrivi in italiano cosa vedi in questa immagine.{location_hint}
+
+Includi nella tua descrizione:
+- Cosa c'è nell'immagine (oggetti, persone, ambiente)
+- Colori e dettagli importanti
+- Se è un luogo interno (indoor) o esterno (outdoor)
+- Eventuali testi o scritte visibili nell'immagine
+
+Descrivi in modo naturale e dettagliato.""",
+            "is_default": False,
+            "is_active": True
+        },
+    ]
+
+    for tmpl_data in default_templates:
+        template = PromptTemplate(**tmpl_data)
+        db.add(template)
+
+    db.commit()
+
+    return {
+        "message": f"Reset completato: {len(default_templates)} template ripristinati",
+        "templates_count": len(default_templates)
+    }

@@ -237,12 +237,38 @@ class OllamaVisionClient:
             return self._get_fallback_analysis(processing_time)
 
     def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None) -> str:
-        """Get enhanced structured prompt for detailed Vision AI analysis"""
+        """Get prompt from database or fallback to hardcoded default"""
 
-        # Aggiungi contesto geolocalizzazione se disponibile
+        # Variabili da sostituire nel template
         location_hint = f" La foto è stata scattata a {location_name}." if location_name else ""
 
-        # Prompt strutturato ottimizzato per descrizioni dettagliate
+        # Try to load prompt from database
+        try:
+            from database import SessionLocal
+            from models import PromptTemplate
+
+            db = SessionLocal()
+            try:
+                # Get default template
+                template = db.query(PromptTemplate).filter(
+                    PromptTemplate.is_default == True,
+                    PromptTemplate.is_active == True
+                ).first()
+
+                if template:
+                    print(f"[VISION] Using prompt template: {template.name}")
+                    # Replace variables in template
+                    prompt_text = template.prompt_text.replace("{location_hint}", location_hint)
+                    prompt_text = prompt_text.replace("{model}", model or "default")
+                    return prompt_text
+                else:
+                    print(f"[VISION] No default template found, using hardcoded prompt")
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"[VISION] Failed to load prompt from database: {e}, using hardcoded fallback")
+
+        # Fallback to hardcoded prompt (same as before)
         return f"""Analizza questa immagine in modo MOLTO DETTAGLIATO in italiano.{location_hint}
 
 Organizza la tua analisi in queste sezioni (rispetta esattamente i titoli in MAIUSCOLO):
