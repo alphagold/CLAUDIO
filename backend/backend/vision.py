@@ -237,28 +237,252 @@ class OllamaVisionClient:
             return self._get_fallback_analysis(processing_time)
 
     def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None) -> str:
-        """Get analysis prompt for Vision AI (simple natural format for all models)"""
+        """Get enhanced structured prompt for detailed Vision AI analysis"""
 
         # Aggiungi contesto geolocalizzazione se disponibile
         location_hint = f" La foto è stata scattata a {location_name}." if location_name else ""
 
-        # Prompt semplice e naturale per TUTTI i modelli - no formato strutturato
-        return f"""Descrivi in italiano cosa vedi in questa immagine.{location_hint}
+        # Prompt strutturato ottimizzato per descrizioni dettagliate
+        return f"""Analizza questa immagine in modo MOLTO DETTAGLIATO in italiano.{location_hint}
 
-Includi nella tua descrizione:
-- Cosa c'è nell'immagine (oggetti, persone, ambiente)
-- Colori e dettagli importanti
-- Se è un luogo interno (indoor) o esterno (outdoor)
-- Eventuali testi o scritte visibili nell'immagine
+Organizza la tua analisi in queste sezioni (rispetta esattamente i titoli in MAIUSCOLO):
 
-Descrivi in modo naturale e dettagliato."""
+DESCRIZIONE COMPLETA:
+[Scrivi almeno 5-6 frasi molto dettagliate descrivendo:
+- Il soggetto principale e contesto generale
+- Oggetti visibili e loro posizione nello spazio
+- Colori dominanti e atmosfera
+- Dettagli importanti (materiali, texture, condizioni)
+- Se è interno (indoor) o esterno (outdoor)
+- Emozioni o sensazioni trasmesse dalla foto]
+
+OGGETTI IDENTIFICATI:
+[Lista di 8-12 oggetti/elementi visibili nell'immagine, separati da virgola.
+Includi sia oggetti principali che secondari. Es: laptop, tazza, libro, finestra, lampada, mouse, tastiera, quadro, pianta, scrivania]
+
+PERSONE E VOLTI:
+[Numero di persone visibili (anche parzialmente). Formato: "N persone" oppure "Nessuna persona visibile".
+Se ci sono persone, descrivi brevemente: età approssimativa, posizione, attività]
+
+TESTO VISIBILE:
+[Trascrivi ESATTAMENTE eventuali testi, scritte, etichette, insegne visibili nell'immagine.
+Se non c'è testo visibile, scrivi: "Nessun testo"]
+
+CATEGORIA SCENA:
+[Una sola parola tra: indoor, outdoor, food, document, people, nature, urban, vehicle, other]
+
+TAG CHIAVE:
+[5-8 tag descrittivi ad alta confidenza che riassumono l'immagine. Evita tag troppo generici.
+Separa con virgola. Es: lavoro, tecnologia, ambiente-moderno, illuminazione-naturale, minimalista]
+
+CONFIDENZA ANALISI:
+[Un numero da 0.0 a 1.0 che indica quanto sei sicuro della tua analisi. Es: 0.85]
+
+Importante: scrivi descrizioni lunghe e ricche di dettagli. Non essere sintetico."""
+
+    def _validate_analysis_quality(self, analysis: Dict) -> tuple[bool, List[str]]:
+        """Valida qualità analisi e restituisce warnings"""
+
+        warnings = []
+        is_valid = True
+
+        # Check descrizione lunghezza
+        desc_len = len(analysis.get("description_full", ""))
+        if desc_len < 200:
+            warnings.append(f"Descrizione troppo breve ({desc_len} char, min 200)")
+            is_valid = False
+        elif desc_len < 400:
+            warnings.append(f"Descrizione breve ({desc_len} char, consigliato 500+)")
+
+        # Check oggetti rilevati
+        objects = analysis.get("detected_objects", [])
+        if len(objects) < 3:
+            warnings.append(f"Pochi oggetti rilevati ({len(objects)}, min 3)")
+
+        # Check categoria valida
+        valid_categories = ["indoor", "outdoor", "food", "document", "people",
+                           "nature", "urban", "vehicle", "other"]
+        if analysis.get("scene_category") not in valid_categories:
+            warnings.append(f"Categoria non valida: {analysis.get('scene_category')}")
+            is_valid = False
+
+        # Check tags
+        tags = analysis.get("tags", [])
+        if len(tags) < 3:
+            warnings.append(f"Pochi tag ({len(tags)}, min 3)")
+
+        # Check confidence
+        conf = analysis.get("confidence_score", 0)
+        if conf < 0.5:
+            warnings.append(f"Confidenza bassa ({conf:.2f})")
+
+        return is_valid, warnings
+
+    def _parse_structured_response(self, text: str) -> Dict:
+        """Parse structured response con sezioni MAIUSCOLE"""
+        import re
+
+        result = {}
+
+        # 1. DESCRIZIONE COMPLETA
+        desc_match = re.search(
+            r'DESCRIZIONE COMPLETA:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
+            text, re.DOTALL | re.IGNORECASE
+        )
+        if desc_match:
+            result["description_full"] = desc_match.group(1).strip()
+
+        # 2. OGGETTI IDENTIFICATI
+        obj_match = re.search(
+            r'OGGETTI IDENTIFICATI:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
+            text, re.DOTALL | re.IGNORECASE
+        )
+        if obj_match:
+            objects_raw = obj_match.group(1).strip()
+            objects = [obj.strip() for obj in re.split(r'[,\n•\-]', objects_raw)
+                      if obj.strip() and len(obj.strip()) > 2]
+            result["detected_objects"] = objects[:15]
+
+        # 3. PERSONE E VOLTI (estrai numero)
+        people_match = re.search(
+            r'PERSONE E VOLTI:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
+            text, re.DOTALL | re.IGNORECASE
+        )
+        if people_match:
+            people_text = people_match.group(1).strip().lower()
+            num_match = re.search(r'(\d+)\s*person[ae]', people_text)
+            if num_match:
+                result["detected_faces"] = int(num_match.group(1))
+            elif any(kw in people_text for kw in ["nessun", "zero", "non ci sono"]):
+                result["detected_faces"] = 0
+
+        # 4. TESTO VISIBILE
+        text_match = re.search(
+            r'TESTO VISIBILE:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
+            text, re.DOTALL | re.IGNORECASE
+        )
+        if text_match:
+            extracted = text_match.group(1).strip()
+            if not any(kw in extracted.lower() for kw in ["nessun", "non c'è", "non presente"]):
+                result["extracted_text"] = extracted[:500]
+
+        # 5. CATEGORIA SCENA
+        cat_match = re.search(r'CATEGORIA SCENA:\s*\n?\s*(\w+)', text, re.IGNORECASE)
+        if cat_match:
+            category = cat_match.group(1).strip().lower()
+            valid_map = {
+                "indoor": "indoor", "interno": "indoor",
+                "outdoor": "outdoor", "esterno": "outdoor",
+                "food": "food", "cibo": "food",
+                "document": "document", "documento": "document",
+                "people": "people", "persone": "people",
+                "nature": "nature", "natura": "nature",
+                "urban": "urban", "urbano": "urban",
+                "vehicle": "vehicle", "veicolo": "vehicle"
+            }
+            result["scene_category"] = valid_map.get(category, "other")
+
+        # 6. TAG CHIAVE
+        tags_match = re.search(
+            r'TAG CHIAVE:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
+            text, re.DOTALL | re.IGNORECASE
+        )
+        if tags_match:
+            tags_raw = tags_match.group(1).strip()
+            tags = [tag.strip() for tag in re.split(r'[,\n•\-]', tags_raw)
+                   if tag.strip() and len(tag.strip()) > 2]
+            result["tags"] = tags[:8]
+
+        # 7. CONFIDENZA ANALISI
+        conf_match = re.search(r'CONFIDENZA ANALISI:\s*\n?\s*(\d*\.?\d+)', text, re.IGNORECASE)
+        if conf_match:
+            confidence = float(conf_match.group(1))
+            result["confidence_score"] = min(max(confidence, 0.0), 1.0)
+
+        return result
+
+    def _complete_analysis_dict(self, partial: Dict) -> Dict:
+        """Completa dizionario analisi con valori di default per campi mancanti"""
+        defaults = {
+            "description_full": "Immagine analizzata",
+            "description_short": "Foto",
+            "extracted_text": None,
+            "detected_objects": [],
+            "detected_faces": 0,
+            "scene_category": "other",
+            "scene_subcategory": None,
+            "tags": [],
+            "confidence_score": 0.5,
+        }
+
+        # Merge con defaults
+        result = {**defaults, **partial}
+
+        # Genera description_short se mancante
+        if "description_short" not in partial and "description_full" in partial:
+            import re
+            sentences = re.split(r'[.!?]+', partial["description_full"])
+            result["description_short"] = sentences[0].strip()[:200] if sentences else "Foto"
+
+        return result
+
+    def _merge_parse_results(self, structured: Dict, natural: Dict) -> Dict:
+        """Merge risultati structured e natural parser, preferendo structured"""
+        merged = natural.copy()
+
+        # Structured ha priorità per tutti i campi presenti
+        for key, value in structured.items():
+            if value:  # Solo se non None/empty
+                if isinstance(value, list) and not value:
+                    continue  # Skip liste vuote
+                merged[key] = value
+
+        return merged
 
     def _parse_analysis_response(self, response_text: str) -> Dict:
-        """Parse Vision AI response into structured data (natural text format)"""
+        """Parse Vision AI response with multi-layer fallback strategy"""
 
-        # Always use natural text extraction - no structured format expected
-        print(f"[VISION] Parsing natural text response (length: {len(response_text)} chars)")
-        return self._extract_from_text(response_text)
+        print(f"[VISION] Parsing response (length: {len(response_text)} chars)")
+
+        # Layer 1: Try structured parser
+        structured_result = self._parse_structured_response(response_text)
+
+        # Calculate completeness (% of required fields populated)
+        required_fields = ["description_full", "detected_objects", "scene_category", "tags"]
+        fields_populated = sum(1 for field in required_fields if structured_result.get(field))
+        completeness = fields_populated / len(required_fields)
+
+        print(f"[VISION] Structured parser completeness: {completeness:.0%} ({fields_populated}/{len(required_fields)} fields)")
+
+        # Strategy based on completeness
+        if completeness >= 0.8:
+            # High completeness: use structured result
+            print(f"[VISION] ✅ Using structured parser result (completeness >= 80%)")
+            result = self._complete_analysis_dict(structured_result)
+
+        elif completeness >= 0.4:
+            # Partial completeness: merge structured + natural
+            print(f"[VISION] ⚠️ Partial structured result, merging with natural parser (completeness 40-80%)")
+            natural_result = self._extract_from_text(response_text)
+            merged = self._merge_parse_results(structured_result, natural_result)
+            result = self._complete_analysis_dict(merged)
+
+        else:
+            # Low completeness: fallback to natural parser only
+            print(f"[VISION] ❌ Structured parser failed, using natural parser only (completeness < 40%)")
+            natural_result = self._extract_from_text(response_text)
+            result = self._complete_analysis_dict(natural_result)
+
+        # Layer 3: Quality validation
+        is_valid, warnings = self._validate_analysis_quality(result)
+
+        if warnings:
+            print(f"[VISION] Quality warnings: {', '.join(warnings)}")
+
+        if not is_valid:
+            print(f"[VISION] ⚠️ Analysis quality below minimum threshold")
+
+        return result
 
     def _parse_structured_text(self, text: str) -> Dict:
         """Parse structured text format from qwen3-vl (non-JSON response)"""
@@ -389,47 +613,110 @@ Descrivi in modo naturale e dettagliato."""
         else:
             category = "other"
 
-        # Extract common objects mentioned (Italian + English nouns)
+        # Extract common objects mentioned (Italian + English nouns) - EXPANDED LIST (100+)
         common_objects = [
-            # Electronics
-            "laptop", "computer", "telefono", "phone", "smartphone", "schermo", "screen", "monitor",
-            "tastiera", "keyboard", "mouse", "tablet", "router", "cavo", "cable",
-            # Furniture
-            "tavolo", "table", "sedia", "chair", "scrivania", "desk", "letto", "bed",
-            "finestra", "window", "porta", "door", "parete", "wall",
-            # Vehicles
-            "auto", "car", "macchina", "bicicletta", "bicycle", "moto", "motorcycle", "strada", "road",
-            # Nature
-            "albero", "tree", "fiore", "flower", "pianta", "plant", "cielo", "sky", "nuvola", "cloud",
-            "montagna", "mountain", "mare", "sea", "lago", "lake",
-            # Objects
-            "libro", "book", "penna", "pen", "carta", "paper", "documento", "document", "foglio", "sheet",
-            "cibo", "food", "piatto", "plate", "tazza", "cup", "bicchiere", "glass", "bottiglia", "bottle",
-            "mela", "apple", "pane", "bread", "pizza", "pasta",
-            # People/body parts
-            "mano", "hand", "persona", "person", "volto", "face", "occhio", "eye"
+            # Elettronica (18)
+            "laptop", "computer", "telefono", "smartphone", "tablet", "monitor",
+            "schermo", "tastiera", "mouse", "cuffie", "altoparlante", "caricabatterie",
+            "cavo", "router", "stampante", "fotocamera", "orologio", "televisore",
+            # Mobili e casa (20)
+            "tavolo", "sedia", "scrivania", "letto", "divano", "poltrona", "armadio",
+            "scaffale", "libreria", "comodino", "cassettiera", "specchio", "lampada",
+            "finestra", "porta", "parete", "pavimento", "tenda", "cuscino", "coperta",
+            # Cibo e cucina (20)
+            "piatto", "tazza", "bicchiere", "forchetta", "coltello", "cucchiaio",
+            "bottiglia", "pentola", "padella", "ciotola", "tovaglia", "caffè", "tè",
+            "pane", "pizza", "pasta", "carne", "verdura", "frutta", "dolce",
+            # Natura (16)
+            "albero", "fiore", "pianta", "foglia", "erba", "rosa", "giardino",
+            "montagna", "collina", "fiume", "lago", "mare", "spiaggia", "roccia",
+            "cielo", "nuvola",
+            # Veicoli (11)
+            "auto", "macchina", "automobile", "bicicletta", "moto", "motorino",
+            "camion", "autobus", "treno", "aereo", "barca",
+            # Persone (13)
+            "persona", "uomo", "donna", "bambino", "ragazzo", "ragazza", "volto",
+            "viso", "mano", "braccio", "gamba", "occhio", "capelli",
+            # Abbigliamento (11)
+            "maglietta", "camicia", "pantalone", "gonna", "vestito", "giacca",
+            "cappotto", "scarpe", "cappello", "occhiali", "borsa",
+            # Altri (15+)
+            "libro", "quaderno", "penna", "documento", "strada", "edificio",
+            "casa", "ponte", "cartello", "insegna", "chiave", "giocattolo",
+            "palla", "bandiera", "foto"
         ]
 
         objects = []
         for obj in common_objects:
             if obj in text_lower and obj not in objects:
                 objects.append(obj)
-                if len(objects) >= 5:
+                if len(objects) >= 12:  # Aumentato da 5 a 12
                     break
 
-        # Simple tags from objects + category (filter duplicates)
-        tags = objects[:5] if objects else [category]
+        # Detect faces/people con pattern regex migliorati
+        detected_faces = 0
+        face_patterns = [
+            r'(\d+)\s*(?:persona|persone|volto|volti|uomo|donna|bambino)',
+            r'(?:una|un)\s*(?:persona|uomo|donna|volto)',
+        ]
+
+        for pattern in face_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                if match.group(0).startswith(('una', 'un')):
+                    detected_faces = 1
+                else:
+                    detected_faces = int(match.group(1))
+                break
+
+        # Check per "nessuna persona"
+        if any(kw in text_lower for kw in ["nessuna persona", "nessun volto", "non ci sono persone"]):
+            detected_faces = 0
+
+        # Generate tags semantici (evita duplicati con oggetti)
+        tags = []
+        # Aggiungi categoria come primo tag
+        if category != "other":
+            tags.append(category)
+
+        # Aggiungi oggetti più rilevanti come tags (max 3)
+        for obj in objects[:3]:
+            if obj not in tags:
+                tags.append(obj)
+
+        # Aggiungi keywords aggiuntive dalla descrizione (max 5 tags totali)
+        semantic_keywords = [
+            "moderno", "antico", "colorato", "luminoso", "scuro", "grande", "piccolo",
+            "pulito", "ordinato", "naturale", "artificiale", "professionale", "casalingo",
+            "tecnologia", "lavoro", "famiglia", "viaggio", "sport", "arte"
+        ]
+        for keyword in semantic_keywords:
+            if keyword in text_lower and keyword not in tags:
+                tags.append(keyword)
+                if len(tags) >= 8:  # Max 8 tags
+                    break
+
+        # Calcola confidence dinamico basato su completezza
+        confidence = 0.5  # Base
+        if len(description_full) > 300: confidence += 0.1
+        if len(description_full) > 500: confidence += 0.1
+        if len(objects) >= 5: confidence += 0.1
+        if len(objects) >= 8: confidence += 0.05
+        if detected_faces > 0: confidence += 0.05
+        if extracted_text: confidence += 0.05
+        if len(tags) >= 5: confidence += 0.05
+        confidence = min(confidence, 0.85)  # Cap a 0.85
 
         return {
-            "description_full": description_full[:500],
+            "description_full": description_full[:1000],  # Aumentato da 500 a 1000
             "description_short": short_desc,
             "extracted_text": extracted_text,
             "detected_objects": objects,
-            "detected_faces": 0,
+            "detected_faces": detected_faces,  # Ora dinamico!
             "scene_category": category,
             "scene_subcategory": None,
             "tags": tags,
-            "confidence_score": 0.7,
+            "confidence_score": confidence,  # Ora dinamico!
         }
 
     def _get_fallback_analysis(self, processing_time: int) -> Dict:
