@@ -29,7 +29,9 @@ done
 
 echo "✅ Migrations completate!"
 
-echo "👤 Creazione admin user..."
+echo "👤 Creazione utenti di default..."
+
+# Admin user
 psql -c "INSERT INTO users (email, hashed_password, is_admin, preferred_model, auto_analyze)
 VALUES (
   'admin@photomemory.local',
@@ -38,7 +40,20 @@ VALUES (
   'qwen3-vl-clean:latest',
   true
 )
-ON CONFLICT (email) DO NOTHING;" 2>/dev/null && echo "✅ Admin user: admin@photomemory.local / password" || echo "  ℹ️ Admin user già esistente"
+ON CONFLICT (email) DO NOTHING;" 2>/dev/null && echo "  ✅ Admin: admin@photomemory.local / password" || echo "  ℹ️ Admin già esistente"
+
+# Test user
+psql -c "INSERT INTO users (email, hashed_password, is_admin, preferred_model, auto_analyze)
+VALUES (
+  'test@example.com',
+  '\$2b\$12\$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5oi4GXW3nz7Om',
+  false,
+  'qwen3-vl-clean:latest',
+  true
+)
+ON CONFLICT (email) DO NOTHING;" 2>/dev/null && echo "  ✅ Test: test@example.com / password" || echo "  ℹ️ Test già esistente"
+
+echo "✅ Utenti pronti!"
 
 # Avvia l'applicazione FastAPI
 echo "🚀 Avvio FastAPI..."
