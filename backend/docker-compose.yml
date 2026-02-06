@@ -1,7 +1,11 @@
+version: '3.8'
+
 services:
   # FastAPI Backend
   api:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: photomemory-api
     restart: unless-stopped
     ports:
@@ -13,28 +17,47 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
-      - JWT_SECRET=change-this-secret-key-in-production
+      - JWT_SECRET=change-this-secret-key-in-production-please
+      - ANALYSIS_TIMEOUT=900
+      - PYTHONUNBUFFERED=1
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_started
       ollama:
         condition: service_started
-      minio:
-        condition: service_started
     volumes:
       - ./uploads:/app/uploads
-      - /var/run/docker.sock:/var/run/docker.sock  # Allow docker commands from container
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - photomemory
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.photomemory.service=api"
+      - "com.photomemory.version=1.0"
 
-  # Ollama Vision AI (CPU-only per ora)
+  # Ollama Vision AI
   ollama:
     image: ollama/ollama:latest
     container_name: photomemory-ollama
@@ -44,12 +67,29 @@ services:
     volumes:
       - ollama_models:/root/.ollama
     environment:
-      - OLLAMA_NUM_PARALLEL=1  # Reduced to 1 for qwen3vl compatibility
+      - OLLAMA_NUM_PARALLEL=1
       - OLLAMA_MAX_LOADED_MODELS=2
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_KEEP_ALIVE=5m
+      - OLLAMA_MAX_QUEUE=50
     networks:
       - photomemory
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 12G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    labels:
+      - "com.photomemory.service=ollama"
+      - "com.photomemory.version=1.0"
 
   # PostgreSQL + pgvector
   postgres:
@@ -60,11 +100,10 @@ services:
       - POSTGRES_DB=photomemory
       - POSTGRES_USER=photomemory
       - POSTGRES_PASSWORD=photomemory123
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=en_US.UTF-8 --lc-ctype=en_US.UTF-8
+      - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./migrations:/docker-entrypoint-initdb.d/migrations
-      - ./init-all.sh:/docker-entrypoint-initdb.d/01-init-all.sh
     ports:
       - "5432:5432"
     networks:
@@ -74,6 +113,49 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.photomemory.service=database"
+      - "com.photomemory.version=1.0"
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "maintenance_work_mem=128MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "default_statistics_target=100"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "work_mem=2621kB"
+      - "-c"
+      - "min_wal_size=1GB"
+      - "-c"
+      - "max_wal_size=4GB"
 
   # Redis Cache & Queue
   redis:
@@ -84,9 +166,38 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
     networks:
       - photomemory
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    labels:
+      - "com.photomemory.service=cache"
+      - "com.photomemory.version=1.0"
 
   # MinIO Object Storage
   minio:
@@ -99,42 +210,55 @@ services:
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_BROWSER_REDIRECT_URL=http://192.168.200.4:9001
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
     networks:
       - photomemory
-
-  # Celery Worker (async processing) - DISABLED FOR NOW
-  # TODO: Implement proper Celery worker
-  # worker:
-  #   build: ./backend
-  #   container_name: photomemory-worker
-  #   restart: unless-stopped
-  #   command: celery -A worker worker --loglevel=info --concurrency=2
-  #   environment:
-  #     - DATABASE_URL=postgresql://photomemory:photomemory123@postgres:5432/photomemory
-  #     - REDIS_URL=redis://redis:6379/0
-  #     - OLLAMA_HOST=http://ollama:11434
-  #     - MINIO_ENDPOINT=minio:9000
-  #     - MINIO_ACCESS_KEY=minioadmin
-  #     - MINIO_SECRET_KEY=minioadmin
-  #   depends_on:
-  #     - postgres
-  #     - redis
-  #     - ollama
-  #     - minio
-  #   volumes:
-  #     - ./uploads:/app/uploads
-  #   networks:
-  #     - photomemory
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.photomemory.service=storage"
+      - "com.photomemory.version=1.0"
 
 volumes:
   postgres_data:
+    driver: local
+    labels:
+      - "com.photomemory.volume=database"
   redis_data:
+    driver: local
+    labels:
+      - "com.photomemory.volume=cache"
   minio_data:
+    driver: local
+    labels:
+      - "com.photomemory.volume=storage"
   ollama_models:
+    driver: local
+    labels:
+      - "com.photomemory.volume=models"
 
 networks:
   photomemory:
     driver: bridge
+    labels:
+      - "com.photomemory.network=main"
