@@ -224,16 +224,7 @@ Scrivi in modo discorsivo e completo.',
 )
 ON CONFLICT (name) DO NOTHING;
 
--- Insert default test user (password: test123)
-INSERT INTO users (email, password_hash, is_admin, preferred_model, auto_analyze)
-VALUES (
-    'test@example.com',
-    '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW',
-    false,
-    'moondream',
-    true
-)
-ON CONFLICT (email) DO NOTHING;
+-- Utente di default creato automaticamente da create_default_user.py all'avvio API
 
 -- Verification queries
 SELECT 'Tabelle create:' as status;

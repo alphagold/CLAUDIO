@@ -14,6 +14,9 @@ echo "✅ PostgreSQL disponibile!"
 # Attendi che il database sia effettivamente pronto per query
 sleep 5
 
-echo "🚀 Avvio FastAPI..."
+echo "👤 Creazione utente di default..."
 cd /app
+python3 create_default_user.py || echo "⚠️ Errore creazione utente (verrà riprovato)"
+
+echo "🚀 Avvio FastAPI..."
 exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload
