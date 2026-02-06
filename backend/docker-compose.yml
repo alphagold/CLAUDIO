@@ -38,22 +38,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    labels:
-      - "com.photomemory.service=api"
-      - "com.photomemory.version=1.0"
 
   # Ollama Vision AI
   ollama:
@@ -72,22 +56,6 @@ services:
       - OLLAMA_MAX_QUEUE=50
     networks:
       - photomemory
-    deploy:
-      resources:
-        limits:
-          cpus: '4.0'
-          memory: 12G
-        reservations:
-          cpus: '1.0'
-          memory: 2G
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "3"
-    labels:
-      - "com.photomemory.service=ollama"
-      - "com.photomemory.version=1.0"
 
   # PostgreSQL + pgvector
   postgres:
@@ -102,8 +70,7 @@ services:
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
-      - ./init-complete.sql:/docker-entrypoint-initdb.d/init-complete.sql:ro
+      - ./init-complete.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     ports:
       - "5432:5432"
     networks:
@@ -114,48 +81,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    labels:
-      - "com.photomemory.service=database"
-      - "com.photomemory.version=1.0"
     command:
       - "postgres"
       - "-c"
       - "max_connections=100"
       - "-c"
       - "shared_buffers=256MB"
-      - "-c"
-      - "effective_cache_size=1GB"
-      - "-c"
-      - "maintenance_work_mem=128MB"
-      - "-c"
-      - "checkpoint_completion_target=0.9"
-      - "-c"
-      - "wal_buffers=16MB"
-      - "-c"
-      - "default_statistics_target=100"
-      - "-c"
-      - "random_page_cost=1.1"
-      - "-c"
-      - "effective_io_concurrency=200"
-      - "-c"
-      - "work_mem=2621kB"
-      - "-c"
-      - "min_wal_size=1GB"
-      - "-c"
-      - "max_wal_size=4GB"
 
   # Redis Cache & Queue
   redis:
@@ -171,9 +102,6 @@ services:
       --appendonly yes
       --maxmemory 512mb
       --maxmemory-policy allkeys-lru
-      --save 900 1
-      --save 300 10
-      --save 60 10000
     networks:
       - photomemory
     healthcheck:
@@ -182,22 +110,6 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.1'
-          memory: 128M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "3"
-    labels:
-      - "com.photomemory.service=cache"
-      - "com.photomemory.version=1.0"
 
   # MinIO Object Storage
   minio:
@@ -216,49 +128,17 @@ services:
     command: server /data --console-address ":9001"
     networks:
       - photomemory
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.1'
-          memory: 256M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    labels:
-      - "com.photomemory.service=storage"
-      - "com.photomemory.version=1.0"
 
 volumes:
   postgres_data:
     driver: local
-    labels:
-      - "com.photomemory.volume=database"
   redis_data:
     driver: local
-    labels:
-      - "com.photomemory.volume=cache"
   minio_data:
     driver: local
-    labels:
-      - "com.photomemory.volume=storage"
   ollama_models:
     driver: local
-    labels:
-      - "com.photomemory.volume=models"
 
 networks:
   photomemory:
     driver: bridge
-    labels:
-      - "com.photomemory.network=main"

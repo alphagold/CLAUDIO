@@ -51,5 +51,5 @@ RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/ap
 # Expose port
 EXPOSE 8000
 
-# Run init script (migrations + FastAPI)
-CMD ["/app/init-migrations.sh"]
+# Run FastAPI
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

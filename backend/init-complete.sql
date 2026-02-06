@@ -224,7 +224,7 @@ Scrivi in modo discorsivo e completo.',
 )
 ON CONFLICT (name) DO NOTHING;
 
--- Utente di default creato automaticamente da create_default_user.py all'avvio API
+-- Utente di default creato automaticamente da main.py all'avvio API
 
 -- Verification queries
 SELECT 'Tabelle create:' as status;

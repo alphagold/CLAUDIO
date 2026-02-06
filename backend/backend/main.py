@@ -46,6 +46,37 @@ from jose import JWTError, jwt
 # Create tables
 Base.metadata.create_all(bind=engine)
 
+# Create default user if not exists
+def create_default_user():
+    """Create default test user if it doesn't exist"""
+    try:
+        db = SessionLocal()
+        existing_user = db.query(User).filter(User.email == "test@example.com").first()
+
+        if not existing_user:
+            from passlib.context import CryptContext
+            pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+            new_user = User(
+                email="test@example.com",
+                password_hash=pwd_context.hash("test123"),
+                is_admin=False,
+                preferred_model="moondream",
+                auto_analyze=True
+            )
+            db.add(new_user)
+            db.commit()
+            print("✅ Default user created: test@example.com / test123")
+        else:
+            print("ℹ️ Default user already exists")
+
+        db.close()
+    except Exception as e:
+        print(f"⚠️ Error creating default user: {e}")
+
+# Create default user at startup
+create_default_user()
+
 # FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
