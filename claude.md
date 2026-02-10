@@ -131,25 +131,30 @@ claudio/
 
 ### Docker
 ```bash
-# Usare SEMPRE -f con percorso esplicito allo yaml (richiesto per deploy remoto)
+# I comandi docker compose vanno eseguiti dalla directory backend/ del server
+# Usare SEMPRE -f docker-compose.yml
 
 # Restart backend API
-docker compose -f backend/docker-compose.yml restart api
+docker compose -f docker-compose.yml restart api
 
 # View logs
-docker compose -f backend/docker-compose.yml logs -f api
+docker compose -f docker-compose.yml logs -f api
 
 # View Ollama logs
-docker compose -f backend/docker-compose.yml logs -f ollama
+docker compose -f docker-compose.yml logs -f ollama
 
 # Rebuild dopo modifiche al Dockerfile
-docker compose -f backend/docker-compose.yml up -d --build api
+docker compose -f docker-compose.yml up -d --build api
 
 # Stop tutto
-docker compose -f backend/docker-compose.yml down
+docker compose -f docker-compose.yml down
 
-# Start tutto
-docker compose -f backend/docker-compose.yml up -d
+# Start tutto (con rebuild)
+docker compose -f docker-compose.yml up -d --build
+
+# Reset completo (ATTENZIONE: cancella tutti i dati)
+docker compose -f docker-compose.yml down -v
+docker compose -f docker-compose.yml up -d --build
 ```
 
 ### Database
