@@ -318,99 +318,9 @@ export default function PhotoDetailPage() {
     );
   };
 
-  const FaceLabelDialog = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">Chi è questa persona?</h3>
-          <button onClick={() => setShowFaceLabelDialog(false)}>
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <p className="text-gray-600 mb-6">
-          {selectedFace?.person_name
-            ? `Attualmente etichettato come: ${selectedFace.person_name}`
-            : 'Questo volto non è ancora stato identificato'}
-        </p>
-
-        <div className="space-y-4">
-          {/* Existing person dropdown */}
-          {persons.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Seleziona persona esistente
-              </label>
-              <select
-                value={labelPersonId}
-                onChange={(e) => {
-                  setLabelPersonId(e.target.value);
-                  setLabelPersonName('');
-                }}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Seleziona --</option>
-                {persons.map((person: Person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.name || `Person ${person.id.slice(0, 8)}`} ({person.photo_count} foto)
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* OR divider */}
-          {persons.length > 0 && (
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">OPPURE</span>
-              </div>
-            </div>
-          )}
-
-          {/* New person name input */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nome nuova persona
-            </label>
-            <input
-              type="text"
-              value={labelPersonName}
-              onChange={(e) => {
-                setLabelPersonName(e.target.value);
-                setLabelPersonId('');
-              }}
-              placeholder="Es: Mario Rossi"
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Submit button */}
-          <button
-            onClick={() => {
-              if (!selectedFace) return;
-              if (!labelPersonId && !labelPersonName.trim()) {
-                toast.error('Seleziona una persona o inserisci un nome');
-                return;
-              }
-              labelFaceMutation.mutate({
-                faceId: selectedFace.id,
-                personId: labelPersonId || undefined,
-                personName: labelPersonName.trim() || undefined,
-              });
-            }}
-            disabled={labelFaceMutation.isPending || (!labelPersonId && !labelPersonName.trim())}
-            className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
-          >
-            {labelFaceMutation.isPending ? 'Salvataggio...' : 'Salva Etichetta'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  // FaceLabelDialog è reso inline (non come componente nested) per evitare
+  // il problema di focus loss: un componente nested viene ricreato ad ogni
+  // re-render del parent, causando unmount/remount e perdita del focus sull'input.
 
   const ModelSelectionDialog = () => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -949,7 +859,96 @@ export default function PhotoDetailPage() {
         </div>
 
         {/* Dialogs */}
-        {showFaceLabelDialog && <FaceLabelDialog />}
+        {showFaceLabelDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">Chi è questa persona?</h3>
+                <button onClick={() => setShowFaceLabelDialog(false)}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-gray-600 mb-6">
+                {selectedFace?.person_name
+                  ? `Attualmente etichettato come: ${selectedFace.person_name}`
+                  : 'Questo volto non è ancora stato identificato'}
+              </p>
+
+              <div className="space-y-4">
+                {persons.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Seleziona persona esistente
+                    </label>
+                    <select
+                      value={labelPersonId}
+                      onChange={(e) => {
+                        setLabelPersonId(e.target.value);
+                        setLabelPersonName('');
+                      }}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">-- Seleziona --</option>
+                      {persons.map((person: Person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.name || `Person ${person.id.slice(0, 8)}`} ({person.photo_count} foto)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {persons.length > 0 && (
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-300" />
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-2 bg-white text-gray-500">OPPURE</span>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome nuova persona
+                  </label>
+                  <input
+                    type="text"
+                    value={labelPersonName}
+                    onChange={(e) => {
+                      setLabelPersonName(e.target.value);
+                      setLabelPersonId('');
+                    }}
+                    placeholder="Es: Mario Rossi"
+                    autoFocus
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (!selectedFace) return;
+                    if (!labelPersonId && !labelPersonName.trim()) {
+                      toast.error('Seleziona una persona o inserisci un nome');
+                      return;
+                    }
+                    labelFaceMutation.mutate({
+                      faceId: selectedFace.id,
+                      personId: labelPersonId || undefined,
+                      personName: labelPersonName.trim() || undefined,
+                    });
+                  }}
+                  disabled={labelFaceMutation.isPending || (!labelPersonId && !labelPersonName.trim())}
+                  className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
+                >
+                  {labelFaceMutation.isPending ? 'Salvataggio...' : 'Salva Etichetta'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {showModelDialog && <ModelSelectionDialog />}
         {showEditDialog && <EditPhotoDialog />}
       </div>

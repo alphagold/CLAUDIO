@@ -384,7 +384,7 @@ class FaceRecognitionService:
             person = Person(
                 user_id=photo.user_id,
                 name=person_name,
-                first_seen_at=photo.upload_date
+                first_seen_at=photo.uploaded_at
             )
             self.db.add(person)
             self.db.flush()  # Get person.id
