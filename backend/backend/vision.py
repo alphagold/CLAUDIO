@@ -379,11 +379,31 @@ class OllamaVisionClient:
         short_desc = sentences[0].strip()[:200] if sentences and sentences[0].strip() else "Foto"
 
         # Testo visibile nell'immagine
-        extracted_text = None
-        if not any(kw in text_lower for kw in ["nessun testo", "non è presente testo", "non ci sono scritte", "no text"]):
-            text_match = re.search(r'(?:testo visibile|scritta|scritto)[:\s]+"?([^"\n.]+)"?', text_cleaned, re.IGNORECASE)
-            if text_match:
-                extracted_text = text_match.group(1).strip()
+        # Il modello mette tra virgolette il testo che legge dall'immagine → estraiamo tutto
+        extracted_texts = []
+
+        # 1. Tutto il testo tra virgolette doppie (il modello usa le virgolette per testo reale)
+        for q in re.findall(r'"([^"]{1,200})"', text_cleaned):
+            q = q.strip()
+            if q and q not in extracted_texts:
+                extracted_texts.append(q)
+
+        # 2. Pattern espliciti di menzione testo (senza virgolette)
+        for pattern in [
+            r'(?:la scritta|etichetta|label|sticker|riporta)[:\s]+([^\n".]{5,100})',
+            r'(?:il testo|testo visibile)[:\s]+([^\n".]{3,100})',
+        ]:
+            for m in re.finditer(pattern, text_cleaned, re.IGNORECASE):
+                t = m.group(1).strip(' :-')
+                if t and t not in extracted_texts:
+                    extracted_texts.append(t)
+
+        # Se il modello dice esplicitamente che non c'è testo visibile, svuota
+        no_text_keywords = ["nessun testo", "non è presente testo", "non ci sono scritte", "no text visible", "no visible text"]
+        if any(kw in text_lower for kw in no_text_keywords):
+            extracted_texts = []
+
+        extracted_text = '\n'.join(extracted_texts[:20]) if extracted_texts else None
 
         # Rilevamento categoria con word boundaries (evita match parziali)
         def has_keyword(keywords):

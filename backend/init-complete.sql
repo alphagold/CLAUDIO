@@ -204,7 +204,7 @@ VALUES
 (
     'simple_description',
     'Descrizione libera dettagliata - il parsing lo fa il backend (default)',
-    'Descrivi in italiano questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi tutto ciò che vedi: oggetti, persone, colori, atmosfera, ambiente (interno o esterno), e qualsiasi testo visibile.',
+    'Descrivi in italiano questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi solo ciò che è chiaramente visibile, senza ipotesi o supposizioni. Includi: oggetti principali, persone, colori, atmosfera, ambiente (interno o esterno). Se nell''immagine è presente testo leggibile (scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.',
     TRUE,
     TRUE
 ),
