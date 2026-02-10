@@ -349,165 +349,143 @@ class OllamaVisionClient:
         """Extract structured data from free-form text response"""
         import re
 
-        # Clean up markdown headers and formatting
+        # Pulizia markdown e formattazione
         text_cleaned = text.strip()
-        text_cleaned = re.sub(r'^###\s+.*?:\s*\n?', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
-        text_cleaned = re.sub(r'^\*\*.*?:\*\*\s*', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
+        text_cleaned = re.sub(r'^#{1,4}\s+.*?:\s*\n?', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
+        text_cleaned = re.sub(r'^\*{1,2}.*?:\*{1,2}\s*', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
         text_cleaned = re.sub(r'^\d+\.\s+[A-Z\s]+:\s*', '', text_cleaned, flags=re.MULTILINE)
-
-        # Remove "Ecco un esempio" and example text (common issue with models)
-        if "ecco un esempio" in text_cleaned.lower() or "esempio:" in text_cleaned.lower():
-            # Try to find actual description after example
-            match = re.search(r'(?:in questo caso|nella foto|nell\'immagine)[:\s]+(.+)', text_cleaned, re.IGNORECASE | re.DOTALL)
-            if match:
-                text_cleaned = match.group(1).strip()
-            else:
-                # Remove everything up to and including the example
-                text_cleaned = re.sub(r'.*?(?:ecco un esempio|esempio).*?(?:\n\n|\.\s+(?=[A-Z]))', '', text_cleaned, flags=re.IGNORECASE | re.DOTALL)
 
         text_lower = text_cleaned.lower()
 
-        # Use cleaned text as description
         description_full = text_cleaned if text_cleaned else "Immagine analizzata"
 
-        # Extract first sentence as short description (max 200 chars)
+        # Prima frase come descrizione breve
         sentences = re.split(r'[.!?]+', text_cleaned)
         short_desc = sentences[0].strip()[:200] if sentences and sentences[0].strip() else "Foto"
 
-        # Detect extracted text from image (look for mentions of text/writing)
+        # Testo visibile nell'immagine
         extracted_text = None
-        if any(kw in text_lower for kw in ["nessun testo", "non è presente testo", "non ci sono scritte", "no text"]):
-            extracted_text = None
-        else:
-            # Look for mentions of visible text
-            text_match = re.search(r'(?:testo visibile|scritta|scritto|text)[:\s]+"?([^".]+)"?', text_cleaned, re.IGNORECASE)
+        if not any(kw in text_lower for kw in ["nessun testo", "non è presente testo", "non ci sono scritte", "no text"]):
+            text_match = re.search(r'(?:testo visibile|scritta|scritto)[:\s]+"?([^"\n.]+)"?', text_cleaned, re.IGNORECASE)
             if text_match:
                 extracted_text = text_match.group(1).strip()
 
-        # Detect category from keywords (Italian + English)
-        food_keywords = ["cibo", "piatto", "pasto", "ristorante", "cucina", "food", "plate", "dish", "meal"]
-        doc_keywords = ["documento", "ricevuta", "carta", "testo", "fattura", "document", "receipt", "paper", "invoice"]
-        outdoor_keywords = ["esterno", "fuori", "strada", "parco", "outdoor", "outside", "street", "park"]
-        indoor_keywords = ["interno", "dentro", "stanza", "casa", "ufficio", "indoor", "inside", "room", "office"]
-        people_keywords = ["persona", "persone", "gente", "donna", "uomo", "bambino", "person", "people", "man", "woman"]
+        # Rilevamento categoria con word boundaries (evita match parziali)
+        def has_keyword(keywords):
+            return any(re.search(rf'\b{re.escape(kw)}\b', text_lower) for kw in keywords)
 
-        if any(kw in text_lower for kw in food_keywords):
+        food_keywords = ["cibo", "piatto", "pasto", "ristorante", "cucina", "food", "plate", "dish", "meal", "pranzo", "cena", "colazione"]
+        doc_keywords = ["documento", "ricevuta", "fattura", "contratto", "certificato", "modulo", "receipt", "invoice", "form"]
+        outdoor_keywords = ["esterno", "fuori", "all'aperto", "outdoor", "outside", "strada", "parco", "giardino", "cielo", "paesaggio"]
+        indoor_keywords = ["interno", "dentro", "stanza", "ufficio", "indoor", "inside", "room", "office", "soggiorno", "cucina"]
+        people_keywords = ["persona", "persone", "gente", "donna", "uomo", "bambino", "ragazzo", "ragazza", "person", "people"]
+        nature_keywords = ["foresta", "bosco", "montagna", "collina", "lago", "mare", "spiaggia", "natura", "nature", "prato", "campo"]
+        vehicle_keywords = ["automobile", "autobus", "camion", "treno", "aereo", "nave", "bicicletta", "motocicletta"]
+
+        if has_keyword(food_keywords):
             category = "food"
-        elif any(kw in text_lower for kw in doc_keywords):
+        elif has_keyword(doc_keywords):
             category = "document"
-        elif any(kw in text_lower for kw in people_keywords):
+        elif has_keyword(nature_keywords):
+            category = "nature"
+        elif has_keyword(vehicle_keywords):
+            category = "vehicle"
+        elif has_keyword(people_keywords):
             category = "people"
-        elif any(kw in text_lower for kw in outdoor_keywords):
+        elif has_keyword(outdoor_keywords):
             category = "outdoor"
-        elif any(kw in text_lower for kw in indoor_keywords):
+        elif has_keyword(indoor_keywords):
             category = "indoor"
         else:
             category = "other"
 
-        # Extract common objects mentioned (Italian + English nouns) - EXPANDED LIST (100+)
+        # Rilevamento oggetti con word boundaries (evita falsi positivi da parole composite)
         common_objects = [
-            # Elettronica (18)
+            # Elettronica
             "laptop", "computer", "telefono", "smartphone", "tablet", "monitor",
-            "schermo", "tastiera", "mouse", "cuffie", "altoparlante", "caricabatterie",
-            "cavo", "router", "stampante", "fotocamera", "orologio", "televisore",
-            # Mobili e casa (20)
+            "schermo", "tastiera", "mouse", "cuffie", "stampante", "fotocamera",
+            "orologio", "televisore", "router", "cavo",
+            # Mobili
             "tavolo", "sedia", "scrivania", "letto", "divano", "poltrona", "armadio",
-            "scaffale", "libreria", "comodino", "cassettiera", "specchio", "lampada",
-            "finestra", "porta", "parete", "pavimento", "tenda", "cuscino", "coperta",
-            # Cibo e cucina (20)
-            "piatto", "tazza", "bicchiere", "forchetta", "coltello", "cucchiaio",
-            "bottiglia", "pentola", "padella", "ciotola", "tovaglia", "caffè", "tè",
-            "pane", "pizza", "pasta", "carne", "verdura", "frutta", "dolce",
-            # Natura (16)
-            "albero", "fiore", "pianta", "foglia", "erba", "rosa", "giardino",
-            "montagna", "collina", "fiume", "lago", "mare", "spiaggia", "roccia",
-            "cielo", "nuvola",
-            # Veicoli (11)
-            "auto", "macchina", "automobile", "bicicletta", "moto", "motorino",
-            "camion", "autobus", "treno", "aereo", "barca",
-            # Persone (13)
-            "persona", "uomo", "donna", "bambino", "ragazzo", "ragazza", "volto",
-            "viso", "mano", "braccio", "gamba", "occhio", "capelli",
-            # Abbigliamento (11)
-            "maglietta", "camicia", "pantalone", "gonna", "vestito", "giacca",
-            "cappotto", "scarpe", "cappello", "occhiali", "borsa",
-            # Altri (15+)
-            "libro", "quaderno", "penna", "documento", "strada", "edificio",
-            "casa", "ponte", "cartello", "insegna", "chiave", "giocattolo",
-            "palla", "bandiera", "foto"
+            "scaffale", "libreria", "specchio", "lampada", "finestra", "porta",
+            # Cibo
+            "piatto", "tazza", "bicchiere", "bottiglia", "pane", "pizza", "pasta",
+            "carne", "verdura", "frutta",
+            # Natura
+            "albero", "fiore", "pianta", "foglia", "giardino", "montagna",
+            "fiume", "lago", "mare", "spiaggia", "roccia", "cielo",
+            # Veicoli
+            "automobile", "bicicletta", "motocicletta", "camion", "autobus", "treno", "aereo", "barca",
+            # Persone
+            "persona", "uomo", "donna", "bambino", "ragazzo", "ragazza",
+            # Industria/tecnica
+            "macchina", "motore", "pompa", "valvola", "tubo", "cavo", "pannello",
+            "quadro elettrico", "interruttore", "generatore", "turbina", "serbatoio",
+            "scala", "ponteggio", "impianto",
+            # Altri
+            "libro", "penna", "documento", "edificio", "casa", "ponte", "cartello",
         ]
 
         objects = []
         for obj in common_objects:
-            if obj in text_lower and obj not in objects:
+            # Word boundary: evita match dentro parole composite
+            if re.search(rf'\b{re.escape(obj)}\b', text_lower) and obj not in objects:
                 objects.append(obj)
-                if len(objects) >= 12:  # Aumentato da 5 a 12
+                if len(objects) >= 12:
                     break
 
-        # Detect faces/people con pattern regex migliorati
+        # Rilevamento persone/volti
         detected_faces = 0
         face_patterns = [
-            r'(\d+)\s*(?:persona|persone|volto|volti|uomo|donna|bambino)',
-            r'(?:una|un)\s*(?:persona|uomo|donna|volto)',
+            r'(\d+)\s*(?:persone|persona|volti|volto)',
+            r'\b(?:una|un)\s+(?:persona|uomo|donna|volto)\b',
         ]
-
         for pattern in face_patterns:
             match = re.search(pattern, text_lower)
             if match:
-                if match.group(0).startswith(('una', 'un')):
-                    detected_faces = 1
-                else:
-                    detected_faces = int(match.group(1))
+                detected_faces = 1 if match.group(0).startswith(('una', 'un')) else int(match.group(1))
                 break
-
-        # Check per "nessuna persona"
-        if any(kw in text_lower for kw in ["nessuna persona", "nessun volto", "non ci sono persone"]):
+        if re.search(r'\b(?:nessuna persona|nessun volto|non ci sono persone)\b', text_lower):
             detected_faces = 0
 
-        # Generate tags semantici (evita duplicati con oggetti)
+        # Tag semantici
         tags = []
-        # Aggiungi categoria come primo tag
         if category != "other":
             tags.append(category)
-
-        # Aggiungi oggetti più rilevanti come tags (max 3)
         for obj in objects[:3]:
             if obj not in tags:
                 tags.append(obj)
-
-        # Aggiungi keywords aggiuntive dalla descrizione (max 5 tags totali)
         semantic_keywords = [
-            "moderno", "antico", "colorato", "luminoso", "scuro", "grande", "piccolo",
-            "pulito", "ordinato", "naturale", "artificiale", "professionale", "casalingo",
-            "tecnologia", "lavoro", "famiglia", "viaggio", "sport", "arte"
+            "moderno", "antico", "luminoso", "scuro", "grande", "piccolo",
+            "industriale", "professionale", "naturale", "artificiale",
+            "tecnologia", "lavoro", "viaggio", "sport", "arte"
         ]
-        for keyword in semantic_keywords:
-            if keyword in text_lower and keyword not in tags:
-                tags.append(keyword)
-                if len(tags) >= 8:  # Max 8 tags
+        for kw in semantic_keywords:
+            if re.search(rf'\b{re.escape(kw)}\b', text_lower) and kw not in tags:
+                tags.append(kw)
+                if len(tags) >= 8:
                     break
 
-        # Calcola confidence dinamico basato su completezza
-        confidence = 0.5  # Base
+        # Confidence dinamico
+        confidence = 0.5
         if len(description_full) > 300: confidence += 0.1
-        if len(description_full) > 500: confidence += 0.1
+        if len(description_full) > 600: confidence += 0.1
         if len(objects) >= 5: confidence += 0.1
-        if len(objects) >= 8: confidence += 0.05
         if detected_faces > 0: confidence += 0.05
         if extracted_text: confidence += 0.05
-        if len(tags) >= 5: confidence += 0.05
-        confidence = min(confidence, 0.85)  # Cap a 0.85
+        if len(tags) >= 4: confidence += 0.05
+        confidence = min(confidence, 0.90)
 
         return {
-            "description_full": description_full[:1000],  # Aumentato da 500 a 1000
+            "description_full": description_full[:2000],
             "description_short": short_desc,
             "extracted_text": extracted_text,
             "detected_objects": objects,
-            "detected_faces": detected_faces,  # Ora dinamico!
+            "detected_faces": detected_faces,
             "scene_category": category,
             "scene_subcategory": None,
             "tags": tags,
-            "confidence_score": confidence,  # Ora dinamico!
+            "confidence_score": confidence,
         }
 
     def _get_fallback_analysis(self, processing_time: int) -> Dict:
