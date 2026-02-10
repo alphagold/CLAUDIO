@@ -89,6 +89,9 @@ CREATE TABLE IF NOT EXISTS face_recognition_consent (
     user_id UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
     consent_given BOOLEAN NOT NULL DEFAULT FALSE,
     consent_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    consent_ip VARCHAR(45),
+    revoked_at TIMESTAMP,
+    revoked_reason TEXT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
