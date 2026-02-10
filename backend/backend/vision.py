@@ -349,11 +349,26 @@ class OllamaVisionClient:
         """Extract structured data from free-form text response"""
         import re
 
-        # Pulizia markdown e formattazione
+        # Pulizia markdown completa - LLM spesso genera **bold**, ## headers, elenchi puntati
         text_cleaned = text.strip()
-        text_cleaned = re.sub(r'^#{1,4}\s+.*?:\s*\n?', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
-        text_cleaned = re.sub(r'^\*{1,2}.*?:\*{1,2}\s*', '', text_cleaned, flags=re.IGNORECASE | re.MULTILINE)
-        text_cleaned = re.sub(r'^\d+\.\s+[A-Z\s]+:\s*', '', text_cleaned, flags=re.MULTILINE)
+        # Strip **bold** *italic* ***bold-italic***
+        text_cleaned = re.sub(r'\*{1,3}([^*\n]*?)\*{1,3}', r'\1', text_cleaned)
+        # Strip __underline__ _italic_
+        text_cleaned = re.sub(r'_{1,2}([^_\n]*?)_{1,2}', r'\1', text_cleaned)
+        # Strip `code`
+        text_cleaned = re.sub(r'`([^`]*)`', r'\1', text_cleaned)
+        # Strip ## headers
+        text_cleaned = re.sub(r'^#{1,4}\s+', '', text_cleaned, flags=re.MULTILINE)
+        # Strip sezioni numerate (es: "1. Struttura predominante:")
+        text_cleaned = re.sub(r'^\s*\d+\.\s+[^\n:]{1,50}:\s*$', '', text_cleaned, flags=re.MULTILINE)
+        # Strip bullet points
+        text_cleaned = re.sub(r'^\s*[-•]\s+', '', text_cleaned, flags=re.MULTILINE)
+        # Appiattisci struttura: newline → spazio (prosa continua)
+        text_cleaned = re.sub(r'\s*\n\s*', ' ', text_cleaned)
+        # Rimuovi spazi multipli
+        text_cleaned = re.sub(r'\s{2,}', ' ', text_cleaned).strip()
+        # Rimuovi trattini/punti iniziali residui
+        text_cleaned = text_cleaned.strip(' :-')
 
         text_lower = text_cleaned.lower()
 
