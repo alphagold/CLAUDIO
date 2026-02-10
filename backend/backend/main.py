@@ -60,7 +60,7 @@ def create_default_user():
             new_user = User(
                 email="test@example.com",
                 password_hash=pwd_context.hash("test123"),
-                is_admin=False,
+                is_admin=True,
                 preferred_model="moondream",
                 auto_analyze=True
             )
