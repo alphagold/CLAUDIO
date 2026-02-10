@@ -202,40 +202,9 @@ CREATE INDEX IF NOT EXISTS idx_embedding ON photo_analysis USING ivfflat (embedd
 INSERT INTO prompt_templates (name, description, prompt_text, is_default, is_active)
 VALUES
 (
-    'structured_detailed',
-    'Prompt strutturato con sezioni MAIUSCOLE per analisi dettagliate (default)',
-    'Analizza questa immagine in italiano e fornisci informazioni dettagliate.{location_hint}
-
-Rispondi usando ESATTAMENTE questo formato:
-
-DESCRIZIONE COMPLETA:
-Scrivi 4-5 frasi che descrivono cosa vedi: soggetto principale, oggetti visibili, colori, atmosfera, se è interno o esterno, dettagli importanti.
-
-OGGETTI IDENTIFICATI:
-laptop, mouse, tastiera, tazza, libro, finestra, lampada, scrivania, sedia, telefono
-(elenca 8-12 oggetti separati da virgola)
-
-PERSONE E VOLTI:
-2 persone
-(oppure: Nessuna persona visibile)
-
-TESTO VISIBILE:
-Welcome to Italy
-(oppure: Nessun testo)
-
-CATEGORIA SCENA:
-indoor
-(scegli una: indoor, outdoor, food, document, people, nature, urban, vehicle, other)
-
-TAG CHIAVE:
-lavoro, tecnologia, ufficio, moderno, professionale
-(5-8 tag separati da virgola)
-
-CONFIDENZA ANALISI:
-0.85
-(numero da 0.0 a 1.0)
-
-Importante: non ripetere queste istruzioni, rispondi solo con le informazioni richieste.',
+    'simple_description',
+    'Descrizione libera dettagliata - il parsing lo fa il backend (default)',
+    'Descrivi in italiano questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi tutto ciò che vedi: oggetti, persone, colori, atmosfera, ambiente (interno o esterno), e qualsiasi testo visibile.',
     TRUE,
     TRUE
 ),

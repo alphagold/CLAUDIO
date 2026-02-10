@@ -239,7 +239,6 @@ class OllamaVisionClient:
     def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None) -> str:
         """Get prompt from database or fallback to hardcoded default"""
 
-        # Variabili da sostituire nel template
         location_hint = f" La foto è stata scattata a {location_name}." if location_name else ""
 
         # Try to load prompt from database
@@ -249,7 +248,6 @@ class OllamaVisionClient:
 
             db = SessionLocal()
             try:
-                # Get default template
                 template = db.query(PromptTemplate).filter(
                     PromptTemplate.is_default == True,
                     PromptTemplate.is_active == True
@@ -257,7 +255,6 @@ class OllamaVisionClient:
 
                 if template:
                     print(f"[VISION] Using prompt template: {template.name}")
-                    # Replace variables in template
                     prompt_text = template.prompt_text.replace("{location_hint}", location_hint)
                     prompt_text = prompt_text.replace("{model}", model or "default")
                     return prompt_text
@@ -268,43 +265,8 @@ class OllamaVisionClient:
         except Exception as e:
             print(f"[VISION] Failed to load prompt from database: {e}, using hardcoded fallback")
 
-        # Fallback to hardcoded prompt (same as before)
-        return f"""Analizza questa immagine in modo MOLTO DETTAGLIATO in italiano.{location_hint}
-
-Organizza la tua analisi in queste sezioni (rispetta esattamente i titoli in MAIUSCOLO):
-
-DESCRIZIONE COMPLETA:
-[Scrivi almeno 5-6 frasi molto dettagliate descrivendo:
-- Il soggetto principale e contesto generale
-- Oggetti visibili e loro posizione nello spazio
-- Colori dominanti e atmosfera
-- Dettagli importanti (materiali, texture, condizioni)
-- Se è interno (indoor) o esterno (outdoor)
-- Emozioni o sensazioni trasmesse dalla foto]
-
-OGGETTI IDENTIFICATI:
-[Lista di 8-12 oggetti/elementi visibili nell'immagine, separati da virgola.
-Includi sia oggetti principali che secondari. Es: laptop, tazza, libro, finestra, lampada, mouse, tastiera, quadro, pianta, scrivania]
-
-PERSONE E VOLTI:
-[Numero di persone visibili (anche parzialmente). Formato: "N persone" oppure "Nessuna persona visibile".
-Se ci sono persone, descrivi brevemente: età approssimativa, posizione, attività]
-
-TESTO VISIBILE:
-[Trascrivi ESATTAMENTE eventuali testi, scritte, etichette, insegne visibili nell'immagine.
-Se non c'è testo visibile, scrivi: "Nessun testo"]
-
-CATEGORIA SCENA:
-[Una sola parola tra: indoor, outdoor, food, document, people, nature, urban, vehicle, other]
-
-TAG CHIAVE:
-[5-8 tag descrittivi ad alta confidenza che riassumono l'immagine. Evita tag troppo generici.
-Separa con virgola. Es: lavoro, tecnologia, ambiente-moderno, illuminazione-naturale, minimalista]
-
-CONFIDENZA ANALISI:
-[Un numero da 0.0 a 1.0 che indica quanto sei sicuro della tua analisi. Es: 0.85]
-
-Importante: scrivi descrizioni lunghe e ricche di dettagli. Non essere sintetico."""
+        # Fallback hardcoded - descrizione libera, nessuna struttura richiesta
+        return f"Descrivi in italiano questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi tutto ciò che vedi: oggetti, persone, colori, atmosfera, ambiente (interno o esterno), e qualsiasi testo visibile."
 
     def _validate_analysis_quality(self, analysis: Dict) -> tuple[bool, List[str]]:
         """Valida qualità analisi e restituisce warnings"""
@@ -344,89 +306,6 @@ Importante: scrivi descrizioni lunghe e ricche di dettagli. Non essere sintetico
 
         return is_valid, warnings
 
-    def _parse_structured_response(self, text: str) -> Dict:
-        """Parse structured response con sezioni MAIUSCOLE"""
-        import re
-
-        result = {}
-
-        # 1. DESCRIZIONE COMPLETA
-        desc_match = re.search(
-            r'DESCRIZIONE COMPLETA:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
-            text, re.DOTALL | re.IGNORECASE
-        )
-        if desc_match:
-            result["description_full"] = desc_match.group(1).strip()
-
-        # 2. OGGETTI IDENTIFICATI
-        obj_match = re.search(
-            r'OGGETTI IDENTIFICATI:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
-            text, re.DOTALL | re.IGNORECASE
-        )
-        if obj_match:
-            objects_raw = obj_match.group(1).strip()
-            objects = [obj.strip() for obj in re.split(r'[,\n•\-]', objects_raw)
-                      if obj.strip() and len(obj.strip()) > 2]
-            result["detected_objects"] = objects[:15]
-
-        # 3. PERSONE E VOLTI (estrai numero)
-        people_match = re.search(
-            r'PERSONE E VOLTI:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
-            text, re.DOTALL | re.IGNORECASE
-        )
-        if people_match:
-            people_text = people_match.group(1).strip().lower()
-            num_match = re.search(r'(\d+)\s*person[ae]', people_text)
-            if num_match:
-                result["detected_faces"] = int(num_match.group(1))
-            elif any(kw in people_text for kw in ["nessun", "zero", "non ci sono"]):
-                result["detected_faces"] = 0
-
-        # 4. TESTO VISIBILE
-        text_match = re.search(
-            r'TESTO VISIBILE:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
-            text, re.DOTALL | re.IGNORECASE
-        )
-        if text_match:
-            extracted = text_match.group(1).strip()
-            if not any(kw in extracted.lower() for kw in ["nessun", "non c'è", "non presente"]):
-                result["extracted_text"] = extracted[:500]
-
-        # 5. CATEGORIA SCENA
-        cat_match = re.search(r'CATEGORIA SCENA:\s*\n?\s*(\w+)', text, re.IGNORECASE)
-        if cat_match:
-            category = cat_match.group(1).strip().lower()
-            valid_map = {
-                "indoor": "indoor", "interno": "indoor",
-                "outdoor": "outdoor", "esterno": "outdoor",
-                "food": "food", "cibo": "food",
-                "document": "document", "documento": "document",
-                "people": "people", "persone": "people",
-                "nature": "nature", "natura": "nature",
-                "urban": "urban", "urbano": "urban",
-                "vehicle": "vehicle", "veicolo": "vehicle"
-            }
-            result["scene_category"] = valid_map.get(category, "other")
-
-        # 6. TAG CHIAVE
-        tags_match = re.search(
-            r'TAG CHIAVE:\s*\n?\s*(.+?)(?=\n\s*[A-Z\s]+:|$)',
-            text, re.DOTALL | re.IGNORECASE
-        )
-        if tags_match:
-            tags_raw = tags_match.group(1).strip()
-            tags = [tag.strip() for tag in re.split(r'[,\n•\-]', tags_raw)
-                   if tag.strip() and len(tag.strip()) > 2]
-            result["tags"] = tags[:8]
-
-        # 7. CONFIDENZA ANALISI
-        conf_match = re.search(r'CONFIDENZA ANALISI:\s*\n?\s*(\d*\.?\d+)', text, re.IGNORECASE)
-        if conf_match:
-            confidence = float(conf_match.group(1))
-            result["confidence_score"] = min(max(confidence, 0.0), 1.0)
-
-        return result
-
     def _complete_analysis_dict(self, partial: Dict) -> Dict:
         """Completa dizionario analisi con valori di default per campi mancanti"""
         defaults = {
@@ -452,133 +331,19 @@ Importante: scrivi descrizioni lunghe e ricche di dettagli. Non essere sintetico
 
         return result
 
-    def _merge_parse_results(self, structured: Dict, natural: Dict) -> Dict:
-        """Merge risultati structured e natural parser, preferendo structured"""
-        merged = natural.copy()
-
-        # Structured ha priorità per tutti i campi presenti
-        for key, value in structured.items():
-            if value:  # Solo se non None/empty
-                if isinstance(value, list) and not value:
-                    continue  # Skip liste vuote
-                merged[key] = value
-
-        return merged
-
     def _parse_analysis_response(self, response_text: str) -> Dict:
-        """Parse Vision AI response with multi-layer fallback strategy"""
+        """Parse Vision AI response - estrae struttura dal testo libero"""
 
         print(f"[VISION] Parsing response (length: {len(response_text)} chars)")
 
-        # Layer 1: Try structured parser
-        structured_result = self._parse_structured_response(response_text)
+        result = self._extract_from_text(response_text)
+        result = self._complete_analysis_dict(result)
 
-        # Calculate completeness (% of required fields populated)
-        required_fields = ["description_full", "detected_objects", "scene_category", "tags"]
-        fields_populated = sum(1 for field in required_fields if structured_result.get(field))
-        completeness = fields_populated / len(required_fields)
-
-        print(f"[VISION] Structured parser completeness: {completeness:.0%} ({fields_populated}/{len(required_fields)} fields)")
-
-        # Strategy based on completeness
-        if completeness >= 0.8:
-            # High completeness: use structured result
-            print(f"[VISION] ✅ Using structured parser result (completeness >= 80%)")
-            result = self._complete_analysis_dict(structured_result)
-
-        elif completeness >= 0.4:
-            # Partial completeness: merge structured + natural
-            print(f"[VISION] ⚠️ Partial structured result, merging with natural parser (completeness 40-80%)")
-            natural_result = self._extract_from_text(response_text)
-            merged = self._merge_parse_results(structured_result, natural_result)
-            result = self._complete_analysis_dict(merged)
-
-        else:
-            # Low completeness: fallback to natural parser only
-            print(f"[VISION] ❌ Structured parser failed, using natural parser only (completeness < 40%)")
-            natural_result = self._extract_from_text(response_text)
-            result = self._complete_analysis_dict(natural_result)
-
-        # Layer 3: Quality validation
         is_valid, warnings = self._validate_analysis_quality(result)
-
         if warnings:
             print(f"[VISION] Quality warnings: {', '.join(warnings)}")
 
-        if not is_valid:
-            print(f"[VISION] ⚠️ Analysis quality below minimum threshold")
-
         return result
-
-    def _parse_structured_text(self, text: str) -> Dict:
-        """Parse structured text format from qwen3-vl (non-JSON response)"""
-        import re
-
-        # Verify minimum required sections are present
-        required_sections = ["DESCRIZIONE DETTAGLIATA:", "DESCRIZIONE BREVE:", "CATEGORIA:"]
-        has_required = all(section.lower() in text.lower() for section in required_sections)
-
-        if not has_required:
-            print(f"[VISION] ⚠️ Structured format incomplete, using text extraction fallback")
-            print(f"[VISION] Text preview (first 200 chars): {text[:200]}")
-            raise ValueError("Structured format incomplete - missing required sections")
-
-        # Extract each section using regex (supports numbered format: "1. DESCRIZIONE DETTAGLIATA:")
-        desc_full_match = re.search(r'(?:\d+\.\s*)?DESCRIZIONE DETTAGLIATA:\s*(.+?)(?=\d+\.\s*DESCRIZIONE BREVE:|DESCRIZIONE BREVE:|\d+\.\s*TESTO VISIBILE:|$)', text, re.DOTALL | re.IGNORECASE)
-        desc_short_match = re.search(r'(?:\d+\.\s*)?DESCRIZIONE BREVE:\s*(.+?)(?=\d+\.\s*TESTO VISIBILE:|TESTO VISIBILE:|\d+\.\s*OGGETTI:|$)', text, re.DOTALL | re.IGNORECASE)
-        text_match = re.search(r'(?:\d+\.\s*)?TESTO VISIBILE:\s*(.+?)(?=\d+\.\s*OGGETTI:|OGGETTI PRINCIPALI:|OGGETTI:|\d+\.\s*CATEGORIA:|$)', text, re.DOTALL | re.IGNORECASE)
-        objects_match = re.search(r'(?:\d+\.\s*)?OGGETTI(?:\s+PRINCIPALI)?:\s*(.+?)(?=\d+\.\s*CATEGORIA:|CATEGORIA SCENA:|CATEGORIA:|\d+\.\s*TAG:|$)', text, re.DOTALL | re.IGNORECASE)
-        category_match = re.search(r'(?:\d+\.\s*)?CATEGORIA(?:\s+SCENA)?:\s*(.+?)(?=\d+\.\s*TAG:|TAG:|\d+\.\s*$|$)', text, re.DOTALL | re.IGNORECASE)
-        tags_match = re.search(r'(?:\d+\.\s*)?TAG.*?:\s*(.+?)$', text, re.DOTALL | re.IGNORECASE)
-
-        # Extract and clean
-        desc_full = desc_full_match.group(1).strip() if desc_full_match else "Immagine analizzata"
-        desc_short = desc_short_match.group(1).strip() if desc_short_match else "Foto"
-
-        print(f"[VISION] ✅ Parsed structured format - desc_full length: {len(desc_full)}, desc_short: {desc_short[:50]}")
-        extracted_text = text_match.group(1).strip() if text_match else ""
-
-        # Parse objects list (comma or newline separated)
-        objects_raw = objects_match.group(1).strip() if objects_match else ""
-        objects = [obj.strip() for obj in re.split(r'[,\n-]', objects_raw) if obj.strip() and len(obj.strip()) > 2][:5]
-
-        # Parse category
-        category = category_match.group(1).strip().lower() if category_match else "other"
-        # Map to valid categories
-        if "cibo" in category or "food" in category:
-            category = "food"
-        elif "documento" in category or "document" in category:
-            category = "document"
-        elif "outdoor" in category or "esterno" in category:
-            category = "outdoor"
-        elif "indoor" in category or "interno" in category:
-            category = "indoor"
-        elif "person" in category or "persone" in category:
-            category = "people"
-        else:
-            category = "other"
-
-        # Parse tags (comma or newline separated)
-        tags_raw = tags_match.group(1).strip() if tags_match else ""
-        tags = [tag.strip() for tag in re.split(r'[,\n-]', tags_raw) if tag.strip() and len(tag.strip()) > 2][:5]
-
-        # Handle "Nessuno" for extracted text
-        if extracted_text.lower() in ["nessuno", "nessun testo", "non presente", "none"]:
-            extracted_text = None
-        elif not extracted_text:
-            extracted_text = None
-
-        return {
-            "description_full": desc_full[:500],
-            "description_short": desc_short[:200],
-            "extracted_text": extracted_text,
-            "detected_objects": objects,
-            "detected_faces": 0,
-            "scene_category": category,
-            "scene_subcategory": None,
-            "tags": tags,
-            "confidence_score": 0.8,
-        }
 
     def _extract_from_text(self, text: str) -> Dict:
         """Extract structured data from free-form text response"""
