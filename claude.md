@@ -1215,6 +1215,27 @@ sudo docker compose restart api
 
 ---
 
+### Sessione 2026-02-10: Fix Schema DB e Utente Admin
+
+**Fix utente admin**
+- ✅ `create_default_user()` in `main.py` impostava `is_admin=False`
+- ✅ Fix: `is_admin=True`
+- File: `backend/backend/main.py`
+
+**Fix schema DB (init-complete.sql completamente riscritto)**
+- ❌ Problema: `init-complete.sql` era fuori sincronia con `models.py`
+- ❌ Mancavano colonne: `thumbnail_128/512_path`, `latitude`, `longitude`, `has_text/faces/food/document`, `exif_data`, `faces_detected_at`, `face_detection_status`, `deleted_at`, `consent_ip`, `revoked_at`, ecc.
+- ✅ Soluzione: riscrittura completa di `init-complete.sql` allineato con `models.py`
+- ✅ Regola: `init-complete.sql` è la **singola fonte di verità** per lo schema DB
+- File: `backend/init-complete.sql`
+
+**Regola importante emersa**
+Quando si aggiunge una colonna a `models.py`, aggiornarla SEMPRE anche in `init-complete.sql` nello stesso commit.
+
+**Commit**: `6b4dade`, `77076c8`
+
+---
+
 ## Quick Reference
 
 ### URLs Importanti
@@ -1238,7 +1259,7 @@ sudo docker compose restart api
 
 ---
 
-**Ultimo aggiornamento**: 2026-02-06 (Sistema Configurazione Prompt AI completato)
+**Ultimo aggiornamento**: 2026-02-10 (Fix schema DB, utente admin)
 **Versione Claude Code**: Sonnet 4.5
 **Stato Progetto**: In sviluppo attivo - Sistema Prompt Configurabile attivo, Server Remoto Ollama operativo, Face Recognition disponibile
 
