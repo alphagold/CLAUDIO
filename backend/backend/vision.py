@@ -440,9 +440,9 @@ class OllamaVisionClient:
             "laptop", "computer", "telefono", "smartphone", "tablet", "monitor",
             "schermo", "tastiera", "mouse", "cuffie", "stampante", "fotocamera",
             "orologio", "televisore", "router", "cavo",
-            # Mobili
+            # Mobili (escluso "porta": troppo ambiguo in italiano, è anche verbo comune)
             "tavolo", "sedia", "scrivania", "letto", "divano", "poltrona", "armadio",
-            "scaffale", "libreria", "specchio", "lampada", "finestra", "porta",
+            "scaffale", "libreria", "specchio", "lampada", "finestra",
             # Cibo
             "piatto", "tazza", "bicchiere", "bottiglia", "pane", "pizza", "pasta",
             "carne", "verdura", "frutta",
@@ -470,17 +470,26 @@ class OllamaVisionClient:
                     break
 
         # Rilevamento persone/volti
+        # Supporta sia cifre ("2 persone") che parole italiane ("due persone")
+        italian_numbers = {
+            'una': 1, 'un': 1, 'due': 2, 'tre': 3, 'quattro': 4,
+            'cinque': 5, 'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10
+        }
         detected_faces = 0
-        face_patterns = [
-            r'(\d+)\s*(?:persone|persona|volti|volto)',
-            r'\b(?:una|un)\s+(?:persona|uomo|donna|volto)\b',
-        ]
-        for pattern in face_patterns:
-            match = re.search(pattern, text_lower)
-            if match:
-                detected_faces = 1 if match.group(0).startswith(('una', 'un')) else int(match.group(1))
-                break
-        if re.search(r'\b(?:nessuna persona|nessun volto|non ci sono persone)\b', text_lower):
+        # Pattern con cifre: "2 persone", "3 volti"
+        digit_match = re.search(r'(\d+)\s*(?:persone|persona|volti|volto)', text_lower)
+        if digit_match:
+            detected_faces = int(digit_match.group(1))
+        else:
+            # Pattern con parole italiane: "due persone", "una donna", "tre uomini"
+            word_match = re.search(
+                r'\b(una?|due|tre|quattro|cinque|sei|sette|otto|nove|dieci)\s+'
+                r'(?:persone?|volti?|uomin[io]|donn[ae]|bambin[io]|ragazz[io])\b',
+                text_lower
+            )
+            if word_match:
+                detected_faces = italian_numbers.get(word_match.group(1), 1)
+        if re.search(r'\b(?:nessuna persona|nessun volto|non ci sono persone|nessuna persona visibile)\b', text_lower):
             detected_faces = 0
 
         # Tag semantici

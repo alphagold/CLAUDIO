@@ -157,8 +157,8 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
 
       {/* No faces message */}
       {!loading && faces.length === 0 && (
-        <div className="absolute top-4 right-4 bg-gray-800/80 text-white text-sm px-3 py-1 rounded">
-          No faces detected
+        <div className="absolute top-4 right-4 bg-gray-800/80 text-white text-xs px-3 py-1 rounded max-w-48 text-center leading-snug">
+          Riconoscimento facciale non disponibile su questo server
         </div>
       )}
     </div>
