@@ -4,7 +4,7 @@ Admin-only routes for system monitoring and logs
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from database import get_db
 from models import User, Photo, Face, Person, FaceRecognitionConsent
 import subprocess
@@ -277,6 +277,43 @@ async def admin_requeue_face_detection(
         "message": f"Accodate {len(pending)} foto per face detection",
         "count": len(pending),
         "stuck_reset": len(stuck)
+    }
+
+
+@router.post("/faces/reset")
+async def admin_reset_face_detection(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Reset completo face detection:
+    - Soft-delete di tutti i Face records esistenti
+    - Reset photo_count = 0 per tutte le Person
+    - Reset face_detection_status = NULL per tutte le foto
+    Usa dopo per ri-accodare con il pulsante 'Ri-accoda Tutto'.
+    """
+    now = datetime.utcnow()
+
+    # Soft-delete tutti i Face records attivi
+    face_count = db.query(Face).filter(Face.deleted_at.is_(None)).count()
+    db.execute(
+        text("UPDATE faces SET deleted_at = :now WHERE deleted_at IS NULL"),
+        {"now": now}
+    )
+
+    # Reset photo_count per tutte le Person
+    db.execute(text("UPDATE persons SET photo_count = 0"))
+
+    # Reset face_detection_status per tutte le foto non cancellate
+    db.execute(
+        text("UPDATE photos SET face_detection_status = NULL, faces_detected_at = NULL WHERE deleted_at IS NULL")
+    )
+
+    db.commit()
+
+    return {
+        "message": f"Reset completato: {face_count} volti rimossi, status foto azzerato",
+        "faces_removed": face_count
     }
 
 

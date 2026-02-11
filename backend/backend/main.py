@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func, distinct
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import shutil
@@ -22,7 +23,7 @@ from PIL.ExifTags import TAGS
 # Local imports
 from config import settings
 from database import get_db, engine, Base, SessionLocal
-from models import User, Photo, PhotoAnalysis, SearchHistory, FaceRecognitionConsent
+from models import User, Photo, PhotoAnalysis, SearchHistory, FaceRecognitionConsent, Face, Person
 import schemas
 from vision import vision_client
 import admin_routes
@@ -1385,9 +1386,38 @@ async def delete_photo(
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
+    # Raccogli person_id delle persone con volti in questa foto (prima del delete)
+    affected_person_ids = []
+    if FACE_RECOGNITION_AVAILABLE:
+        faces_in_photo = db.query(Face).filter(
+            Face.photo_id == photo_id,
+            Face.deleted_at.is_(None)
+        ).all()
+        affected_person_ids = list({
+            str(f.person_id) for f in faces_in_photo if f.person_id is not None
+        })
+        # Soft delete dei Face associati alla foto
+        for face in faces_in_photo:
+            face.deleted_at = datetime.now(timezone.utc)
+
     # Soft delete in DB
     photo.deleted_at = datetime.now(timezone.utc)
     db.commit()
+
+    # Ricalcola photo_count per le persone coinvolte (query reale sul DB)
+    if affected_person_ids:
+        for pid in affected_person_ids:
+            import uuid as _uuid
+            pid_uuid = _uuid.UUID(pid)
+            photo_count = db.query(func.count(distinct(Face.photo_id))).filter(
+                Face.person_id == pid_uuid,
+                Face.deleted_at.is_(None)
+            ).scalar() or 0
+            db.query(Person).filter(Person.id == pid_uuid).update(
+                {"photo_count": photo_count},
+                synchronize_session=False
+            )
+        db.commit()
 
     # Delete physical files
     try:

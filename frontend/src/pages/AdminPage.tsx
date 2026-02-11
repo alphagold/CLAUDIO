@@ -72,6 +72,17 @@ export default function AdminPage() {
     },
   });
 
+  const resetFacesMutation = useMutation({
+    mutationFn: () => apiClient.post('/api/admin/faces/reset'),
+    onSuccess: (data) => {
+      toast.success(data.data.message);
+      refetchStatus();
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Errore nel reset face detection');
+    },
+  });
+
   // Fetch system status
   const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
     queryKey: ['admin', 'status'],
@@ -293,6 +304,19 @@ export default function AdminPage() {
               >
                 <RefreshCw className={`w-4 h-4 ${requeueFacesMutation.isPending ? 'animate-spin' : ''}`} />
                 <span>Ri-accoda Tutto</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm('Reset completo: elimina tutti i volti rilevati e azzera i contatori. Continuare?')) {
+                    resetFacesMutation.mutate();
+                  }
+                }}
+                disabled={resetFacesMutation.isPending}
+                className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors text-sm"
+                title="Elimina tutti i volti e azzera i contatori, poi usa Ri-accoda Tutto"
+              >
+                <XCircle className={`w-4 h-4 ${resetFacesMutation.isPending ? 'animate-spin' : ''}`} />
+                <span>Reset Completo</span>
               </button>
             </div>
           </div>

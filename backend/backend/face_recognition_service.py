@@ -200,9 +200,32 @@ class FaceRecognitionService:
         if not self.check_user_consent(photo.user_id):
             raise ValueError(f"User {photo.user_id} has not given consent for face recognition")
 
+        # Soft-delete Face esistenti per questa foto (evita duplicati su ri-analisi)
+        existing_faces = self.db.query(Face).filter(
+            Face.photo_id == photo_id,
+            Face.deleted_at.is_(None)
+        ).all()
+        affected_person_ids = list({str(f.person_id) for f in existing_faces if f.person_id is not None})
+        for ef in existing_faces:
+            ef.deleted_at = datetime.utcnow()
+
         # Update status
         photo.face_detection_status = "processing"
         self.db.commit()
+
+        # Ricalcola photo_count per persone che avevano volti in questa foto
+        for pid_str in affected_person_ids:
+            pid_uuid = UUID(pid_str)
+            pc = self.db.query(func.count(distinct(Face.photo_id))).filter(
+                Face.person_id == pid_uuid,
+                Face.deleted_at.is_(None)
+            ).scalar() or 0
+            self.db.execute(
+                text("UPDATE persons SET photo_count = :count WHERE id = :pid"),
+                {"count": pc, "pid": pid_str}
+            )
+        if affected_person_ids:
+            self.db.commit()
 
         try:
             # Load image
