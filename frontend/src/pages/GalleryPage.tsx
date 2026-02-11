@@ -5,7 +5,7 @@ import { photosApi } from '../api/client';
 import apiClient from '../api/client';
 import Layout from '../components/Layout';
 import PhotoUpload from '../components/PhotoUpload';
-import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X, Grid3x3, Grid2x2, List, LayoutGrid, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react';
+import { Plus, Loader, Image as ImageIcon, Clock, Eye, Calendar, Search, Filter, CheckSquare, Trash2, X, Grid3x3, Grid2x2, List, LayoutGrid, ChevronDown, ChevronUp, Sparkles, Zap, Users } from 'lucide-react';
 import type { Photo } from '../types';
 import PhotoSkeleton from '../components/PhotoSkeleton';
 import toast from 'react-hot-toast';
@@ -308,13 +308,25 @@ export default function GalleryPage() {
                   )}
                 </div>
               </div>
-              {!photo.analyzed_at && photo.analysis_started_at && (
-                <div className="ml-4">
+              <div className="ml-4 flex flex-col items-end space-y-1">
+                {!photo.analyzed_at && photo.analysis_started_at && (
                   <div className="bg-yellow-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
                     <Loader className="w-3 h-3 animate-spin" />
                   </div>
-                </div>
-              )}
+                )}
+                {(photo.face_detection_status === 'pending' || photo.face_detection_status === 'processing') && (
+                  <div className="bg-blue-500 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
+                    <Loader className="w-3 h-3 animate-spin" />
+                    <span>Volti...</span>
+                  </div>
+                )}
+                {photo.face_detection_status === 'completed' && (photo.analysis?.detected_faces ?? 0) > 0 && (
+                  <div className="bg-indigo-100 text-indigo-700 text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
+                    <Users className="w-3 h-3" />
+                    <span>{photo.analysis!.detected_faces}</span>
+                  </div>
+                )}
+              </div>
             </div>
             {/* Tags */}
             {photo.analysis?.tags && photo.analysis.tags.length > 0 && (
@@ -814,6 +826,24 @@ export default function GalleryPage() {
                           </div>
                         )}
 
+                        {/* Face Detection Badge */}
+                        {(photo.face_detection_status === 'pending' || photo.face_detection_status === 'processing') && (
+                          <div className="absolute bottom-2 left-2">
+                            <div className="bg-blue-500/90 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
+                              <Loader className="w-3 h-3 animate-spin" />
+                              <span>Volti...</span>
+                            </div>
+                          </div>
+                        )}
+                        {photo.face_detection_status === 'completed' && (photo.analysis?.detected_faces ?? 0) > 0 && (
+                          <div className="absolute bottom-2 left-2">
+                            <div className="bg-indigo-600/90 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
+                              <Users className="w-3 h-3" />
+                              <span>{photo.analysis!.detected_faces}</span>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Tags Preview - only if not selected */}
                         {!isSelected && photo.analysis?.tags && photo.analysis.tags.length > 0 && (
                           <div className="absolute top-3 left-3 flex flex-wrap gap-1">
@@ -896,6 +926,24 @@ export default function GalleryPage() {
                           <div className="absolute top-2 right-2">
                             <div className="bg-gray-500 text-white text-xs font-medium px-2 py-1 rounded-full">
                               Da analizzare
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Face Detection Badge */}
+                        {(photo.face_detection_status === 'pending' || photo.face_detection_status === 'processing') && (
+                          <div className="absolute bottom-2 left-2">
+                            <div className="bg-blue-500/90 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
+                              <Loader className="w-3 h-3 animate-spin" />
+                              <span>Volti...</span>
+                            </div>
+                          </div>
+                        )}
+                        {photo.face_detection_status === 'completed' && (photo.analysis?.detected_faces ?? 0) > 0 && (
+                          <div className="absolute bottom-2 left-2">
+                            <div className="bg-indigo-600/90 text-white text-xs font-medium px-2 py-1 rounded-full flex items-center space-x-1">
+                              <Users className="w-3 h-3" />
+                              <span>{photo.analysis!.detected_faces}</span>
                             </div>
                           </div>
                         )}

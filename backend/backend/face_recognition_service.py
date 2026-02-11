@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import UUID
 import numpy as np
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import func, text, distinct
 
 # Face recognition (optional)
 try:
@@ -426,32 +426,49 @@ class FaceRecognitionService:
 
         self.db.commit()
         self.db.refresh(face)
+        self.db.refresh(person)  # Previene expired object dopo commit
 
-        # Aggiorna photo_count per la persona (numero foto distinte)
-        photo_count = self.db.query(func.count(func.distinct(Face.photo_id))).filter(
-            Face.person_id == person.id,
+        # Cattura valori prima di ulteriori commit (evita access su oggetto expired)
+        person_id_val = person.id
+        user_id_val = person.user_id
+        person_name_val = person.name
+
+        # Aggiorna photo_count e last_seen_at per la persona
+        photo_count = self.db.query(func.count(distinct(Face.photo_id))).filter(
+            Face.person_id == person_id_val,
             Face.deleted_at.is_(None)
         ).scalar() or 0
+
+        latest_photo = self.db.query(Photo).join(Face, Face.photo_id == Photo.id).filter(
+            Face.person_id == person_id_val,
+            Face.deleted_at.is_(None)
+        ).order_by(Photo.uploaded_at.desc()).first()
+
         person.photo_count = photo_count
+        if latest_photo:
+            person.last_seen_at = latest_photo.uploaded_at
         self.db.commit()
 
         # Auto-assegna volti simili se labeling manuale (non bloccante)
         if label_type == "manual":
             try:
-                auto_count = self._auto_assign_similar_faces(face, person)
+                auto_count = self._auto_assign_similar_faces(
+                    face, person_id_val, user_id_val
+                )
                 if auto_count > 0:
-                    logger.info(f"Auto-assegnati {auto_count} volti simili a {person.name}")
+                    logger.info(f"Auto-assegnati {auto_count} volti simili a {person_name_val}")
             except Exception as e:
                 logger.warning(f"Auto-assegnazione volti simili fallita (non critico): {e}")
 
-        logger.info(f"Labeled face {face_id} as person {person.id} ({person.name})")
+        logger.info(f"Labeled face {face_id} as person {person_id_val} ({person_name_val})")
         return face
 
     def _auto_assign_similar_faces(
         self,
         labeled_face: Face,
-        person: Person,
-        min_similarity: float = 0.6
+        person_id: UUID,
+        user_id: UUID,
+        min_similarity: float = 0.4
     ) -> int:
         """
         Auto-assegna la stessa persona a volti simili non etichettati.
@@ -459,10 +476,13 @@ class FaceRecognitionService:
         Dopo un labeling manuale, cerca volti con similarità coseno >= min_similarity
         e li assegna automaticamente alla stessa persona.
 
+        Soglia 0.4 = distanza coseno 0.6 (standard dlib per stessa persona).
+
         Args:
             labeled_face: Volto appena etichettato (riferimento)
-            person: Persona da assegnare
-            min_similarity: Soglia similarità coseno (0.6 ≈ stessa persona)
+            person_id: ID persona da assegnare (valore catturato, non oggetto ORM)
+            user_id: ID utente (valore catturato, non oggetto ORM)
+            min_similarity: Soglia similarità coseno minima
 
         Returns:
             Numero di volti auto-assegnati
@@ -489,24 +509,25 @@ class FaceRecognitionService:
             {
                 "face_id": str(labeled_face.id),
                 "embedding": str(labeled_face.embedding),
-                "user_id": str(person.user_id),
+                "user_id": str(user_id),
                 "min_similarity": min_similarity
             }
         ).fetchall()
 
         if not results:
+            logger.info(f"Nessun volto simile trovato (threshold={min_similarity})")
             return 0
 
         assigned_count = 0
         for row in results:
             face_to_assign = self.db.query(Face).filter(Face.id == row.id).first()
             if face_to_assign and face_to_assign.person_id is None:
-                face_to_assign.person_id = person.id
+                face_to_assign.person_id = person_id
                 face_to_assign.cluster_id = None
                 label = FaceLabel(
                     face_id=face_to_assign.id,
-                    person_id=person.id,
-                    labeled_by_user_id=person.user_id,
+                    person_id=person_id,
+                    labeled_by_user_id=user_id,
                     label_type="auto",
                     confidence=float(row.similarity)
                 )
@@ -515,11 +536,15 @@ class FaceRecognitionService:
 
         if assigned_count > 0:
             self.db.flush()
-            photo_count = self.db.query(func.count(func.distinct(Face.photo_id))).filter(
-                Face.person_id == person.id,
+            photo_count = self.db.query(func.count(distinct(Face.photo_id))).filter(
+                Face.person_id == person_id,
                 Face.deleted_at.is_(None)
             ).scalar() or 0
-            person.photo_count = photo_count
+            # Aggiorna person tramite query diretta (evita oggetto ORM expired)
+            self.db.execute(
+                text("UPDATE persons SET photo_count = :count WHERE id = :pid"),
+                {"count": photo_count, "pid": str(person_id)}
+            )
             self.db.commit()
 
         return assigned_count
