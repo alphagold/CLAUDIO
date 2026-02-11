@@ -220,13 +220,13 @@ class FaceRecognitionService:
             ):
                 face = Face(
                     photo_id=photo_id,
-                    bbox_x=left,
-                    bbox_y=top,
-                    bbox_width=right - left,
-                    bbox_height=bottom - top,
+                    bbox_x=int(left),
+                    bbox_y=int(top),
+                    bbox_width=int(right - left),
+                    bbox_height=int(bottom - top),
                     embedding=encoding.tolist(),  # Convert numpy to list
-                    detection_confidence=0.90,  # face_recognition doesn't provide confidence
-                    face_quality_score=float(quality)  # cast np.float64 → float per psycopg2
+                    detection_confidence=0.90,
+                    face_quality_score=float(quality)  # cast np.float → float per psycopg2
                 )
                 self.db.add(face)
                 created_faces.append(face)
@@ -271,17 +271,17 @@ class FaceRecognitionService:
 
             # Sharpness (Laplacian variance)
             gray = cv2.cvtColor(face_img, cv2.COLOR_RGB2GRAY)
-            laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+            laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
             sharpness = min(laplacian_var / 500.0, 1.0)  # Normalize
 
             # Size score (larger faces = better)
-            face_area = (right - left) * (bottom - top)
-            image_area = image.shape[0] * image.shape[1]
+            face_area = int(right - left) * int(bottom - top)
+            image_area = int(image.shape[0]) * int(image.shape[1])
             size_ratio = face_area / image_area
             size_score = min(size_ratio * 10, 1.0)  # Normalize
 
-            # Combined quality (weighted average)
-            quality = 0.7 * sharpness + 0.3 * size_score
+            # Combined quality (weighted average) - ensure Python float
+            quality = float(0.7 * sharpness + 0.3 * size_score)
             quality_scores.append(round(quality, 2))
 
         return quality_scores
