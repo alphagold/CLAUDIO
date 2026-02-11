@@ -304,16 +304,24 @@ async def admin_reset_face_detection(
     # Reset photo_count per tutte le Person
     db.execute(text("UPDATE persons SET photo_count = 0"))
 
-    # Reset face_detection_status per tutte le foto non cancellate
+    # Reset face_detection_status = 'pending' per tutte le foto non cancellate
+    # (pending invece di NULL così Ri-accoda le trova subito)
     db.execute(
-        text("UPDATE photos SET face_detection_status = NULL, faces_detected_at = NULL WHERE deleted_at IS NULL")
+        text("UPDATE photos SET face_detection_status = 'pending', faces_detected_at = NULL WHERE deleted_at IS NULL")
     )
 
     db.commit()
 
+    # Conta foto messe in pending per l'utente
+    pending_count = db.query(Photo).filter(
+        Photo.face_detection_status == 'pending',
+        Photo.deleted_at.is_(None)
+    ).count()
+
     return {
-        "message": f"Reset completato: {face_count} volti rimossi, status foto azzerato",
-        "faces_removed": face_count
+        "message": f"Reset completato: {face_count} volti rimossi, {pending_count} foto pronte per ri-analisi. Ora clicca 'Ri-accoda Pending'.",
+        "faces_removed": face_count,
+        "photos_pending": pending_count
     }
 
 
