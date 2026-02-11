@@ -22,7 +22,7 @@ from PIL.ExifTags import TAGS
 # Local imports
 from config import settings
 from database import get_db, engine, Base, SessionLocal
-from models import User, Photo, PhotoAnalysis, SearchHistory
+from models import User, Photo, PhotoAnalysis, SearchHistory, FaceRecognitionConsent
 import schemas
 from vision import vision_client
 import admin_routes
@@ -1484,6 +1484,52 @@ if FACE_RECOGNITION_AVAILABLE and face_routes:
     print("Face recognition routes registered")
 else:
     print("Face recognition routes NOT available - feature disabled")
+
+
+@app.on_event("startup")
+async def enqueue_pending_face_detections():
+    """Al boot, accoda le foto con face_detection_status pending/processing.
+    Le foto 'processing' erano in corso durante un riavvio precedente."""
+    if not FACE_RECOGNITION_AVAILABLE:
+        return
+
+    db = SessionLocal()
+    try:
+        # Reset foto bloccate in "processing" da riavvii precedenti
+        stuck = db.query(Photo).filter(Photo.face_detection_status == "processing").all()
+        for photo in stuck:
+            photo.face_detection_status = "pending"
+        if stuck:
+            db.commit()
+            print(f"Reset {len(stuck)} foto da 'processing' a 'pending'")
+
+        # Recupera utenti con consenso attivo
+        consented_users = {
+            c.user_id for c in db.query(FaceRecognitionConsent).filter(
+                FaceRecognitionConsent.consent_given == True,
+                FaceRecognitionConsent.revoked_at == None
+            ).all()
+        }
+
+        if not consented_users:
+            return
+
+        # Accode foto pending degli utenti con consenso
+        pending = db.query(Photo).filter(
+            Photo.face_detection_status == "pending",
+            Photo.user_id.in_(consented_users)
+        ).all()
+
+        for photo in pending:
+            enqueue_face_detection(photo.id, str(photo.original_path))
+
+        if pending:
+            print(f"Accodate {len(pending)} foto pending per face detection")
+
+    except Exception as e:
+        print(f"Errore nel riaccodamento foto pending: {e}")
+    finally:
+        db.close()
 
 
 # ============================================================================

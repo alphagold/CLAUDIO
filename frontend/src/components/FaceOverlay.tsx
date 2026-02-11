@@ -25,6 +25,7 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
 }) => {
   const [faces, setFaces] = useState<Face[]>([]);
   const [loading, setLoading] = useState(true);
+  const [featureAvailable, setFeatureAvailable] = useState(true);
   const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [displaySize, setDisplaySize] = useState<{ width: number; height: number } | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -37,8 +38,12 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
         setLoading(true);
         const fetchedFaces = await facesApi.getPhotoFaces(photoId);
         setFaces(fetchedFaces);
-      } catch (error) {
+        setFeatureAvailable(true);
+      } catch (error: any) {
         console.error('Failed to fetch faces:', error);
+        if (error?.response?.status === 404) {
+          setFeatureAvailable(false);
+        }
       } finally {
         setLoading(false);
       }
@@ -155,8 +160,8 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
         </div>
       )}
 
-      {/* No faces message */}
-      {!loading && faces.length === 0 && (
+      {/* Feature not available */}
+      {!loading && !featureAvailable && (
         <div className="absolute top-4 right-4 bg-gray-800/80 text-white text-xs px-3 py-1 rounded max-w-48 text-center leading-snug">
           Riconoscimento facciale non disponibile su questo server
         </div>
