@@ -11,17 +11,11 @@ RUN apt-get update && apt-get install -y \
     make \
     libpq-dev \
     docker.io \
-    cmake \
     build-essential \
     libopenblas-dev \
     liblapack-dev \
-    libx11-dev \
     python3-dev \
-    libboost-all-dev \
     pkg-config \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
@@ -35,9 +29,11 @@ RUN pip install --upgrade pip setuptools wheel
 RUN grep -v "face_recognition\|dlib\|scikit-learn\|opencv-python" requirements.txt > requirements_base.txt && \
     pip install --no-cache-dir -r requirements_base.txt
 
-# Try to install face_recognition deps (optional - app works without)
-RUN pip install --no-cache-dir scikit-learn opencv-python || echo "WARNING: ML dependencies optional install failed"
-RUN pip install --no-cache-dir dlib face_recognition || echo "WARNING: face_recognition not available - feature disabled"
+# Install dlib pre-compiled wheel (no compilation needed)
+RUN pip install --no-cache-dir dlib-bin
+# Install face recognition and ML deps (optional - app works without)
+RUN pip install --no-cache-dir face_recognition scikit-learn opencv-python-headless || \
+    echo "WARNING: face_recognition not available - feature disabled"
 
 # Copy application code
 COPY . .
