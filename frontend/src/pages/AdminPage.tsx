@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import {
@@ -17,9 +17,12 @@ import {
   ChevronRight,
   Cpu,
   MemoryStick,
-  MessageSquare
+  MessageSquare,
+  UserCheck,
+  Play,
 } from 'lucide-react';
 import apiClient from '../api/client';
+import toast from 'react-hot-toast';
 
 interface SystemStatus {
   containers: Array<{ name: string; status: string }>;
@@ -28,6 +31,16 @@ interface SystemStatus {
     analyzed_photos: number;
     pending_analysis: number;
     disk_usage_mb: number;
+  };
+  face_detection: {
+    pending: number;
+    processing: number;
+    completed: number;
+    failed: number;
+    no_faces: number;
+    skipped: number;
+    total_faces: number;
+    persons: number;
   };
   system: {
     cpu_percent: number;
@@ -46,6 +59,18 @@ export default function AdminPage() {
   const navigate = useNavigate();
   const [logType, setLogType] = useState<'backend' | 'ollama'>('backend');
   const [logLines, setLogLines] = useState(100);
+
+  const requeueFacesMutation = useMutation({
+    mutationFn: (resetFailed: boolean) =>
+      apiClient.post(`/api/admin/faces/requeue?reset_failed=${resetFailed}`),
+    onSuccess: (data) => {
+      toast.success(data.data.message);
+      refetchStatus();
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail || 'Errore nel riaccodamento face detection');
+    },
+  });
 
   // Fetch system status
   const { data: status, isLoading: statusLoading, refetch: refetchStatus } = useQuery<SystemStatus>({
@@ -241,6 +266,62 @@ export default function AdminPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Face Detection Queue */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <UserCheck className="w-5 h-5 text-blue-600" />
+              <h2 className="text-xl font-semibold text-gray-900">Coda Riconoscimento Volti</h2>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => requeueFacesMutation.mutate(false)}
+                disabled={requeueFacesMutation.isPending}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+                title="Ri-accoda foto pending e bloccate in processing"
+              >
+                <Play className={`w-4 h-4 ${requeueFacesMutation.isPending ? 'animate-spin' : ''}`} />
+                <span>Ri-accoda Pending</span>
+              </button>
+              <button
+                onClick={() => requeueFacesMutation.mutate(true)}
+                disabled={requeueFacesMutation.isPending}
+                className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 transition-colors text-sm"
+                title="Ri-accoda anche foto failed e no_faces"
+              >
+                <RefreshCw className={`w-4 h-4 ${requeueFacesMutation.isPending ? 'animate-spin' : ''}`} />
+                <span>Ri-accoda Tutto</span>
+              </button>
+            </div>
+          </div>
+
+          {statusLoading ? (
+            <div className="flex items-center justify-center h-16">
+              <Loader className="w-6 h-6 text-blue-600 animate-spin" />
+            </div>
+          ) : status?.face_detection ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              {[
+                { label: 'Completati', value: status.face_detection.completed, color: 'text-green-700 bg-green-50 border-green-200' },
+                { label: 'Nessun volto', value: status.face_detection.no_faces, color: 'text-gray-600 bg-gray-50 border-gray-200' },
+                { label: 'In attesa', value: status.face_detection.pending, color: 'text-yellow-700 bg-yellow-50 border-yellow-200' },
+                { label: 'In corso', value: status.face_detection.processing, color: 'text-blue-700 bg-blue-50 border-blue-200' },
+                { label: 'Falliti', value: status.face_detection.failed, color: 'text-red-700 bg-red-50 border-red-200' },
+                { label: 'Saltati', value: status.face_detection.skipped, color: 'text-gray-500 bg-gray-50 border-gray-200' },
+                { label: 'Volti totali', value: status.face_detection.total_faces, color: 'text-indigo-700 bg-indigo-50 border-indigo-200' },
+                { label: 'Persone', value: status.face_detection.persons, color: 'text-purple-700 bg-purple-50 border-purple-200' },
+              ].map((item) => (
+                <div key={item.label} className={`rounded-lg border p-3 text-center ${item.color}`}>
+                  <div className="text-2xl font-bold">{item.value ?? '—'}</div>
+                  <div className="text-xs mt-1 font-medium">{item.label}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">Face recognition non disponibile su questo server</p>
+          )}
         </div>
 
         {/* Quick Links Section - Gestione Sistema */}

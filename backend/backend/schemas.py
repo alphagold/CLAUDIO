@@ -84,6 +84,8 @@ class PhotoResponse(PhotoBase):
     file_size: Optional[int]
     width: Optional[int]
     height: Optional[int]
+    face_detection_status: Optional[str] = None
+    faces_detected_at: Optional[datetime] = None
     analysis: Optional[PhotoAnalysisResponse] = None
 
     class Config:

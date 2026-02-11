@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database import get_db
-from models import User, Photo
+from models import User, Photo, Face, Person, FaceRecognitionConsent
 import subprocess
 import os
 
@@ -145,6 +145,21 @@ async def get_system_status(
         Photo.deleted_at.is_(None)
     ).scalar()
 
+    # Face detection stats
+    face_stats = {}
+    try:
+        for status in ["pending", "processing", "completed", "failed", "no_faces", "skipped"]:
+            face_stats[status] = db.query(func.count(Photo.id)).filter(
+                Photo.face_detection_status == status,
+                Photo.deleted_at.is_(None)
+            ).scalar() or 0
+        face_stats["total_faces"] = db.query(func.count(Face.id)).filter(
+            Face.deleted_at.is_(None)
+        ).scalar() or 0
+        face_stats["persons"] = db.query(func.count(Person.id)).scalar() or 0
+    except Exception:
+        face_stats = {}
+
     # Get disk usage
     try:
         upload_dir = "/app/uploads"
@@ -191,12 +206,77 @@ async def get_system_status(
             "pending_analysis": pending_photos,
             "disk_usage_mb": round(disk_usage_mb, 2)
         },
+        "face_detection": face_stats,
         "system": {
             "cpu_percent": round(cpu_percent, 1),
             "memory_percent": round(memory_percent, 1),
             "memory_used_mb": round(memory_used_mb, 2),
             "memory_total_mb": round(memory_total_mb, 2)
         }
+    }
+
+
+# ============================================================================
+# FACE DETECTION ADMIN ENDPOINTS
+# ============================================================================
+
+@router.post("/faces/requeue")
+async def admin_requeue_face_detection(
+    reset_failed: bool = False,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Rimette in coda tutte le foto pending per face detection.
+    reset_failed=true: rimette in coda anche foto failed/no_faces.
+    """
+    # Lazy import per evitare circular dependency
+    try:
+        from main import enqueue_face_detection, FACE_RECOGNITION_AVAILABLE
+        if not FACE_RECOGNITION_AVAILABLE:
+            raise HTTPException(status_code=503, detail="Face recognition non disponibile su questo server")
+    except ImportError:
+        raise HTTPException(status_code=503, detail="Face recognition non disponibile")
+
+    # Reset foto bloccate in processing
+    stuck = db.query(Photo).filter(Photo.face_detection_status == "processing").all()
+    for p in stuck:
+        p.face_detection_status = "pending"
+
+    if reset_failed:
+        to_reset = db.query(Photo).filter(
+            Photo.face_detection_status.in_(["failed", "no_faces"])
+        ).all()
+        for p in to_reset:
+            p.face_detection_status = "pending"
+
+    db.commit()
+
+    # Recupera utenti con consenso attivo
+    consented_users = {
+        c.user_id for c in db.query(FaceRecognitionConsent).filter(
+            FaceRecognitionConsent.consent_given == True,
+            FaceRecognitionConsent.revoked_at == None
+        ).all()
+    }
+
+    if not consented_users:
+        return {"message": "Nessun utente con consenso attivo", "count": 0, "stuck_reset": len(stuck)}
+
+    # Accoda foto pending
+    pending = db.query(Photo).filter(
+        Photo.face_detection_status == "pending",
+        Photo.user_id.in_(consented_users),
+        Photo.deleted_at.is_(None)
+    ).all()
+
+    for photo in pending:
+        enqueue_face_detection(photo.id, str(photo.original_path))
+
+    return {
+        "message": f"Accodate {len(pending)} foto per face detection",
+        "count": len(pending),
+        "stuck_reset": len(stuck)
     }
 
 

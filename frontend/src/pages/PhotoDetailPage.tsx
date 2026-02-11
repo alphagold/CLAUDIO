@@ -24,6 +24,7 @@ import {
   Edit3,
   MapPin,
   CheckCircle,
+  Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -135,6 +136,18 @@ export default function PhotoDetailPage() {
     },
     onError: () => {
       toast.error('Errore nell\'etichettatura del volto');
+    },
+  });
+
+  const redetectFacesMutation = useMutation({
+    mutationFn: () => facesApi.detectFaces(photoId!),
+    onSuccess: () => {
+      toast.success('Rilevamento volti avviato');
+      queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.detail || 'Errore nel rilevamento volti';
+      toast.error(msg);
     },
   });
 
@@ -693,6 +706,64 @@ export default function PhotoDetailPage() {
                 </div>
               </div>
             )}
+
+            {/* Face Detection */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <Users className="w-5 h-5 text-blue-600" />
+                  <h3 className="font-semibold text-gray-900">Riconoscimento Volti</h3>
+                </div>
+                <button
+                  onClick={() => redetectFacesMutation.mutate()}
+                  disabled={redetectFacesMutation.isPending}
+                  className="flex items-center space-x-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors text-sm font-medium"
+                  title="Rianalizza solo i volti (senza rianalisi AI)"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${redetectFacesMutation.isPending ? 'animate-spin' : ''}`} />
+                  <span>{redetectFacesMutation.isPending ? 'Avvio...' : 'Rianalizza'}</span>
+                </button>
+              </div>
+              <div className="flex items-center space-x-3 text-sm">
+                {/* Status badge */}
+                {photo.face_detection_status === 'completed' && (
+                  <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                    Completato
+                  </span>
+                )}
+                {photo.face_detection_status === 'no_faces' && (
+                  <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                    Nessun volto
+                  </span>
+                )}
+                {photo.face_detection_status === 'pending' && (
+                  <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
+                    In attesa
+                  </span>
+                )}
+                {photo.face_detection_status === 'processing' && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                    In elaborazione...
+                  </span>
+                )}
+                {photo.face_detection_status === 'failed' && (
+                  <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                    Fallito
+                  </span>
+                )}
+                {(!photo.face_detection_status || photo.face_detection_status === 'skipped') && (
+                  <span className="px-2 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                    Non eseguito
+                  </span>
+                )}
+                {/* Faces count */}
+                {photo.analysis?.detected_faces !== undefined && photo.analysis.detected_faces > 0 && (
+                  <span className="text-gray-600">
+                    {photo.analysis.detected_faces} {photo.analysis.detected_faces === 1 ? 'volto' : 'volti'} rilevati
+                  </span>
+                )}
+              </div>
+            </div>
 
             {/* EXIF Metadata */}
             {photo.exif_data && Object.keys(photo.exif_data).length > 0 && (() => {

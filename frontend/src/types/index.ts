@@ -62,6 +62,8 @@ export interface Photo {
   is_food: boolean;
   is_document: boolean;
   exif_data: Record<string, any> | null;
+  face_detection_status: string | null;
+  faces_detected_at: string | null;
   analysis: PhotoAnalysis | null;
 }
 

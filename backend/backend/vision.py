@@ -67,6 +67,11 @@ class OllamaVisionClient:
 
         # Adjust parameters based on model
         is_qwen = "qwen" in selected_model.lower()
+
+        # Per qwen3-vl: anteponi /no_think per disabilitare reasoning mode
+        # Più affidabile del parametro "think": False (funziona con tutte le versioni Ollama)
+        if is_qwen:
+            prompt = "/no_think\n" + prompt
         # Aumentato num_predict per permettere descrizioni dettagliate (2000 token = ~2500-3000 caratteri)
         num_predict = 2000
 
@@ -183,14 +188,11 @@ class OllamaVisionClient:
                 if has_structured_format:
                     print(f"[VISION] ✅ Thinking field contains structured format, using it")
                     analysis_text = thinking_text
-                elif len(thinking_text) > 100:
-                    # Thinking has content (even if English/unstructured) - use it
-                    # Natural parser will extract objects/categories it can find
-                    print(f"[VISION] ℹ️ Using thinking field as fallback ({len(thinking_text)} chars)")
-                    analysis_text = thinking_text
                 else:
-                    print(f"[VISION] ⚠️ Thinking field empty or too short, using generic fallback")
-                    analysis_text = "Immagine analizzata"
+                    # Thinking è solo ragionamento in inglese, non usarlo come descrizione
+                    print(f"[VISION] ⚠️ Thinking field is just reasoning (English), skipping")
+                    print(f"[VISION] Thinking preview: {thinking_text[:200]}")
+                    analysis_text = "Immagine analizzata (dettagli non disponibili da questo modello)"
 
             processing_time = int((time.time() - start_time) * 1000)
             print(f"[VISION] Analysis completed in {processing_time}ms")
