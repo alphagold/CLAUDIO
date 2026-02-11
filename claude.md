@@ -118,9 +118,17 @@ Poi configurare nelle Settings dell'app: abilita server remoto, inserisci URL e 
 - Fallback hardcoded se DB non disponibile
 
 ### Face Recognition
-- Implementata ma NON ATTIVA (dlib non compila in Docker)
-- Graceful degradation: app funziona al 100% senza
-- Routes `/api/faces/*` non registrate se libreria mancante
+- **ATTIVA** con `dlib-bin` (wheel pre-compilato, no sorgente)
+- `face_recognition_models` installato da GitHub (PyPI omette file .dat)
+- `pkg_resources` patchato post-install (setuptools rimosso da pip)
+- Al boot: foto con `face_detection_status=pending/processing` vengono accodate automaticamente
+- Consenso GDPR richiesto (tabella `face_recognition_consent`)
+- Routes `/api/faces/*` registrate solo se `FACE_RECOGNITION_AVAILABLE=True`
+- Graceful degradation: `except (Exception, SystemExit)` cattura anche `quit()` di face_recognition
+
+### qwen3-vl
+- Usa `think: False` nel payload `/api/generate` per disabilitare reasoning mode
+- Senza di esso: `response: ""` + campo `thinking` in inglese (ignorato dal parser)
 
 ---
 
@@ -158,11 +166,20 @@ Deve essere sempre allineato con `backend/backend/models.py`.
 | `backend/backend/models.py` | SQLAlchemy models |
 | `backend/backend/vision.py` | Client Ollama AI + parsing |
 | `backend/backend/admin_routes.py` | Route admin + prompt templates CRUD |
-| `backend/backend/face_routes.py` | Route face recognition (opzionale) |
+| `backend/backend/face_routes.py` | Route face recognition |
+| `backend/backend/face_recognition_service.py` | Detection, clustering, labeling volti |
+| `frontend/src/components/FaceOverlay.tsx` | Bounding box volti su foto |
 | `frontend/src/pages/GalleryPage.tsx` | Gallery principale |
 | `frontend/src/pages/SettingsPage.tsx` | Settings utente + server remoto |
 | `frontend/src/pages/PromptConfigurationPage.tsx` | Config prompt AI |
 
 ---
 
-**Aggiornato**: 2026-02-10 | **Stato**: Production-ready
+### Note Deploy
+- Dopo modifiche a **solo codice Python** (no Dockerfile): `up -d --build api` è sufficiente
+- Se il container usa layer cached vecchi: `build --no-cache api` poi `up -d api`
+- `restart api` NON ricarica codice (usa immagine esistente)
+
+---
+
+**Aggiornato**: 2026-02-11 | **Stato**: Production-ready
