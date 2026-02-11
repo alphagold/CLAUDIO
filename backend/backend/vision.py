@@ -158,45 +158,48 @@ class OllamaVisionClient:
                 raise
 
         try:
-            # Run synchronous requests call in thread pool
-            print(f"[VISION] Calling asyncio.to_thread(_sync_post)...")
-            result = await asyncio.to_thread(_sync_post)
-            print(f"[VISION] asyncio.to_thread() completed!")
-            print(f"[VISION] ✅ Response received successfully from {self.host}")
+            # Retry loop: riprova se la risposta è vuota o troppo corta
+            # (qwen3-vl a volte ignora /no_think e risponde solo nel campo thinking)
+            MAX_ATTEMPTS = 3
+            MIN_RESPONSE_LEN = 100  # Risposta valida deve avere almeno 100 chars
 
-            # Debug: log entire Ollama response structure
-            print(f"[VISION] Full Ollama response keys: {list(result.keys())}")
-            print(f"[VISION] Full Ollama response: {json.dumps(result, indent=2, ensure_ascii=False)[:2000]}")
+            result = None
+            analysis_text = ""
+            for attempt in range(MAX_ATTEMPTS):
+                if attempt > 0:
+                    print(f"[VISION] Retry {attempt}/{MAX_ATTEMPTS - 1} (risposta precedente troppo corta o vuota)")
+                    await asyncio.sleep(2)
 
-            # Parse response from /api/generate (used for all models now)
-            analysis_text = result.get("response", "")
-            print(f"[VISION] Using /api/generate response format")
+                print(f"[VISION] Calling asyncio.to_thread(_sync_post) attempt {attempt + 1}...")
+                result = await asyncio.to_thread(_sync_post)
+                print(f"[VISION] ✅ Response received successfully from {self.host}")
 
-            # Fallback to "thinking" field if response is empty
-            # BUT ONLY if thinking contains structured format (not just reasoning)
-            if not analysis_text.strip() and "thinking" in result:
-                thinking_text = result.get("thinking", "")
-                print(f"[VISION] ⚠️ Response empty, checking 'thinking' field")
-                print(f"[VISION] Thinking field length: {len(thinking_text)} chars")
+                # Parse response from /api/generate
+                analysis_text = result.get("response", "").strip()
+                print(f"[VISION] Response text length: {len(analysis_text)} chars (attempt {attempt + 1})")
 
-                # Check if thinking contains structured format (Italian sections)
-                has_structured_format = (
-                    "DESCRIZIONE DETTAGLIATA:" in thinking_text and
-                    "CATEGORIA:" in thinking_text
-                )
+                # Fallback a campo "thinking" se response vuota
+                # Sezioni del prompt corrente: DESCRIZIONE COMPLETA, CATEGORIA SCENA, OGGETTI IDENTIFICATI
+                if not analysis_text and "thinking" in result:
+                    thinking_text = result.get("thinking", "")
+                    print(f"[VISION] ⚠️ Response empty, checking 'thinking' field ({len(thinking_text)} chars)")
+                    has_structured_format = any(kw in thinking_text for kw in [
+                        "DESCRIZIONE COMPLETA:", "CATEGORIA SCENA:", "OGGETTI IDENTIFICATI:", "TAG CHIAVE:"
+                    ])
+                    if has_structured_format:
+                        print(f"[VISION] ✅ Thinking field contains structured format, using it")
+                        analysis_text = thinking_text
 
-                if has_structured_format:
-                    print(f"[VISION] ✅ Thinking field contains structured format, using it")
-                    analysis_text = thinking_text
-                else:
-                    # Thinking è solo ragionamento in inglese, non usarlo come descrizione
-                    print(f"[VISION] ⚠️ Thinking field is just reasoning (English), skipping")
-                    print(f"[VISION] Thinking preview: {thinking_text[:200]}")
-                    analysis_text = "Immagine analizzata (dettagli non disponibili da questo modello)"
+                if len(analysis_text) >= MIN_RESPONSE_LEN:
+                    break  # Risposta valida
+                print(f"[VISION] ⚠️ Risposta troppo corta ({len(analysis_text)} chars), ritento...")
+
+            if not analysis_text or len(analysis_text) < MIN_RESPONSE_LEN:
+                print(f"[VISION] ⚠️ Nessuna risposta valida dopo {MAX_ATTEMPTS} tentativi, uso fallback")
+                analysis_text = "Immagine analizzata (dettagli non disponibili da questo modello)"
 
             processing_time = int((time.time() - start_time) * 1000)
             print(f"[VISION] Analysis completed in {processing_time}ms")
-            print(f"[VISION] Response text length: {len(analysis_text)} chars")
             print(f"[VISION] Response text preview: {analysis_text[:500]}")
 
             # Parse JSON from response
