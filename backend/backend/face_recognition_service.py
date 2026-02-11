@@ -28,12 +28,11 @@ except ImportError as e:
 # Registra psycopg2 adapters per tipi numpy - previene "can't adapt type numpy.floatX"
 # face_recognition/cv2 producono numpy scalars che psycopg2 non serializza nativamente
 try:
-    import psycopg2.extensions as _pg2ext
-    _pg2ext.register_adapter(np.float32, lambda x: _pg2ext.AsIs(float(x)))
-    _pg2ext.register_adapter(np.float64, lambda x: _pg2ext.AsIs(float(x)))
-    _pg2ext.register_adapter(np.int32, lambda x: _pg2ext.AsIs(int(x)))
-    _pg2ext.register_adapter(np.int64, lambda x: _pg2ext.AsIs(int(x)))
-    del _pg2ext
+    from psycopg2.extensions import register_adapter as _pg2_register, AsIs as _pg2_AsIs
+    _pg2_register(np.float32, lambda x: _pg2_AsIs(float(x)))
+    _pg2_register(np.float64, lambda x: _pg2_AsIs(float(x)))
+    _pg2_register(np.int32, lambda x: _pg2_AsIs(int(x)))
+    _pg2_register(np.int64, lambda x: _pg2_AsIs(int(x)))
 except Exception:
     pass
 
@@ -428,8 +427,99 @@ class FaceRecognitionService:
         self.db.commit()
         self.db.refresh(face)
 
+        # Aggiorna photo_count per la persona (numero foto distinte)
+        photo_count = self.db.query(func.count(func.distinct(Face.photo_id))).filter(
+            Face.person_id == person.id,
+            Face.deleted_at.is_(None)
+        ).scalar() or 0
+        person.photo_count = photo_count
+        self.db.commit()
+
+        # Auto-assegna volti simili se labeling manuale
+        if label_type == "manual":
+            auto_count = self._auto_assign_similar_faces(face, person)
+            if auto_count > 0:
+                logger.info(f"Auto-assegnati {auto_count} volti simili a {person.name}")
+
         logger.info(f"Labeled face {face_id} as person {person.id} ({person.name})")
         return face
+
+    def _auto_assign_similar_faces(
+        self,
+        labeled_face: Face,
+        person: Person,
+        min_similarity: float = 0.6
+    ) -> int:
+        """
+        Auto-assegna la stessa persona a volti simili non etichettati.
+
+        Dopo un labeling manuale, cerca volti con similarità coseno >= min_similarity
+        e li assegna automaticamente alla stessa persona.
+
+        Args:
+            labeled_face: Volto appena etichettato (riferimento)
+            person: Persona da assegnare
+            min_similarity: Soglia similarità coseno (0.6 ≈ stessa persona)
+
+        Returns:
+            Numero di volti auto-assegnati
+        """
+        if not labeled_face.embedding:
+            return 0
+
+        query = text("""
+            SELECT f.id,
+                   (1 - (f.embedding <=> :embedding::vector)) AS similarity
+            FROM faces f
+            JOIN photos ph ON f.photo_id = ph.id
+            WHERE f.person_id IS NULL
+              AND f.deleted_at IS NULL
+              AND f.id != :face_id
+              AND ph.user_id = :user_id
+              AND (1 - (f.embedding <=> :embedding::vector)) >= :min_similarity
+            ORDER BY f.embedding <=> :embedding::vector
+            LIMIT 100
+        """)
+
+        results = self.db.execute(
+            query,
+            {
+                "face_id": str(labeled_face.id),
+                "embedding": str(labeled_face.embedding),
+                "user_id": str(person.user_id),
+                "min_similarity": min_similarity
+            }
+        ).fetchall()
+
+        if not results:
+            return 0
+
+        assigned_count = 0
+        for row in results:
+            face_to_assign = self.db.query(Face).filter(Face.id == row.id).first()
+            if face_to_assign and face_to_assign.person_id is None:
+                face_to_assign.person_id = person.id
+                face_to_assign.cluster_id = None
+                label = FaceLabel(
+                    face_id=face_to_assign.id,
+                    person_id=person.id,
+                    labeled_by_user_id=person.user_id,
+                    label_type="auto",
+                    confidence=float(row.similarity)
+                )
+                self.db.add(label)
+                assigned_count += 1
+
+        if assigned_count > 0:
+            self.db.flush()
+            photo_count = self.db.query(func.count(func.distinct(Face.photo_id))).filter(
+                Face.person_id == person.id,
+                Face.deleted_at.is_(None)
+            ).scalar() or 0
+            person.photo_count = photo_count
+            self.db.commit()
+
+        return assigned_count
 
     def get_person_photos(self, person_id: UUID, limit: int = 100) -> List[Dict[str, Any]]:
         """
