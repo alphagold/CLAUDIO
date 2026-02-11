@@ -29,12 +29,13 @@ RUN pip install --upgrade pip setuptools wheel
 RUN grep -v "face_recognition\|dlib\|scikit-learn\|opencv-python" requirements.txt > requirements_base.txt && \
     pip install --no-cache-dir -r requirements_base.txt
 
-# Install dlib pre-compiled wheel (no compilation needed)
-# face_recognition requires dlib>=19.7.0, but dlib-bin provides the same module
-# with a different package name - use --no-deps to skip pip's dependency check
+# Install face recognition stack:
+# 1. dlib-bin: pre-compiled wheel (no source compilation)
+# 2. face_recognition_models: must be installed BEFORE face_recognition imports
+# 3. face_recognition --no-deps: skips dlib>=19.7.0 check (satisfied by dlib-bin)
 RUN pip install --no-cache-dir dlib-bin && \
-    pip install --no-cache-dir --no-deps face_recognition==1.3.0 && \
-    pip install --no-cache-dir face-recognition-models scikit-learn opencv-python-headless || \
+    pip install --no-cache-dir face_recognition_models scikit-learn opencv-python-headless && \
+    pip install --no-cache-dir --no-deps face_recognition==1.3.0 || \
     echo "WARNING: face_recognition not available - feature disabled"
 
 # Copy application code
