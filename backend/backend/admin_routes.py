@@ -305,9 +305,12 @@ async def admin_reset_face_detection(
     db.execute(text("UPDATE persons SET photo_count = 0"))
 
     # Reset face_detection_status = 'pending' per tutte le foto non cancellate
-    # (pending invece di NULL così Ri-accoda le trova subito)
+    # Escludi 'skipped' (file fisico mancante - non ha senso ri-accodarle)
     db.execute(
-        text("UPDATE photos SET face_detection_status = 'pending', faces_detected_at = NULL WHERE deleted_at IS NULL")
+        text("""UPDATE photos
+                SET face_detection_status = 'pending', faces_detected_at = NULL
+                WHERE deleted_at IS NULL
+                AND (face_detection_status IS NULL OR face_detection_status != 'skipped')""")
     )
 
     db.commit()

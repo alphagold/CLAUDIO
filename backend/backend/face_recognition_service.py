@@ -276,6 +276,11 @@ class FaceRecognitionService:
 
             return created_faces
 
+        except FileNotFoundError as e:
+            # File fisico mancante: salta permanentemente (non ri-accodare)
+            logger.warning(f"Face detection skipped for photo {photo_id}: file not found at {image_path}")
+            photo.face_detection_status = "skipped"
+            self.db.commit()
         except Exception as e:
             logger.error(f"Face detection failed for photo {photo_id}: {e}")
             photo.face_detection_status = "failed"
