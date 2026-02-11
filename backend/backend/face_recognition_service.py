@@ -226,7 +226,7 @@ class FaceRecognitionService:
                     bbox_height=bottom - top,
                     embedding=encoding.tolist(),  # Convert numpy to list
                     detection_confidence=0.90,  # face_recognition doesn't provide confidence
-                    face_quality_score=quality
+                    face_quality_score=float(quality)  # cast np.float64 → float per psycopg2
                 )
                 self.db.add(face)
                 created_faces.append(face)
