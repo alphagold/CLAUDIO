@@ -6,6 +6,7 @@ Utilizza face_recognition library (basata su dlib) per generare embeddings 128-d
 """
 
 import logging
+import traceback
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from uuid import UUID
@@ -328,6 +329,7 @@ class FaceRecognitionService:
             self.db.commit()
         except Exception as e:
             logger.error(f"Face detection failed for photo {photo_id}: {e}")
+            logger.error(f"Traceback completo:\n{traceback.format_exc()}")
             photo.face_detection_status = "failed"
             self.db.commit()
             raise
@@ -422,24 +424,35 @@ class FaceRecognitionService:
         clustering = DBSCAN(eps=eps, min_samples=min_samples, metric='cosine')
         labels = clustering.fit_predict(embeddings)
 
-        # Assign cluster IDs
-        for face, cluster_id in zip(unlabeled_faces, labels):
-            if cluster_id >= 0:  # Not noise
-                face.cluster_id = int(cluster_id)
+        # Assign cluster IDs - usa raw_embeddings (lista Python) invece di face.embedding (pgvector)
+        for idx, (face, cluster_id) in enumerate(zip(unlabeled_faces, labels)):
+            cluster_id_int = int(cluster_id)
+            if cluster_id_int >= 0:  # Not noise
+                face.cluster_id = cluster_id_int
 
                 # Calculate distance to cluster centroid
-                cluster_embeddings = embeddings[labels == cluster_id]
+                cluster_mask = labels == cluster_id_int
+                cluster_embeddings = embeddings[cluster_mask]
                 centroid = cluster_embeddings.mean(axis=0)
-                distance = self._cosine_distance(face.embedding, centroid)
-                face.cluster_distance = round(distance, 4)
+                distance = self._cosine_distance(raw_embeddings[idx], centroid)
+                face.cluster_distance = round(float(distance), 4)
 
         self.db.commit()
-        logger.info(f"Clustered {len(unlabeled_faces)} faces into {max(labels) + 1} clusters")
+        n_clusters = int(max(labels)) + 1 if len(labels) > 0 and int(max(labels)) >= 0 else 0
+        logger.info(f"Clustered {len(unlabeled_faces)} faces into {n_clusters} clusters")
 
-    def _cosine_distance(self, vec1: List[float], vec2: np.ndarray) -> float:
+    def _cosine_distance(self, vec1, vec2: np.ndarray) -> float:
         """Calcola distanza coseno tra due vettori."""
-        vec1 = np.array(vec1)
-        return 1 - np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+        # Converti vec1 in lista Python se è pgvector o numpy (evita boolean ambiguity)
+        if hasattr(vec1, 'tolist'):
+            vec1 = vec1.tolist()
+        v1 = np.array(list(vec1), dtype=np.float64)
+        v2 = np.array(vec2, dtype=np.float64)
+        norm1 = float(np.linalg.norm(v1))
+        norm2 = float(np.linalg.norm(v2))
+        if norm1 == 0.0 or norm2 == 0.0:
+            return 1.0
+        return float(1.0 - np.dot(v1, v2) / (norm1 * norm2))
 
     # ========================================================================
     # Person Management
