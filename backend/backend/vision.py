@@ -340,6 +340,33 @@ class OllamaVisionClient:
 
         return result
 
+    # Mappa tag inglesi → italiani (il modello a volte risponde in inglese)
+    _TAG_TRANSLATIONS = {
+        "nature": "natura", "natural": "natura", "outdoor": "esterno", "outdoors": "esterno",
+        "indoor": "interno", "indoors": "interno", "people": "persone", "person": "persona",
+        "food": "cibo", "drink": "bevanda", "drinks": "bevande", "water": "acqua",
+        "sky": "cielo", "tree": "albero", "trees": "alberi", "flower": "fiore",
+        "flowers": "fiori", "beach": "spiaggia", "sea": "mare", "ocean": "oceano",
+        "mountain": "montagna", "mountains": "montagne", "city": "città",
+        "urban": "urbano", "building": "edificio", "buildings": "edifici",
+        "road": "strada", "car": "auto", "vehicle": "veicolo", "vehicles": "veicoli",
+        "animal": "animale", "animals": "animali", "dog": "cane", "cat": "gatto",
+        "travel": "viaggio", "family": "famiglia", "friends": "amici", "friend": "amico",
+        "sport": "sport", "sports": "sport", "art": "arte", "work": "lavoro",
+        "technology": "tecnologia", "tech": "tecnologia", "night": "notte",
+        "day": "giorno", "sunset": "tramonto", "sunrise": "alba",
+        "landscape": "paesaggio", "portrait": "ritratto", "architecture": "architettura",
+        "document": "documento", "text": "testo", "sign": "insegna",
+    }
+
+    def _normalize_tags(self, tags: list) -> list:
+        """Normalizza tag inglesi in italiano"""
+        normalized = []
+        for tag in tags:
+            lower = tag.strip().lower()
+            normalized.append(self._TAG_TRANSLATIONS.get(lower, tag.strip()))
+        return normalized
+
     def _parse_analysis_response(self, response_text: str) -> Dict:
         """Parse Vision AI response - estrae struttura dal testo libero"""
 
@@ -347,6 +374,10 @@ class OllamaVisionClient:
 
         result = self._extract_from_text(response_text)
         result = self._complete_analysis_dict(result)
+
+        # Normalizza tag inglesi → italiani
+        if result.get("tags"):
+            result["tags"] = self._normalize_tags(result["tags"])
 
         is_valid, warnings = self._validate_analysis_quality(result)
         if warnings:

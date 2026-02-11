@@ -271,6 +271,40 @@ class FaceRecognitionService:
 
             logger.info(f"Detected {len(created_faces)} faces in photo {photo_id}")
 
+            # Per ogni nuovo volto, cerca se corrisponde a una persona già nota
+            auto_matched = 0
+            for face in created_faces:
+                self.db.refresh(face)
+                match = self._match_to_known_persons(face, photo.user_id)
+                if match:
+                    person_id_match, similarity = match
+                    face.person_id = person_id_match
+                    label = FaceLabel(
+                        face_id=face.id,
+                        person_id=person_id_match,
+                        labeled_by_user_id=photo.user_id,
+                        label_type="auto",
+                        confidence=float(similarity)
+                    )
+                    self.db.add(label)
+                    auto_matched += 1
+
+            if auto_matched > 0:
+                self.db.flush()
+                matched_person_ids = {str(f.person_id) for f in created_faces if f.person_id is not None}
+                for pid_str in matched_person_ids:
+                    pid_uuid = UUID(pid_str)
+                    pc = self.db.query(func.count(distinct(Face.photo_id))).filter(
+                        Face.person_id == pid_uuid,
+                        Face.deleted_at.is_(None)
+                    ).scalar() or 0
+                    self.db.execute(
+                        text("UPDATE persons SET photo_count = :count WHERE id = :pid"),
+                        {"count": pc, "pid": pid_str}
+                    )
+                self.db.commit()
+                logger.info(f"Auto-matched {auto_matched} faces to known persons in photo {photo_id}")
+
             # Trigger auto-clustering for this user
             self._auto_cluster_faces(photo.user_id)
 
@@ -490,6 +524,47 @@ class FaceRecognitionService:
 
         logger.info(f"Labeled face {face_id} as person {person_id_val} ({person_name_val})")
         return face
+
+    def _match_to_known_persons(
+        self,
+        face: Face,
+        user_id: UUID,
+        min_similarity: float = 0.4
+    ):
+        """
+        Per un nuovo volto, cerca se esiste già una persona nota con embedding simile.
+        Restituisce (person_id, similarity) oppure None.
+        """
+        if not face.embedding:
+            return None
+
+        query = text("""
+            SELECT f.person_id,
+                   (1 - (f.embedding <=> :embedding::vector)) AS similarity
+            FROM faces f
+            JOIN photos ph ON f.photo_id = ph.id
+            WHERE f.person_id IS NOT NULL
+              AND f.deleted_at IS NULL
+              AND f.id != :face_id
+              AND ph.user_id = :user_id
+              AND (1 - (f.embedding <=> :embedding::vector)) >= :min_similarity
+            ORDER BY f.embedding <=> :embedding::vector
+            LIMIT 1
+        """)
+
+        result = self.db.execute(
+            query,
+            {
+                "face_id": str(face.id),
+                "embedding": str(face.embedding),
+                "user_id": str(user_id),
+                "min_similarity": min_similarity
+            }
+        ).fetchone()
+
+        if result:
+            return (result.person_id, result.similarity)
+        return None
 
     def _auto_assign_similar_faces(
         self,

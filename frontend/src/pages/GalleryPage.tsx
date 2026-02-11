@@ -52,10 +52,15 @@ export default function GalleryPage() {
       return photosApi.getPhotos({ limit: 100 });
     },
     refetchInterval: (query) => {
-      // Auto-refresh if any photo is being analyzed
+      // Auto-refresh se analisi LLM o face detection in corso
       const photos = query.state.data?.photos || [];
       const hasAnalyzing = photos.some(p => !p.analyzed_at && p.analysis_started_at);
-      return hasAnalyzing ? 1000 : false; // Refresh every 1s if analyzing (più reattivo)
+      const hasFaceDetecting = photos.some(
+        p => p.face_detection_status === 'pending' || p.face_detection_status === 'processing'
+      );
+      if (hasAnalyzing) return 1000;
+      if (hasFaceDetecting) return 3000;
+      return false;
     },
   });
 
