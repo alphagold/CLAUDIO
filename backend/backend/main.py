@@ -32,7 +32,7 @@ try:
     import face_routes
     from face_recognition_service import FaceRecognitionService
     FACE_RECOGNITION_AVAILABLE = True
-except ImportError as e:
+except (Exception, SystemExit) as e:
     FACE_RECOGNITION_AVAILABLE = False
     print(f"WARNING: face_recognition not available: {e}")
     print("Face recognition features will be disabled")
