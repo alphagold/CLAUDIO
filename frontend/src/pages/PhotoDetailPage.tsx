@@ -60,9 +60,11 @@ export default function PhotoDetailPage() {
     queryFn: () => photosApi.getPhoto(photoId!),
     enabled: !!photoId,
     refetchInterval: (query) => {
-      // Auto-refresh only while analysis is truly in progress
+      // Auto-refresh during LLM analysis or face detection
       const photo = query.state.data;
-      return photo && !photo.analyzed_at && photo.analysis_started_at ? 1000 : false; // 1s per reattività
+      const llmInProgress = photo && !photo.analyzed_at && photo.analysis_started_at;
+      const faceInProgress = photo?.face_detection_status === 'processing' || photo?.face_detection_status === 'pending';
+      return (llmInProgress || faceInProgress) ? 1000 : false;
     },
   });
 
@@ -142,7 +144,7 @@ export default function PhotoDetailPage() {
   const redetectFacesMutation = useMutation({
     mutationFn: () => facesApi.detectFaces(photoId!),
     onSuccess: () => {
-      toast.success('Rilevamento volti avviato');
+      toast.success('Rilevamento volti completato');
       queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
     },
     onError: (error: any) => {
@@ -150,6 +152,15 @@ export default function PhotoDetailPage() {
       toast.error(msg);
     },
   });
+
+  const handleRedetectFaces = () => {
+    // Avvisa se ci sono volti etichettati (labels verranno persi)
+    const hasLabeledFaces = photo?.has_faces && photo?.face_detection_status === 'completed';
+    if (hasLabeledFaces) {
+      if (!window.confirm('La ri-analisi eliminerà i volti rilevati in precedenza e i nomi assegnati. Continuare?')) return;
+    }
+    redetectFacesMutation.mutate();
+  };
 
   const handleDelete = () => {
     if (window.confirm('Sei sicuro di voler eliminare questa foto?')) {
@@ -512,7 +523,7 @@ export default function PhotoDetailPage() {
           {/* Photo */}
           <div className="lg:col-span-3 bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200 animate-fade-in">
             <div className="relative w-full">
-              {photo.analysis?.detected_faces && photo.analysis.detected_faces > 0 ? (
+              {photo.face_detection_status === 'completed' ? (
                 <FaceOverlay
                   photoId={photo.id}
                   imageUrl={photosApi.getPhotoUrl(photo.id)}
@@ -524,6 +535,7 @@ export default function PhotoDetailPage() {
                   }}
                   showLabels={true}
                   className={getOrientationClass(photo.exif_data?.Orientation)}
+                  refreshTrigger={photo.faces_detected_at}
                 />
               ) : (
                 <img
@@ -715,13 +727,13 @@ export default function PhotoDetailPage() {
                   <h3 className="font-semibold text-gray-900">Riconoscimento Volti</h3>
                 </div>
                 <button
-                  onClick={() => redetectFacesMutation.mutate()}
+                  onClick={handleRedetectFaces}
                   disabled={redetectFacesMutation.isPending}
                   className="flex items-center space-x-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors text-sm font-medium"
                   title="Rianalizza solo i volti (senza rianalisi AI)"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${redetectFacesMutation.isPending ? 'animate-spin' : ''}`} />
-                  <span>{redetectFacesMutation.isPending ? 'Avvio...' : 'Rianalizza'}</span>
+                  <span>{redetectFacesMutation.isPending ? 'In corso...' : 'Rianalizza'}</span>
                 </button>
               </div>
               <div className="flex items-center space-x-3 text-sm">
@@ -756,10 +768,10 @@ export default function PhotoDetailPage() {
                     Non eseguito
                   </span>
                 )}
-                {/* Faces count */}
-                {photo.analysis?.detected_faces !== undefined && photo.analysis.detected_faces > 0 && (
+                {/* Faces count - solo quando completato (dato reale dal pipeline) */}
+                {photo.face_detection_status === 'completed' && photo.analysis?.detected_faces !== undefined && photo.analysis.detected_faces > 0 && (
                   <span className="text-gray-600">
-                    {photo.analysis.detected_faces} {photo.analysis.detected_faces === 1 ? 'volto' : 'volti'} rilevati
+                    {photo.analysis.detected_faces} {photo.analysis.detected_faces === 1 ? 'volto rilevato' : 'volti rilevati'}
                   </span>
                 )}
               </div>

@@ -8,6 +8,7 @@ interface FaceOverlayProps {
   onFaceClick?: (face: Face) => void;
   showLabels?: boolean;
   className?: string;
+  refreshTrigger?: string | number | null;
 }
 
 /**
@@ -22,6 +23,7 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
   onFaceClick,
   showLabels = true,
   className = '',
+  refreshTrigger,
 }) => {
   const [faces, setFaces] = useState<Face[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +52,7 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
     };
 
     fetchFaces();
-  }, [photoId]);
+  }, [photoId, refreshTrigger]);
 
   // Get natural image size when image loads
   const handleImageLoad = () => {
