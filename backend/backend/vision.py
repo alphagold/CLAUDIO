@@ -93,7 +93,8 @@ class OllamaVisionClient:
             "prompt": prompt,
             "images": [image_b64],
             "stream": False,
-            "options": options
+            "options": options,
+            "think": False  # Disabilita reasoning mode (qwen3-vl): response diretta senza thinking
         }
 
         print(f"[VISION] Making request to: {target_url} with model: {selected_model}")
