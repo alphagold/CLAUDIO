@@ -272,38 +272,46 @@ class FaceRecognitionService:
             logger.info(f"Detected {len(created_faces)} faces in photo {photo_id}")
 
             # Per ogni nuovo volto, cerca se corrisponde a una persona già nota
-            auto_matched = 0
-            for face in created_faces:
-                self.db.refresh(face)
-                match = self._match_to_known_persons(face, photo.user_id)
-                if match:
-                    person_id_match, similarity = match
-                    face.person_id = person_id_match
-                    label = FaceLabel(
-                        face_id=face.id,
-                        person_id=person_id_match,
-                        labeled_by_user_id=photo.user_id,
-                        label_type="auto",
-                        confidence=float(similarity)
-                    )
-                    self.db.add(label)
-                    auto_matched += 1
+            # Wrappato in try/except: errore qui non deve bloccare il face detection
+            try:
+                auto_matched = 0
+                for face in created_faces:
+                    self.db.refresh(face)
+                    match = self._match_to_known_persons(face, photo.user_id)
+                    if match is not None:
+                        person_id_match, similarity = match
+                        face.person_id = person_id_match
+                        label = FaceLabel(
+                            face_id=face.id,
+                            person_id=person_id_match,
+                            labeled_by_user_id=photo.user_id,
+                            label_type="auto",
+                            confidence=float(similarity)
+                        )
+                        self.db.add(label)
+                        auto_matched += 1
 
-            if auto_matched > 0:
-                self.db.flush()
-                matched_person_ids = {str(f.person_id) for f in created_faces if f.person_id is not None}
-                for pid_str in matched_person_ids:
-                    pid_uuid = UUID(pid_str)
-                    pc = self.db.query(func.count(distinct(Face.photo_id))).filter(
-                        Face.person_id == pid_uuid,
-                        Face.deleted_at.is_(None)
-                    ).scalar() or 0
-                    self.db.execute(
-                        text("UPDATE persons SET photo_count = :count WHERE id = :pid"),
-                        {"count": pc, "pid": pid_str}
-                    )
-                self.db.commit()
-                logger.info(f"Auto-matched {auto_matched} faces to known persons in photo {photo_id}")
+                if auto_matched > 0:
+                    self.db.flush()
+                    matched_person_ids = [
+                        str(f.person_id) for f in created_faces
+                        if f.person_id is not None
+                    ]
+                    for pid_str in set(matched_person_ids):
+                        pid_uuid = UUID(pid_str)
+                        pc = self.db.query(func.count(distinct(Face.photo_id))).filter(
+                            Face.person_id == pid_uuid,
+                            Face.deleted_at.is_(None)
+                        ).scalar() or 0
+                        self.db.execute(
+                            text("UPDATE persons SET photo_count = :count WHERE id = :pid"),
+                            {"count": pc, "pid": pid_str}
+                        )
+                    self.db.commit()
+                    logger.info(f"Auto-matched {auto_matched} faces to known persons in photo {photo_id}")
+            except Exception as e:
+                logger.warning(f"Auto-match non critico fallito per photo {photo_id}: {e}")
+                self.db.rollback()
 
             # Trigger auto-clustering for this user
             self._auto_cluster_faces(photo.user_id)
@@ -538,6 +546,11 @@ class FaceRecognitionService:
         if face.embedding is None:
             return None
 
+        # Converti embedding in lista Python (pgvector ritorna numpy array dopo db.refresh)
+        emb = face.embedding
+        if hasattr(emb, 'tolist'):
+            emb = emb.tolist()
+
         query = text("""
             SELECT f.person_id,
                    (1 - (f.embedding <=> :embedding::vector)) AS similarity
@@ -556,14 +569,14 @@ class FaceRecognitionService:
             query,
             {
                 "face_id": str(face.id),
-                "embedding": str(face.embedding),
+                "embedding": str(emb),
                 "user_id": str(user_id),
                 "min_similarity": min_similarity
             }
         ).fetchone()
 
-        if result:
-            return (result.person_id, result.similarity)
+        if result is not None:
+            return (result.person_id, float(result.similarity))
         return None
 
     def _auto_assign_similar_faces(
@@ -593,6 +606,11 @@ class FaceRecognitionService:
         if labeled_face.embedding is None:
             return 0
 
+        # Converti embedding in lista Python (pgvector ritorna numpy array dopo db.refresh)
+        emb = labeled_face.embedding
+        if hasattr(emb, 'tolist'):
+            emb = emb.tolist()
+
         query = text("""
             SELECT f.id,
                    (1 - (f.embedding <=> :embedding::vector)) AS similarity
@@ -611,7 +629,7 @@ class FaceRecognitionService:
             query,
             {
                 "face_id": str(labeled_face.id),
-                "embedding": str(labeled_face.embedding),
+                "embedding": str(emb),
                 "user_id": str(user_id),
                 "min_similarity": min_similarity
             }
