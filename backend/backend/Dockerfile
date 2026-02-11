@@ -30,9 +30,11 @@ RUN grep -v "face_recognition\|dlib\|scikit-learn\|opencv-python" requirements.t
     pip install --no-cache-dir -r requirements_base.txt
 
 # Install dlib pre-compiled wheel (no compilation needed)
-RUN pip install --no-cache-dir dlib-bin
-# Install face recognition and ML deps (optional - app works without)
-RUN pip install --no-cache-dir face_recognition scikit-learn opencv-python-headless || \
+# face_recognition requires dlib>=19.7.0, but dlib-bin provides the same module
+# with a different package name - use --no-deps to skip pip's dependency check
+RUN pip install --no-cache-dir dlib-bin && \
+    pip install --no-cache-dir --no-deps face_recognition==1.3.0 && \
+    pip install --no-cache-dir face-recognition-models scikit-learn opencv-python-headless || \
     echo "WARNING: face_recognition not available - feature disabled"
 
 # Copy application code
