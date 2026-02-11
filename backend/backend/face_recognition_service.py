@@ -25,6 +25,18 @@ except ImportError as e:
     print(f"WARNING: face_recognition not available: {e}")
     print("Face recognition features will be disabled")
 
+# Registra psycopg2 adapters per tipi numpy - previene "can't adapt type numpy.floatX"
+# face_recognition/cv2 producono numpy scalars che psycopg2 non serializza nativamente
+try:
+    import psycopg2.extensions as _pg2ext
+    _pg2ext.register_adapter(np.float32, lambda x: _pg2ext.AsIs(float(x)))
+    _pg2ext.register_adapter(np.float64, lambda x: _pg2ext.AsIs(float(x)))
+    _pg2ext.register_adapter(np.int32, lambda x: _pg2ext.AsIs(int(x)))
+    _pg2ext.register_adapter(np.int64, lambda x: _pg2ext.AsIs(int(x)))
+    del _pg2ext
+except Exception:
+    pass
+
 # Models
 from models import Face, Person, FaceLabel, FaceRecognitionConsent, Photo
 
