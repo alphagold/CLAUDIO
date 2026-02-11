@@ -313,8 +313,11 @@ class FaceRecognitionService:
                 logger.warning(f"Auto-match non critico fallito per photo {photo_id}: {e}")
                 self.db.rollback()
 
-            # Trigger auto-clustering for this user
-            self._auto_cluster_faces(photo.user_id)
+            # Trigger auto-clustering (non critico)
+            try:
+                self._auto_cluster_faces(photo.user_id)
+            except Exception as e:
+                logger.warning(f"Auto-clustering non critico fallito per photo {photo_id}: {e}")
 
             return created_faces
 
@@ -396,8 +399,24 @@ class FaceRecognitionService:
             logger.info(f"Not enough unlabeled faces for clustering (found {len(unlabeled_faces)})")
             return
 
-        # Extract embeddings
-        embeddings = np.array([face.embedding for face in unlabeled_faces])
+        # Extract embeddings - converti in lista Python prima di np.array
+        # (pgvector può ritornare Vector/numpy types che causano problemi)
+        raw_embeddings = []
+        valid_faces = []
+        for face in unlabeled_faces:
+            emb = face.embedding
+            if emb is None:
+                continue
+            if hasattr(emb, 'tolist'):
+                emb = emb.tolist()
+            raw_embeddings.append(list(emb))
+            valid_faces.append(face)
+
+        if len(valid_faces) < min_samples:
+            return
+
+        embeddings = np.array(raw_embeddings, dtype=np.float64)
+        unlabeled_faces = valid_faces
 
         # DBSCAN clustering (cosine distance)
         clustering = DBSCAN(eps=eps, min_samples=min_samples, metric='cosine')
