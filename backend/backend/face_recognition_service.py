@@ -535,7 +535,7 @@ class FaceRecognitionService:
         Per un nuovo volto, cerca se esiste già una persona nota con embedding simile.
         Restituisce (person_id, similarity) oppure None.
         """
-        if not face.embedding:
+        if face.embedding is None:
             return None
 
         query = text("""
@@ -590,7 +590,7 @@ class FaceRecognitionService:
         Returns:
             Numero di volti auto-assegnati
         """
-        if not labeled_face.embedding:
+        if labeled_face.embedding is None:
             return 0
 
         query = text("""
