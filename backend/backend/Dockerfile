@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system dependencies including Docker CLI and face_recognition deps
 RUN apt-get update && apt-get install -y \
     curl \
+    git \
     netcat-openbsd \
     gcc \
     g++ \
@@ -31,10 +32,11 @@ RUN grep -v "face_recognition\|dlib\|scikit-learn\|opencv-python" requirements.t
 
 # Install face recognition stack:
 # 1. dlib-bin: pre-compiled wheel (no source compilation)
-# 2. face_recognition_models: must be installed BEFORE face_recognition imports
+# 2. face_recognition_models from GitHub: PyPI 0.3.0 omette i file modello .dat
 # 3. face_recognition --no-deps: skips dlib>=19.7.0 check (satisfied by dlib-bin)
 RUN pip install --no-cache-dir dlib-bin && \
-    pip install --no-cache-dir face_recognition_models scikit-learn opencv-python-headless && \
+    pip install --no-cache-dir "git+https://github.com/ageitgey/face_recognition_models" && \
+    pip install --no-cache-dir scikit-learn opencv-python-headless && \
     pip install --no-cache-dir --no-deps face_recognition==1.3.0 || \
     echo "WARNING: face_recognition not available - feature disabled"
 
