@@ -435,11 +435,14 @@ class FaceRecognitionService:
         person.photo_count = photo_count
         self.db.commit()
 
-        # Auto-assegna volti simili se labeling manuale
+        # Auto-assegna volti simili se labeling manuale (non bloccante)
         if label_type == "manual":
-            auto_count = self._auto_assign_similar_faces(face, person)
-            if auto_count > 0:
-                logger.info(f"Auto-assegnati {auto_count} volti simili a {person.name}")
+            try:
+                auto_count = self._auto_assign_similar_faces(face, person)
+                if auto_count > 0:
+                    logger.info(f"Auto-assegnati {auto_count} volti simili a {person.name}")
+            except Exception as e:
+                logger.warning(f"Auto-assegnazione volti simili fallita (non critico): {e}")
 
         logger.info(f"Labeled face {face_id} as person {person.id} ({person.name})")
         return face
