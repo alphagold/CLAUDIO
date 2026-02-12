@@ -561,6 +561,16 @@ class FaceRecognitionService:
                     logger.info(f"Auto-assegnati {auto_count} volti simili a {person_name_val}")
             except Exception as e:
                 logger.warning(f"Auto-assegnazione volti simili fallita (non critico): {e}")
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
+
+        # Refresh face per assicurare stato pulito prima di restituire
+        try:
+            self.db.refresh(face)
+        except Exception:
+            pass
 
         logger.info(f"Labeled face {face_id} as person {person_id_val} ({person_name_val})")
         return face
@@ -715,7 +725,7 @@ class FaceRecognitionService:
         """
         results = self.db.query(
             Photo.id,
-            Photo.upload_date,
+            Photo.uploaded_at,
             Photo.file_path,
             Face.bbox_x,
             Face.bbox_y,
@@ -724,12 +734,12 @@ class FaceRecognitionService:
         ).join(Face).filter(
             Face.person_id == person_id,
             Face.deleted_at.is_(None)
-        ).order_by(Photo.upload_date.desc()).limit(limit).all()
+        ).order_by(Photo.uploaded_at.desc()).limit(limit).all()
 
         return [
             {
                 "photo_id": str(r.id),
-                "upload_date": r.upload_date.isoformat(),
+                "upload_date": r.uploaded_at.isoformat(),
                 "file_path": r.file_path,
                 "face_bbox": {
                     "x": r.bbox_x,

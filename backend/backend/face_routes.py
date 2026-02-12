@@ -472,6 +472,9 @@ async def label_face(
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Face labeling error for face {face_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Errore etichettatura: {str(e)}")
 
 
 @router.get("/similar/{face_id}", response_model=List[SimilarFaceResponse])

@@ -207,30 +207,34 @@ INSERT INTO prompt_templates (name, description, prompt_text, is_default, is_act
 VALUES
 (
     'simple_description',
-    'Descrizione libera dettagliata - il parsing lo fa il backend (default)',
-    'Descrivi in italiano questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi solo ciò che è chiaramente visibile, senza ipotesi o supposizioni. Includi: oggetti principali, persone, colori, atmosfera, ambiente (interno o esterno). Se nell''immagine è presente testo leggibile (scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.',
+    'Descrizione libera dettagliata in italiano - il parsing lo fa il backend (default)',
+    'IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.
+
+Descrivi questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi solo ciò che è chiaramente visibile, senza ipotesi o supposizioni. Includi: oggetti principali, persone (quante sono e cosa fanno), colori, atmosfera, ambiente (interno o esterno). Se nell''immagine è presente testo leggibile (scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.',
     TRUE,
     TRUE
 ),
 (
     'simple_natural',
-    'Prompt semplice e naturale per descrizioni fluide',
-    'Descrivi questa immagine in italiano in modo naturale e dettagliato.{location_hint}
+    'Prompt semplice e naturale per descrizioni fluide in italiano',
+    'IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.
+
+Descrivi questa immagine in modo naturale e dettagliato.{location_hint}
 
 Includi nella tua descrizione:
-- Cosa vedi nell''immagine (scene generale, oggetti principali, persone se presenti)
+- Cosa vedi nell''immagine (scena generale, oggetti principali, persone se presenti e quante sono)
 - Colori dominanti e atmosfera
 - Se è un ambiente interno o esterno
-- Eventuali testi o scritte visibili
+- Eventuali testi o scritte visibili (trascrivili tra virgolette)
 
-Scrivi in modo discorsivo e completo.',
+Scrivi in modo discorsivo e completo, sempre in italiano.',
     FALSE,
     TRUE
 ),
 (
     'compact_json',
-    'Prompt compatto per output JSON strutturato',
-    'Analyze this image and provide a JSON response with: description (2-3 sentences), objects (array of 5-8 items), category (indoor/outdoor/food/document/people/nature/urban/vehicle/other), tags (array of 3-5 keywords).{location_hint}',
+    'Prompt compatto per output JSON strutturato (italiano)',
+    'IMPORTANTE: Rispondi in italiano. Analizza questa immagine e fornisci una risposta JSON con: description (2-3 frasi in italiano), objects (array di 5-8 oggetti in italiano), category (indoor/outdoor/food/document/people/nature/urban/vehicle/other), tags (array di 3-5 parole chiave in italiano).{location_hint}',
     FALSE,
     TRUE
 )

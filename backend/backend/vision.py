@@ -223,8 +223,8 @@ class OllamaVisionClient:
         except Exception as e:
             print(f"[VISION] Failed to load prompt from database: {e}, using hardcoded fallback")
 
-        # Fallback hardcoded - descrizione libera, nessuna struttura richiesta
-        return f"Descrivi in italiano questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi tutto ciò che vedi: oggetti, persone, colori, atmosfera, ambiente (interno o esterno), e qualsiasi testo visibile."
+        # Fallback hardcoded - descrizione libera in italiano
+        return f"IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.\n\nDescrivi questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi tutto ciò che vedi: oggetti principali, persone (quante e cosa fanno), colori, atmosfera, ambiente (interno o esterno). Se nell'immagine è presente testo leggibile (scritte, etichette, insegne), trascrivilo esattamente tra virgolette."
 
     def _validate_analysis_quality(self, analysis: Dict) -> tuple[bool, List[str]]:
         """Valida qualità analisi e restituisce warnings"""
@@ -291,21 +291,62 @@ class OllamaVisionClient:
 
     # Mappa tag inglesi → italiani (il modello a volte risponde in inglese)
     _TAG_TRANSLATIONS = {
+        # Categorie
         "nature": "natura", "natural": "natura", "outdoor": "esterno", "outdoors": "esterno",
         "indoor": "interno", "indoors": "interno", "people": "persone", "person": "persona",
-        "food": "cibo", "drink": "bevanda", "drinks": "bevande", "water": "acqua",
+        "food": "cibo", "document": "documento", "vehicle": "veicolo", "vehicles": "veicoli",
+        "urban": "urbano",
+        # Natura
         "sky": "cielo", "tree": "albero", "trees": "alberi", "flower": "fiore",
         "flowers": "fiori", "beach": "spiaggia", "sea": "mare", "ocean": "oceano",
-        "mountain": "montagna", "mountains": "montagne", "city": "città",
-        "urban": "urbano", "building": "edificio", "buildings": "edifici",
-        "road": "strada", "car": "auto", "vehicle": "veicolo", "vehicles": "veicoli",
+        "mountain": "montagna", "mountains": "montagne", "river": "fiume", "lake": "lago",
+        "forest": "foresta", "garden": "giardino", "grass": "erba", "rock": "roccia",
+        "cloud": "nuvola", "clouds": "nuvole", "rain": "pioggia", "snow": "neve",
+        "sun": "sole", "moon": "luna", "field": "campo", "hill": "collina",
+        # Citta/edifici
+        "city": "città", "building": "edificio", "buildings": "edifici",
+        "road": "strada", "street": "strada", "bridge": "ponte", "tower": "torre",
+        "church": "chiesa", "house": "casa", "wall": "muro", "gate": "cancello",
+        "park": "parco", "square": "piazza", "sidewalk": "marciapiede",
+        # Persone
+        "man": "uomo", "woman": "donna", "child": "bambino", "children": "bambini",
+        "boy": "ragazzo", "girl": "ragazza", "baby": "neonato", "group": "gruppo",
+        "crowd": "folla", "couple": "coppia",
+        # Veicoli
+        "car": "auto", "bus": "autobus", "truck": "camion", "train": "treno",
+        "airplane": "aereo", "plane": "aereo", "boat": "barca", "ship": "nave",
+        "bicycle": "bicicletta", "bike": "bicicletta", "motorcycle": "motocicletta",
+        # Animali
         "animal": "animale", "animals": "animali", "dog": "cane", "cat": "gatto",
+        "bird": "uccello", "birds": "uccelli", "fish": "pesce", "horse": "cavallo",
+        # Cibo
+        "drink": "bevanda", "drinks": "bevande", "water": "acqua", "wine": "vino",
+        "coffee": "caffè", "plate": "piatto", "dish": "piatto", "meal": "pasto",
+        "fruit": "frutta", "bread": "pane", "cake": "torta", "glass": "bicchiere",
+        "bottle": "bottiglia", "cup": "tazza",
+        # Oggetti/interni
+        "table": "tavolo", "chair": "sedia", "desk": "scrivania", "bed": "letto",
+        "sofa": "divano", "couch": "divano", "lamp": "lampada", "mirror": "specchio",
+        "window": "finestra", "door": "porta", "stairs": "scale", "shelf": "scaffale",
+        "carpet": "tappeto", "curtain": "tenda", "pillow": "cuscino",
+        # Elettronica
+        "phone": "telefono", "computer": "computer", "screen": "schermo",
+        "keyboard": "tastiera", "camera": "fotocamera", "watch": "orologio",
+        "television": "televisore", "tv": "televisore",
+        # Abbigliamento
+        "shirt": "camicia", "hat": "cappello", "shoes": "scarpe", "bag": "borsa",
+        "clothes": "vestiti", "dress": "vestito", "jacket": "giacca",
+        # Concetti
         "travel": "viaggio", "family": "famiglia", "friends": "amici", "friend": "amico",
         "sport": "sport", "sports": "sport", "art": "arte", "work": "lavoro",
         "technology": "tecnologia", "tech": "tecnologia", "night": "notte",
         "day": "giorno", "sunset": "tramonto", "sunrise": "alba",
         "landscape": "paesaggio", "portrait": "ritratto", "architecture": "architettura",
-        "document": "documento", "text": "testo", "sign": "insegna",
+        "text": "testo", "sign": "insegna", "light": "luce", "shadow": "ombra",
+        "color": "colore", "bright": "luminoso", "dark": "scuro",
+        "old": "antico", "new": "nuovo", "modern": "moderno", "ancient": "antico",
+        "beautiful": "bello", "small": "piccolo", "large": "grande", "big": "grande",
+        "warm": "caldo", "cold": "freddo", "quiet": "tranquillo", "busy": "affollato",
     }
 
     def _normalize_tags(self, tags: list) -> list:
@@ -423,38 +464,75 @@ class OllamaVisionClient:
         else:
             category = "other"
 
-        # Rilevamento oggetti con word boundaries (evita falsi positivi da parole composite)
-        common_objects = [
+        # Rilevamento oggetti: cerca sia in italiano che in inglese, output sempre in italiano
+        # Formato: (keyword_da_cercare, nome_italiano_output)
+        _object_patterns = [
             # Elettronica
-            "laptop", "computer", "telefono", "smartphone", "tablet", "monitor",
-            "schermo", "tastiera", "mouse", "cuffie", "stampante", "fotocamera",
-            "orologio", "televisore", "router", "cavo",
-            # Mobili (escluso "porta": troppo ambiguo in italiano, è anche verbo comune)
-            "tavolo", "sedia", "scrivania", "letto", "divano", "poltrona", "armadio",
-            "scaffale", "libreria", "specchio", "lampada", "finestra",
+            ("laptop", "laptop"), ("computer", "computer"), ("telefono", "telefono"),
+            ("smartphone", "smartphone"), ("phone", "telefono"), ("tablet", "tablet"),
+            ("monitor", "monitor"), ("schermo", "schermo"), ("screen", "schermo"),
+            ("tastiera", "tastiera"), ("keyboard", "tastiera"), ("mouse", "mouse"),
+            ("cuffie", "cuffie"), ("headphones", "cuffie"), ("stampante", "stampante"),
+            ("fotocamera", "fotocamera"), ("camera", "fotocamera"),
+            ("orologio", "orologio"), ("watch", "orologio"), ("clock", "orologio"),
+            ("televisore", "televisore"), ("television", "televisore"), ("tv", "televisore"),
+            # Mobili
+            ("tavolo", "tavolo"), ("table", "tavolo"), ("sedia", "sedia"), ("chair", "sedia"),
+            ("scrivania", "scrivania"), ("desk", "scrivania"), ("letto", "letto"), ("bed", "letto"),
+            ("divano", "divano"), ("sofa", "divano"), ("couch", "divano"),
+            ("poltrona", "poltrona"), ("armadio", "armadio"), ("scaffale", "scaffale"),
+            ("shelf", "scaffale"), ("libreria", "libreria"), ("bookshelf", "libreria"),
+            ("specchio", "specchio"), ("mirror", "specchio"),
+            ("lampada", "lampada"), ("lamp", "lampada"), ("finestra", "finestra"), ("window", "finestra"),
             # Cibo
-            "piatto", "tazza", "bicchiere", "bottiglia", "pane", "pizza", "pasta",
-            "carne", "verdura", "frutta",
+            ("piatto", "piatto"), ("plate", "piatto"), ("dish", "piatto"),
+            ("tazza", "tazza"), ("cup", "tazza"), ("bicchiere", "bicchiere"), ("glass", "bicchiere"),
+            ("bottiglia", "bottiglia"), ("bottle", "bottiglia"),
+            ("pane", "pane"), ("bread", "pane"), ("pizza", "pizza"), ("pasta", "pasta"),
+            ("carne", "carne"), ("meat", "carne"), ("verdura", "verdura"),
+            ("frutta", "frutta"), ("fruit", "frutta"), ("torta", "torta"), ("cake", "torta"),
             # Natura
-            "albero", "fiore", "pianta", "foglia", "giardino", "montagna",
-            "fiume", "lago", "mare", "spiaggia", "roccia", "cielo",
+            ("albero", "albero"), ("tree", "albero"), ("fiore", "fiore"), ("flower", "fiore"),
+            ("pianta", "pianta"), ("plant", "pianta"), ("foglia", "foglia"), ("leaf", "foglia"),
+            ("giardino", "giardino"), ("garden", "giardino"),
+            ("montagna", "montagna"), ("mountain", "montagna"),
+            ("fiume", "fiume"), ("river", "fiume"), ("lago", "lago"), ("lake", "lago"),
+            ("mare", "mare"), ("sea", "mare"), ("spiaggia", "spiaggia"), ("beach", "spiaggia"),
+            ("roccia", "roccia"), ("rock", "roccia"), ("cielo", "cielo"), ("sky", "cielo"),
             # Veicoli
-            "automobile", "bicicletta", "motocicletta", "camion", "autobus", "treno", "aereo", "barca",
+            ("automobile", "automobile"), ("car", "automobile"),
+            ("bicicletta", "bicicletta"), ("bicycle", "bicicletta"), ("bike", "bicicletta"),
+            ("motocicletta", "motocicletta"), ("motorcycle", "motocicletta"),
+            ("camion", "camion"), ("truck", "camion"),
+            ("autobus", "autobus"), ("bus", "autobus"),
+            ("treno", "treno"), ("train", "treno"),
+            ("aereo", "aereo"), ("airplane", "aereo"), ("plane", "aereo"),
+            ("barca", "barca"), ("boat", "barca"),
             # Persone
-            "persona", "uomo", "donna", "bambino", "ragazzo", "ragazza",
+            ("persona", "persona"), ("person", "persona"),
+            ("uomo", "uomo"), ("man", "uomo"), ("donna", "donna"), ("woman", "donna"),
+            ("bambino", "bambino"), ("child", "bambino"), ("ragazzo", "ragazzo"), ("boy", "ragazzo"),
+            ("ragazza", "ragazza"), ("girl", "ragazza"),
             # Industria/tecnica
-            "macchina", "motore", "pompa", "valvola", "tubo", "cavo", "pannello",
-            "quadro elettrico", "interruttore", "generatore", "turbina", "serbatoio",
-            "scala", "ponteggio", "impianto",
+            ("macchina", "macchina"), ("motore", "motore"), ("engine", "motore"),
+            ("pompa", "pompa"), ("pump", "pompa"), ("tubo", "tubo"), ("pipe", "tubo"),
+            ("pannello", "pannello"), ("panel", "pannello"),
+            ("interruttore", "interruttore"), ("switch", "interruttore"),
+            ("scala", "scala"), ("stairs", "scala"),
             # Altri
-            "libro", "penna", "documento", "edificio", "casa", "ponte", "cartello",
+            ("libro", "libro"), ("book", "libro"), ("penna", "penna"), ("pen", "penna"),
+            ("documento", "documento"), ("edificio", "edificio"), ("building", "edificio"),
+            ("casa", "casa"), ("house", "casa"), ("ponte", "ponte"), ("bridge", "ponte"),
+            ("cartello", "cartello"), ("sign", "cartello"),
+            ("porta", "porta"), ("door", "porta"),
+            ("borsa", "borsa"), ("bag", "borsa"),
+            ("cappello", "cappello"), ("hat", "cappello"),
         ]
 
         objects = []
-        for obj in common_objects:
-            # Word boundary: evita match dentro parole composite
-            if re.search(rf'\b{re.escape(obj)}\b', text_lower) and obj not in objects:
-                objects.append(obj)
+        for keyword, italian_name in _object_patterns:
+            if re.search(rf'\b{re.escape(keyword)}\b', text_lower) and italian_name not in objects:
+                objects.append(italian_name)
                 if len(objects) >= 12:
                     break
 
