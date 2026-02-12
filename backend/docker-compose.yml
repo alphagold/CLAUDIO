@@ -17,7 +17,7 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - JWT_SECRET=change-this-secret-key-in-production-please
       - ANALYSIS_TIMEOUT=900
-      - CORS_ORIGINS=http://192.168.200.4:5173,http://localhost:5173
+      - CORS_ORIGINS=http://192.168.200.4:5173,http://localhost:5173,http://192.168.52.15:5173
       - PYTHONUNBUFFERED=1
     depends_on:
       postgres:
