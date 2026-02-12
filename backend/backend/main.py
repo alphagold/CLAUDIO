@@ -86,9 +86,10 @@ app = FastAPI(
 )
 
 # CORS middleware
+CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://192.168.200.4:5173,http://localhost:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your domains
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -154,7 +155,6 @@ def get_current_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    print(f"[AUTH] Loaded user {user.email} - auto_analyze: {user.auto_analyze}, preferred_model: {user.preferred_model}")
     return user
 
 
@@ -184,7 +184,7 @@ async def health_check(db: Session = Depends(get_db)):
     try:
         ollama_ok = await vision_client.test_connection()
         services["ollama"] = "ok" if ollama_ok else "error"
-    except:
+    except Exception:
         services["ollama"] = "error"
 
     return {
@@ -386,7 +386,7 @@ def extract_exif_data(file_path: str) -> dict:
         try:
             exif_data['Width'] = image.width
             exif_data['Height'] = image.height
-        except:
+        except Exception:
             pass
 
         # Try to extract EXIF
@@ -404,8 +404,7 @@ def extract_exif_data(file_path: str) -> dict:
                             # Try to decode as string
                             try:
                                 exif_data[str(tag_name)] = value.decode('utf-8', errors='ignore').strip('\x00')
-                            except:
-                                # If fails, store as hex
+                            except (UnicodeDecodeError, AttributeError):
                                 exif_data[str(tag_name)] = value.hex()
                         elif isinstance(value, (str, int, float, bool)):
                             exif_data[str(tag_name)] = value
@@ -434,7 +433,7 @@ def extract_exif_data(file_path: str) -> dict:
                                         exif_data[sub_tag_name] = f"{sub_value[0]}/{sub_value[1]}"
                                     else:
                                         exif_data[sub_tag_name] = str(sub_value)
-                                except:
+                                except Exception:
                                     pass
                         else:
                             # Last resort - convert to string
@@ -448,10 +447,7 @@ def extract_exif_data(file_path: str) -> dict:
                 # Extract GPS info separately if available
                 try:
                     gps_info = exif.get_ifd(0x8825)  # GPS IFD
-                    print(f"[EXIF] GPS IFD found: {gps_info is not None}")
                     if gps_info:
-                        print(f"[EXIF] GPS tags count: {len(gps_info)}")
-                        print(f"[EXIF] GPS IFD contents: {dict(gps_info)}")
                         from PIL.ExifTags import GPSTAGS
 
                         # Store raw GPS data
@@ -471,7 +467,7 @@ def extract_exif_data(file_path: str) -> dict:
                                         exif_data[tag_name] = str(value)
                                 else:
                                     exif_data[tag_name] = str(value)
-                            except:
+                            except Exception:
                                 exif_data[tag_name] = str(value)
 
                         # Convert GPS to decimal coordinates
@@ -507,39 +503,27 @@ def extract_exif_data(file_path: str) -> dict:
                         try:
                             gps_lat = gps_info.get(2)  # GPSLatitude
                             gps_lat_ref = gps_info.get(1)  # GPSLatitudeRef
-                            print(f"[EXIF] GPS Lat raw: {gps_lat}, Ref: {gps_lat_ref}")
                             if gps_lat and gps_lat_ref:
                                 if isinstance(gps_lat_ref, bytes):
                                     gps_lat_ref = gps_lat_ref.decode('utf-8')
                                 lat_decimal = dms_to_decimal(gps_lat, gps_lat_ref)
-                                print(f"[EXIF] GPS Lat decimal: {lat_decimal}")
                                 if lat_decimal is not None:
                                     exif_data['GPS_Latitude_Decimal'] = lat_decimal
-                            else:
-                                print(f"[EXIF] GPS Lat missing: lat={gps_lat}, ref={gps_lat_ref}")
                         except Exception as lat_error:
-                            print(f"[EXIF] GPS Latitude extraction error: {lat_error}")
-                            import traceback
-                            traceback.print_exc()
+                            print(f"[EXIF] GPS Latitude error: {lat_error}")
 
                         # Extract and convert longitude
                         try:
                             gps_lon = gps_info.get(4)  # GPSLongitude
                             gps_lon_ref = gps_info.get(3)  # GPSLongitudeRef
-                            print(f"[EXIF] GPS Lon raw: {gps_lon}, Ref: {gps_lon_ref}")
                             if gps_lon and gps_lon_ref:
                                 if isinstance(gps_lon_ref, bytes):
                                     gps_lon_ref = gps_lon_ref.decode('utf-8')
                                 lon_decimal = dms_to_decimal(gps_lon, gps_lon_ref)
-                                print(f"[EXIF] GPS Lon decimal: {lon_decimal}")
                                 if lon_decimal is not None:
                                     exif_data['GPS_Longitude_Decimal'] = lon_decimal
-                            else:
-                                print(f"[EXIF] GPS Lon missing: lon={gps_lon}, ref={gps_lon_ref}")
                         except Exception as lon_error:
-                            print(f"[EXIF] GPS Longitude extraction error: {lon_error}")
-                            import traceback
-                            traceback.print_exc()
+                            print(f"[EXIF] GPS Longitude error: {lon_error}")
 
                 except Exception as gps_error:
                     print(f"GPS extraction error: {gps_error}")
@@ -632,9 +616,7 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
     """Analyze photo in background with Vision AI"""
     try:
         model_name = model or "llama3.2-vision"
-        print(f"[ANALYSIS] Starting background analysis for photo {photo_id}")
-        print(f"[ANALYSIS] Received model parameter: {model!r}")
-        print(f"[ANALYSIS] Model name resolved: {model_name}")
+        print(f"[ANALYSIS] Starting for photo {photo_id}, model={model_name}")
 
         # Mark analysis start time immediately and get user preferences
         db = SessionLocal()
@@ -648,8 +630,6 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
 
             # Get location name for AI context
             location_name = photo.location_name
-            if location_name:
-                print(f"Photo location: {location_name}")
 
             # Get user preferences for remote server
             user = db.query(User).filter(User.id == photo.user_id).first()
@@ -663,35 +643,26 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             # Save analysis start timestamp
             photo.analysis_started_at = datetime.now(timezone.utc)
             db.commit()
-            print(f"Analysis started at {photo.analysis_started_at} for photo {photo_id}")
         except Exception as e:
             print(f"Failed to mark analysis start: {e}")
         finally:
             db.close()
 
         # Determine which server to use
-        print(f"[ANALYSIS] Checking remote server: model={model!r}, user_config={user_config}")
         if model == "remote" and user_config and user_config["remote_enabled"]:
-            # Use remote Ollama server
             from vision import OllamaVisionClient
             remote_url = user_config["remote_url"]
             actual_model = user_config["remote_model"]
-            print(f"[ANALYSIS] Creating remote client with URL: {remote_url!r}")
+            print(f"[ANALYSIS] Using REMOTE server: {remote_url}, model={actual_model}")
             remote_client = OllamaVisionClient(host=remote_url)
-            print(f"[ANALYSIS] Remote client created, client.host = {remote_client.host!r}")
-            print(f"[ANALYSIS] ✅ Using REMOTE Ollama server: {remote_url} with model {actual_model}")
-            print(f"[ANALYSIS] Calling analyze_photo on remote client...")
             analysis_result = await remote_client.analyze_photo(
                 file_path,
                 model=actual_model,
                 location_name=location_name,
-                allow_fallback=False  # No fallback for remote - must succeed or fail clearly
+                allow_fallback=False
             )
-            print(f"[ANALYSIS] Remote analyze_photo returned, result keys: {list(analysis_result.keys()) if isinstance(analysis_result, dict) else 'NOT A DICT'}")
         else:
-            # Use local Ollama server
-            print(f"[ANALYSIS] ❌ Using LOCAL Ollama server with model: {model}")
-            print(f"[ANALYSIS] Reason: model==remote? {model == 'remote'}, user_config? {user_config is not None}, remote_enabled? {user_config.get('remote_enabled') if user_config else 'N/A'}")
+            print(f"[ANALYSIS] Using LOCAL server, model={model}")
             analysis_result = await vision_client.analyze_photo(
                 file_path,
                 model=model,
@@ -715,7 +686,6 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 print(f"Deleted existing analysis for photo {photo_id}")
 
             # Verify analysis_result is a dict
-            print(f"[ANALYSIS] Result type: {type(analysis_result)}, content: {analysis_result}")
             if not isinstance(analysis_result, dict):
                 print(f"ERROR: analysis_result is not a dict, it's {type(analysis_result)}")
                 raise ValueError(f"Invalid analysis result type: {type(analysis_result)}")
@@ -839,8 +809,6 @@ async def update_user_preferences(
     db: Session = Depends(get_db)
 ):
     """Update user preferences for AI model and auto-analysis"""
-    print(f"[PREFERENCES] Updating preferences for user {current_user.email}")
-    print(f"[PREFERENCES] Before update - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}")
 
     if preferred_model is not None:
         valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest", "remote"]
@@ -854,7 +822,7 @@ async def update_user_preferences(
     # Validazione server remoto se abilitato
     if remote_ollama_enabled and remote_ollama_url and remote_ollama_model:
         import httpx
-        print(f"[PREFERENCES] Validating remote server: {remote_ollama_url} with model {remote_ollama_model}")
+        pass  # Validate remote server
 
         try:
             # Test connessione al server remoto
@@ -871,10 +839,7 @@ async def update_user_preferences(
                         detail=f"Modello '{remote_ollama_model}' non trovato sul server remoto. Modelli disponibili: {', '.join(model_names)}"
                     )
 
-                print(f"[PREFERENCES] Remote server validation OK - model {remote_ollama_model} found")
-
         except httpx.HTTPError as e:
-            print(f"[PREFERENCES] Remote server validation failed: {e}")
             raise HTTPException(
                 status_code=503,
                 detail=f"Impossibile contattare server Ollama a {remote_ollama_url}. Verifica che il server sia in esecuzione."
@@ -891,9 +856,6 @@ async def update_user_preferences(
 
     db.commit()
     db.refresh(current_user)
-
-    print(f"[PREFERENCES] After update - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}")
-    print(f"[PREFERENCES] Remote Ollama - enabled: {current_user.remote_ollama_enabled}, url: {current_user.remote_ollama_url}, model: {current_user.remote_ollama_model}")
 
     return {
         "message": "Preferences updated successfully",
@@ -943,7 +905,7 @@ async def upload_photo(
     if taken_at:
         try:
             taken_at_dt = datetime.fromisoformat(taken_at.replace('Z', '+00:00'))
-        except:
+        except (ValueError, TypeError):
             taken_at_dt = datetime.now(timezone.utc)
     else:
         # Try to get date from EXIF
@@ -953,8 +915,8 @@ async def upload_photo(
             if date_taken:
                 try:
                     taken_at_dt = datetime.strptime(date_taken, '%Y:%m:%d %H:%M:%S')
-                except:
-                    pass  # Keep default utcnow
+                except (ValueError, TypeError):
+                    pass  # Keep default
 
     # Get image dimensions
     width = exif_data.get('Width') if exif_data else None
@@ -1053,6 +1015,8 @@ async def list_photos(
     db: Session = Depends(get_db)
 ):
     """List user's photos with optional search and filters"""
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
     # Base query
     query = db.query(Photo).filter(
         Photo.user_id == current_user.id,
@@ -1094,22 +1058,19 @@ async def get_all_tags(
     db: Session = Depends(get_db)
 ):
     """Get all unique tags from user's analyzed photos"""
-    # Get all photo analyses for user
-    analyses = db.query(PhotoAnalysis).join(Photo).filter(
-        Photo.user_id == current_user.id,
-        Photo.deleted_at.is_(None),
-        PhotoAnalysis.tags.isnot(None)
-    ).all()
+    # Query diretta con unnest() + DISTINCT (evita caricare tutte le analisi in memoria)
+    from sqlalchemy import text as sql_text
+    result = db.execute(sql_text("""
+        SELECT DISTINCT unnest(pa.tags) AS tag
+        FROM photo_analysis pa
+        JOIN photos p ON pa.photo_id = p.id
+        WHERE p.user_id = :user_id
+          AND p.deleted_at IS NULL
+          AND pa.tags IS NOT NULL
+        ORDER BY tag
+    """), {"user_id": str(current_user.id)}).fetchall()
 
-    # Collect all unique tags
-    tags_set = set()
-    for analysis in analyses:
-        if analysis.tags:
-            tags_set.update(analysis.tags)
-
-    # Sort alphabetically
-    tags_list = sorted(list(tags_set))
-
+    tags_list = [row[0] for row in result]
     return {"tags": tags_list, "count": len(tags_list)}
 
 
@@ -1180,6 +1141,7 @@ async def get_photo_thumbnail(
     db: Session = Depends(get_db)
 ):
     """Get photo thumbnail (no auth required for self-hosted use)"""
+    size = max(64, min(size, 1024))
     photo = (
         db.query(Photo)
         .filter(Photo.id == photo_id, Photo.deleted_at.is_(None))
@@ -1355,7 +1317,7 @@ async def update_photo(
     if taken_at is not None:
         try:
             photo.taken_at = datetime.fromisoformat(taken_at.replace('Z', '+00:00'))
-        except:
+        except (ValueError, TypeError):
             raise HTTPException(status_code=400, detail="Invalid date format")
 
     if latitude is not None:

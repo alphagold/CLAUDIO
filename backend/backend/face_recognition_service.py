@@ -8,7 +8,7 @@ Utilizza face_recognition library (basata su dlib) per generare embeddings 128-d
 import logging
 import traceback
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 import numpy as np
 from sqlalchemy.orm import Session
@@ -96,17 +96,17 @@ class FaceRecognitionService:
         if consent:
             # Update existing
             consent.consent_given = True
-            consent.consent_date = datetime.utcnow()
+            consent.consent_date = datetime.now(timezone.utc)
             consent.consent_ip = ip_address
             consent.revoked_at = None
             consent.revoked_reason = None
-            consent.updated_at = datetime.utcnow()
+            consent.updated_at = datetime.now(timezone.utc)
         else:
             # Create new
             consent = FaceRecognitionConsent(
                 user_id=user_id,
                 consent_given=True,
-                consent_date=datetime.utcnow(),
+                consent_date=datetime.now(timezone.utc),
                 consent_ip=ip_address
             )
             self.db.add(consent)
@@ -141,9 +141,9 @@ class FaceRecognitionService:
             raise ValueError("No consent record found for user")
 
         consent.consent_given = False
-        consent.revoked_at = datetime.utcnow()
+        consent.revoked_at = datetime.now(timezone.utc)
         consent.revoked_reason = reason
-        consent.updated_at = datetime.utcnow()
+        consent.updated_at = datetime.now(timezone.utc)
 
         if delete_data:
             # Soft delete all faces (cascade handled by DB)
@@ -208,7 +208,7 @@ class FaceRecognitionService:
         ).all()
         affected_person_ids = list({str(f.person_id) for f in existing_faces if f.person_id is not None})
         for ef in existing_faces:
-            ef.deleted_at = datetime.utcnow()
+            ef.deleted_at = datetime.now(timezone.utc)
 
         # Update status
         photo.face_detection_status = "processing"
@@ -238,7 +238,7 @@ class FaceRecognitionService:
             if not face_locations:
                 logger.info(f"No faces detected in photo {photo_id}")
                 photo.face_detection_status = "no_faces"
-                photo.faces_detected_at = datetime.utcnow()
+                photo.faces_detected_at = datetime.now(timezone.utc)
                 self.db.commit()
                 return []
 
@@ -267,7 +267,7 @@ class FaceRecognitionService:
                 created_faces.append(face)
 
             photo.face_detection_status = "completed"
-            photo.faces_detected_at = datetime.utcnow()
+            photo.faces_detected_at = datetime.now(timezone.utc)
             self.db.commit()
 
             logger.info(f"Detected {len(created_faces)} faces in photo {photo_id}")

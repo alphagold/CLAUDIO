@@ -45,7 +45,7 @@ class Photo(Base):
     thumbnail_512_path = Column(String(512))
 
     # Timestamps
-    taken_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    taken_at = Column(TIMESTAMP(timezone=True), nullable=False, index=True)
     uploaded_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     analysis_started_at = Column(TIMESTAMP(timezone=True))
     analyzed_at = Column(TIMESTAMP(timezone=True))
@@ -70,10 +70,10 @@ class Photo(Base):
 
     # Face detection
     faces_detected_at = Column(TIMESTAMP(timezone=True))
-    face_detection_status = Column(String(20), default="pending")  # pending, processing, completed, failed, no_faces, skipped
+    face_detection_status = Column(String(20), default="pending", index=True)  # pending, processing, completed, failed, no_faces, skipped
 
     # Soft delete
-    deleted_at = Column(TIMESTAMP(timezone=True))
+    deleted_at = Column(TIMESTAMP(timezone=True), index=True)
 
     # Relationships
     user = relationship("User", back_populates="photos")
@@ -138,7 +138,7 @@ class SearchHistory(Base):
     __tablename__ = "search_history"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
 
     query_text = Column(Text, nullable=False)
     # query_embedding column defined in init.sql

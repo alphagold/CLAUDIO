@@ -186,13 +186,17 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_photos_user_id ON photos(user_id);
 CREATE INDEX IF NOT EXISTS idx_photos_uploaded_at ON photos(uploaded_at);
+CREATE INDEX IF NOT EXISTS idx_photos_taken_at ON photos(taken_at);
 CREATE INDEX IF NOT EXISTS idx_photos_analyzed_at ON photos(analyzed_at);
+CREATE INDEX IF NOT EXISTS idx_photos_deleted_at ON photos(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_photos_face_detection_status ON photos(face_detection_status);
 CREATE INDEX IF NOT EXISTS idx_photos_not_deleted ON photos(user_id) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_photo_analysis_photo_id ON photo_analysis(photo_id);
 CREATE INDEX IF NOT EXISTS idx_faces_photo_id ON faces(photo_id);
 CREATE INDEX IF NOT EXISTS idx_faces_person_id ON faces(person_id);
 CREATE INDEX IF NOT EXISTS idx_faces_cluster_id ON faces(cluster_id);
 CREATE INDEX IF NOT EXISTS idx_faces_not_deleted ON faces(photo_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_prompt_templates_default ON prompt_templates(is_default) WHERE is_active = TRUE;
 
 -- Vector similarity search index

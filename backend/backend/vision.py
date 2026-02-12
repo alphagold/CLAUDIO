@@ -102,60 +102,32 @@ class OllamaVisionClient:
             "think": False  # Disabilita reasoning mode (qwen3-vl): response diretta senza thinking
         }
 
-        print(f"[VISION] Making request to: {target_url} with model: {selected_model}")
-        print(f"[VISION] self.host = {self.host!r}")
-        print(f"[VISION] Timeout: {self.timeout} seconds")
-        print(f"[VISION] Image size: {len(image_b64)} bytes (base64)")
-        print(f"[VISION] Prompt length: {len(prompt)} characters")
-        print(f"[VISION] Prompt preview (first 200 chars): {prompt[:200]}")
-        print(f"[VISION] API endpoint: {target_url.split('/')[-1]}, num_predict={num_predict}")
-        payload_size = len(json.dumps(payload))
-        print(f"[VISION] Total payload size: {payload_size} bytes ({payload_size/1024/1024:.2f} MB)")
-
-        # Use requests library in thread for better large payload handling
-        # httpx has issues with large payloads (4+ MB)
-        print(f"[VISION] Using requests library for large payload compatibility...")
+        print(f"[VISION] Request to {self.host} model={selected_model}, image={len(image_b64)//1024}KB")
 
         def _sync_post():
             """Synchronous POST using requests library with aggressive timeout"""
-            import threading
             from requests.adapters import HTTPAdapter
             from urllib3.util.retry import Retry
 
-            print(f"[VISION] _sync_post called in thread: {threading.current_thread().name}")
-            print(f"[VISION] Target URL: {target_url}")
-            print(f"[VISION] About to call requests.post()...")
+            retry_strategy = Retry(
+                total=3,
+                status_forcelist=[429, 500, 502, 503, 504],
+                backoff_factor=1
+            )
+            adapter = HTTPAdapter(max_retries=retry_strategy)
 
-            try:
-                # Create session with retry strategy and large timeouts
-                session = requests.Session()
-                retry_strategy = Retry(
-                    total=3,
-                    status_forcelist=[429, 500, 502, 503, 504],
-                    backoff_factor=1
-                )
-                adapter = HTTPAdapter(max_retries=retry_strategy)
+            with requests.Session() as session:
                 session.mount("http://", adapter)
                 session.mount("https://", adapter)
 
-                # Timeout: 5 minuti connect, self.timeout (900s) read
-                # Necessario per payload grandi (4-8 MB) su rete remota
                 resp = session.post(
                     target_url,
                     json=payload,
-                    timeout=(300, self.timeout),  # 300s connect/upload, 900s read/analysis
+                    timeout=(300, self.timeout),
                     headers={"Content-Type": "application/json"}
                 )
-                print(f"[VISION] requests.post() returned!")
-                print(f"[VISION] POST completed, status: {resp.status_code}")
                 resp.raise_for_status()
-                result = resp.json()
-                print(f"[VISION] Response parsed as JSON successfully")
-                session.close()
-                return result
-            except Exception as e:
-                print(f"[VISION] ❌ Exception in _sync_post: {type(e).__name__}: {e}")
-                raise
+                return resp.json()
 
         try:
             # Retry loop: riprova se la risposta è vuota o troppo corta
@@ -167,40 +139,31 @@ class OllamaVisionClient:
             analysis_text = ""
             for attempt in range(MAX_ATTEMPTS):
                 if attempt > 0:
-                    print(f"[VISION] Retry {attempt}/{MAX_ATTEMPTS - 1} (risposta precedente troppo corta o vuota)")
+                    print(f"[VISION] Retry {attempt}/{MAX_ATTEMPTS - 1}")
                     await asyncio.sleep(2)
 
-                print(f"[VISION] Calling asyncio.to_thread(_sync_post) attempt {attempt + 1}...")
                 result = await asyncio.to_thread(_sync_post)
-                print(f"[VISION] ✅ Response received successfully from {self.host}")
 
                 # Parse response from /api/generate
                 analysis_text = result.get("response", "").strip()
-                print(f"[VISION] Response text length: {len(analysis_text)} chars (attempt {attempt + 1})")
 
-                # Fallback a campo "thinking" se response vuota
-                # Sezioni del prompt corrente: DESCRIZIONE COMPLETA, CATEGORIA SCENA, OGGETTI IDENTIFICATI
+                # Fallback a campo "thinking" se response vuota (qwen3-vl)
                 if not analysis_text and "thinking" in result:
                     thinking_text = result.get("thinking", "")
-                    print(f"[VISION] ⚠️ Response empty, checking 'thinking' field ({len(thinking_text)} chars)")
                     has_structured_format = any(kw in thinking_text for kw in [
                         "DESCRIZIONE COMPLETA:", "CATEGORIA SCENA:", "OGGETTI IDENTIFICATI:", "TAG CHIAVE:"
                     ])
                     if has_structured_format:
-                        print(f"[VISION] ✅ Thinking field contains structured format, using it")
                         analysis_text = thinking_text
 
                 if len(analysis_text) >= MIN_RESPONSE_LEN:
-                    break  # Risposta valida
-                print(f"[VISION] ⚠️ Risposta troppo corta ({len(analysis_text)} chars), ritento...")
+                    break
 
             if not analysis_text or len(analysis_text) < MIN_RESPONSE_LEN:
-                print(f"[VISION] ⚠️ Nessuna risposta valida dopo {MAX_ATTEMPTS} tentativi, uso fallback")
                 analysis_text = "Immagine analizzata (dettagli non disponibili da questo modello)"
 
             processing_time = int((time.time() - start_time) * 1000)
-            print(f"[VISION] Analysis completed in {processing_time}ms")
-            print(f"[VISION] Response text preview: {analysis_text[:500]}")
+            print(f"[VISION] Completed in {processing_time}ms, response={len(analysis_text)} chars")
 
             # Parse JSON from response
             analysis_data = self._parse_analysis_response(analysis_text)
@@ -211,38 +174,24 @@ class OllamaVisionClient:
 
         except requests.exceptions.Timeout as e:
             processing_time = int((time.time() - start_time) * 1000)
-            print(f"[VISION] ❌ Timeout error from {self.host}: {type(e).__name__}: {e}")
-
+            print(f"[VISION] Timeout from {self.host}: {e}")
             if not allow_fallback:
-                print(f"[VISION] Fallback disabled - propagating timeout error")
                 raise
-
-            print(f"[VISION] Returning fallback analysis")
             return self._get_fallback_analysis(processing_time)
 
         except requests.exceptions.HTTPError as e:
             processing_time = int((time.time() - start_time) * 1000)
-            print(f"[VISION] ❌ HTTP error from {self.host}: {type(e).__name__}: {e}")
-            if e.response is not None:
-                print(f"[VISION] Response status: {e.response.status_code}")
-                print(f"[VISION] Response body: {e.response.text[:500]}")
-
+            status = e.response.status_code if e.response is not None else "N/A"
+            print(f"[VISION] HTTP error from {self.host}: status={status}")
             if not allow_fallback:
-                print(f"[VISION] Fallback disabled - propagating HTTP error")
                 raise
-
-            print(f"[VISION] Returning fallback analysis")
             return self._get_fallback_analysis(processing_time)
 
         except Exception as e:
             processing_time = int((time.time() - start_time) * 1000)
-            print(f"[VISION] ❌ Unexpected error from {self.host}: {type(e).__name__}: {e}")
-
+            print(f"[VISION] Error from {self.host}: {type(e).__name__}: {e}")
             if not allow_fallback:
-                print(f"[VISION] Fallback disabled - propagating error")
                 raise
-
-            print(f"[VISION] Returning fallback analysis")
             return self._get_fallback_analysis(processing_time)
 
     def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None) -> str:
@@ -594,7 +543,7 @@ class OllamaVisionClient:
             async with httpx.AsyncClient(timeout=5) as client:
                 response = await client.get(f"{self.host}/api/tags")
                 return response.status_code == 200
-        except:
+        except Exception:
             return False
 
 

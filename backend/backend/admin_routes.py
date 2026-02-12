@@ -17,7 +17,7 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import deque
 from typing import List, Dict
 
@@ -66,6 +66,7 @@ async def get_backend_logs(
     current_user: User = Depends(require_admin)
 ):
     """Get backend container logs (last N lines)"""
+    lines = max(1, min(lines, 5000))
     try:
         result = subprocess.run(
             ["docker", "logs", "photomemory-api", "--tail", str(lines), "--timestamps"],
@@ -90,6 +91,7 @@ async def get_ollama_logs(
     current_user: User = Depends(require_admin)
 ):
     """Get Ollama container logs (last N lines)"""
+    lines = max(1, min(lines, 5000))
     try:
         result = subprocess.run(
             ["docker", "logs", "photomemory-ollama", "--tail", str(lines), "--timestamps"],
@@ -129,7 +131,7 @@ async def get_system_status(
             )
             status = result.stdout.strip() if result.returncode == 0 else "unknown"
             containers.append({"name": container, "status": status})
-        except:
+        except Exception:
             containers.append({"name": container, "status": "unknown"})
 
     # Get database stats (exclude soft-deleted photos)
@@ -145,14 +147,22 @@ async def get_system_status(
         Photo.deleted_at.is_(None)
     ).scalar()
 
-    # Face detection stats
+    # Face detection stats (singola query GROUP BY invece di N query)
     face_stats = {}
     try:
-        for status in ["pending", "processing", "completed", "failed", "no_faces", "skipped"]:
-            face_stats[status] = db.query(func.count(Photo.id)).filter(
-                Photo.face_detection_status == status,
-                Photo.deleted_at.is_(None)
-            ).scalar() or 0
+        status_counts = db.query(
+            Photo.face_detection_status,
+            func.count(Photo.id)
+        ).filter(
+            Photo.deleted_at.is_(None)
+        ).group_by(Photo.face_detection_status).all()
+
+        for status_name in ["pending", "processing", "completed", "failed", "no_faces", "skipped"]:
+            face_stats[status_name] = 0
+        for status_val, count in status_counts:
+            if status_val in face_stats:
+                face_stats[status_val] = count
+
         face_stats["total_faces"] = db.query(func.count(Face.id)).filter(
             Face.deleted_at.is_(None)
         ).scalar() or 0
@@ -174,7 +184,7 @@ async def get_system_status(
             disk_usage_mb = disk_usage_bytes / (1024 * 1024)
         else:
             disk_usage_mb = 0
-    except:
+    except Exception:
         disk_usage_mb = 0
 
     # Get system metrics (CPU, RAM)
@@ -292,7 +302,7 @@ async def admin_reset_face_detection(
     - Reset face_detection_status = NULL per tutte le foto
     Usa dopo per ri-accodare con il pulsante 'Ri-accoda Tutto'.
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Soft-delete tutti i Face records attivi
     face_count = db.query(Face).filter(Face.deleted_at.is_(None)).count()
@@ -338,18 +348,24 @@ async def list_users(
     db: Session = Depends(get_db)
 ):
     """List all users (admin only)"""
-    users = db.query(User).all()
+    from sqlalchemy.orm import aliased
+
+    # Singola query con LEFT JOIN + GROUP BY (evita N+1)
+    results = db.query(
+        User,
+        func.count(Photo.id).label("photo_count")
+    ).outerjoin(
+        Photo, (Photo.user_id == User.id) & Photo.deleted_at.is_(None)
+    ).group_by(User.id).all()
+
     return [{
         "id": str(user.id),
         "email": user.email,
         "full_name": user.full_name,
         "is_admin": user.is_admin,
         "created_at": user.created_at.isoformat(),
-        "photo_count": db.query(func.count(Photo.id)).filter(
-            Photo.user_id == user.id,
-            Photo.deleted_at.is_(None)
-        ).scalar()
-    } for user in users]
+        "photo_count": photo_count
+    } for user, photo_count in results]
 
 
 @router.post("/users")
@@ -530,7 +546,7 @@ async def record_current_metrics(
             memory_percent = memory.percent
 
             metric_entry = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "cpu_percent": round(cpu_percent, 1),
                 "memory_percent": round(memory_percent, 1)
             }
@@ -684,7 +700,7 @@ async def delete_ollama_model(
                 # Try to get error details from response
                 try:
                     error_detail = response.json().get('error', 'Failed to delete model')
-                except:
+                except Exception:
                     error_detail = f"Failed to delete model (status {response.status_code})"
                 raise HTTPException(status_code=response.status_code, detail=error_detail)
 
@@ -780,24 +796,13 @@ async def get_remote_ollama_models(
 
                 # Check if it's a vision model
                 families = model.get("details", {}).get("families")
-                print(f"[REMOTE MODELS] Model: {model.get('name')}, families: {families}")
-
                 if families:
-                    # families can be a string or a list
                     families_str = " ".join(families) if isinstance(families, list) else str(families)
-                    # Check for vision-related keywords
                     if any(keyword in families_str.lower() for keyword in ["clip", "mllama", "qwen", "vision"]):
-                        print(f"[REMOTE MODELS]   ✓ Vision model detected")
                         vision_models.append(model_info)
-                    else:
-                        print(f"[REMOTE MODELS]   ✗ Not a vision model (families: {families_str})")
 
             # Se non ci sono vision models, mostra tutti (il server potrebbe non avere families)
             models_to_return = vision_models if vision_models else all_models
-
-            print(f"[REMOTE MODELS] URL: {clean_url}")
-            print(f"[REMOTE MODELS] Total models: {len(all_models)}, Vision models: {len(vision_models)}")
-            print(f"[REMOTE MODELS] Returning: {len(models_to_return)} models")
 
             return {
                 "models": models_to_return,
@@ -838,7 +843,6 @@ async def test_remote_ollama_connection(
 
     # Decode URL in case it's URL-encoded
     decoded_url = unquote(ollama_url)
-    print(f"[REMOTE TEST] Received URL: {ollama_url!r}, Decoded: {decoded_url!r}")
 
     # Validate URL format
     try:
