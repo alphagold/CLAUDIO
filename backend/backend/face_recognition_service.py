@@ -229,11 +229,18 @@ class FaceRecognitionService:
             self.db.commit()
 
         try:
-            # Load image
-            image = face_recognition.load_image_file(image_path)
+            # Preprocessing: correggi EXIF, ridimensiona se necessario
+            resized_image, full_image, scale_factor = self._preprocess_image(image_path)
 
-            # Detect face locations
-            face_locations = face_recognition.face_locations(image, model=model)
+            # Detect face locations sull'immagine ridimensionata
+            face_locations = face_recognition.face_locations(resized_image, model=model)
+
+            # Retry con upsampling se nessun volto trovato (cattura volti piccoli/distanti)
+            if not face_locations:
+                logger.info(f"Nessun volto al primo tentativo per photo {photo_id}, retry con upsample=2")
+                face_locations = face_recognition.face_locations(
+                    resized_image, model=model, number_of_times_to_upsample=2
+                )
 
             if not face_locations:
                 logger.info(f"No faces detected in photo {photo_id}")
@@ -242,16 +249,31 @@ class FaceRecognitionService:
                 self.db.commit()
                 return []
 
-            # Generate embeddings
-            face_encodings = face_recognition.face_encodings(image, face_locations)
+            # Rimappa coordinate bbox all'immagine originale
+            if scale_factor < 1.0:
+                inv_scale = 1.0 / scale_factor
+                original_face_locations = [
+                    (
+                        int(top * inv_scale),
+                        int(right * inv_scale),
+                        int(bottom * inv_scale),
+                        int(left * inv_scale)
+                    )
+                    for top, right, bottom, left in face_locations
+                ]
+            else:
+                original_face_locations = face_locations
 
-            # Calculate quality scores
-            quality_scores = self._calculate_face_quality(image, face_locations)
+            # Generate embeddings sull'immagine EXIF-corretta a piena risoluzione
+            face_encodings = face_recognition.face_encodings(full_image, original_face_locations)
 
-            # Save faces
+            # Calculate quality scores sull'immagine originale
+            quality_scores = self._calculate_face_quality(full_image, original_face_locations)
+
+            # Save faces (coordinate originali)
             created_faces = []
             for i, ((top, right, bottom, left), encoding, quality) in enumerate(
-                zip(face_locations, face_encodings, quality_scores)
+                zip(original_face_locations, face_encodings, quality_scores)
             ):
                 face = Face(
                     photo_id=photo_id,
@@ -259,9 +281,9 @@ class FaceRecognitionService:
                     bbox_y=int(top),
                     bbox_width=int(right - left),
                     bbox_height=int(bottom - top),
-                    embedding=encoding.tolist(),  # Convert numpy to list
+                    embedding=encoding.tolist(),
                     detection_confidence=0.90,
-                    face_quality_score=float(quality)  # cast np.float → float per psycopg2
+                    face_quality_score=float(quality)
                 )
                 self.db.add(face)
                 created_faces.append(face)
@@ -372,11 +394,54 @@ class FaceRecognitionService:
 
         return quality_scores
 
+    def _preprocess_image(
+        self,
+        image_path: str,
+        max_long_side: int = 2048
+    ) -> Tuple[np.ndarray, np.ndarray, float]:
+        """
+        Preprocessa immagine per face detection: corregge EXIF, ridimensiona.
+
+        Args:
+            image_path: Path assoluto al file immagine
+            max_long_side: Dimensione massima del lato lungo (default 2048)
+
+        Returns:
+            (resized_array, exif_corrected_array, scale_factor)
+            scale_factor = 1.0 se non ridimensionata
+        """
+        img = Image.open(image_path)
+
+        # Correggi orientamento EXIF (foto da cellulare ruotate)
+        from PIL import ImageOps
+        img = ImageOps.exif_transpose(img)
+
+        # Converti in RGB (rimuove alpha channel, gestisce grayscale)
+        img = img.convert("RGB")
+
+        # Immagine EXIF-corretta a risoluzione piena (per embedding di qualità)
+        exif_corrected = np.array(img)
+
+        # Ridimensiona se troppo grande (per detection veloce)
+        w, h = img.size
+        long_side = max(w, h)
+        if long_side > max_long_side:
+            scale_factor = max_long_side / long_side
+            new_w = int(w * scale_factor)
+            new_h = int(h * scale_factor)
+            img_resized = img.resize((new_w, new_h), Image.LANCZOS)
+            resized = np.array(img_resized)
+        else:
+            scale_factor = 1.0
+            resized = exif_corrected
+
+        return resized, exif_corrected, scale_factor
+
     # ========================================================================
     # Clustering
     # ========================================================================
 
-    def _auto_cluster_faces(self, user_id: UUID, eps: float = 0.5, min_samples: int = 2):
+    def _auto_cluster_faces(self, user_id: UUID, eps: float = 0.6, min_samples: int = 2):
         """
         Esegue clustering DBSCAN sui volti non ancora etichettati.
         Suggerisce grouping automatico per person_id assignment.
@@ -420,8 +485,8 @@ class FaceRecognitionService:
         embeddings = np.array(raw_embeddings, dtype=np.float64)
         unlabeled_faces = valid_faces
 
-        # DBSCAN clustering (cosine distance)
-        clustering = DBSCAN(eps=eps, min_samples=min_samples, metric='cosine')
+        # DBSCAN clustering (distanza euclidea L2, metrica nativa dlib)
+        clustering = DBSCAN(eps=eps, min_samples=min_samples, metric='euclidean')
         labels = clustering.fit_predict(embeddings)
 
         # Assign cluster IDs - usa raw_embeddings (lista Python) invece di face.embedding (pgvector)
@@ -434,7 +499,9 @@ class FaceRecognitionService:
                 cluster_mask = labels == cluster_id_int
                 cluster_embeddings = embeddings[cluster_mask]
                 centroid = cluster_embeddings.mean(axis=0)
-                distance = self._cosine_distance(raw_embeddings[idx], centroid)
+                distance = float(np.linalg.norm(
+                    np.array(raw_embeddings[idx], dtype=np.float64) - centroid
+                ))
                 face.cluster_distance = round(float(distance), 4)
 
         self.db.commit()
@@ -579,11 +646,12 @@ class FaceRecognitionService:
         self,
         face: Face,
         user_id: UUID,
-        min_similarity: float = 0.4
+        max_distance: float = 0.6
     ):
         """
         Per un nuovo volto, cerca se esiste già una persona nota con embedding simile.
-        Restituisce (person_id, similarity) oppure None.
+        Usa distanza euclidea L2 (metrica nativa dlib, soglia 0.6).
+        Restituisce (person_id, confidence) oppure None.
         """
         if face.embedding is None:
             return None
@@ -595,15 +663,15 @@ class FaceRecognitionService:
 
         query = text("""
             SELECT f.person_id,
-                   (1 - (f.embedding <=> :embedding::vector)) AS similarity
+                   (f.embedding <-> :embedding::vector) AS distance
             FROM faces f
             JOIN photos ph ON f.photo_id = ph.id
             WHERE f.person_id IS NOT NULL
               AND f.deleted_at IS NULL
               AND f.id != :face_id
               AND ph.user_id = :user_id
-              AND (1 - (f.embedding <=> :embedding::vector)) >= :min_similarity
-            ORDER BY f.embedding <=> :embedding::vector
+              AND (f.embedding <-> :embedding::vector) <= :max_distance
+            ORDER BY f.embedding <-> :embedding::vector
             LIMIT 1
         """)
 
@@ -613,12 +681,14 @@ class FaceRecognitionService:
                 "face_id": str(face.id),
                 "embedding": str(emb),
                 "user_id": str(user_id),
-                "min_similarity": min_similarity
+                "max_distance": max_distance
             }
         ).fetchone()
 
         if result is not None:
-            return (result.person_id, float(result.similarity))
+            # Converti distanza L2 in confidenza: 0.0 dist → 1.0, 0.6 dist → 0.0
+            confidence = max(0.0, 1.0 - (float(result.distance) / max_distance))
+            return (result.person_id, confidence)
         return None
 
     def _auto_assign_similar_faces(
@@ -626,21 +696,21 @@ class FaceRecognitionService:
         labeled_face: Face,
         person_id: UUID,
         user_id: UUID,
-        min_similarity: float = 0.4
+        max_distance: float = 0.6
     ) -> int:
         """
         Auto-assegna la stessa persona a volti simili non etichettati.
 
-        Dopo un labeling manuale, cerca volti con similarità coseno >= min_similarity
+        Dopo un labeling manuale, cerca volti con distanza euclidea L2 <= max_distance
         e li assegna automaticamente alla stessa persona.
 
-        Soglia 0.4 = distanza coseno 0.6 (standard dlib per stessa persona).
+        Soglia 0.6 = standard dlib per stessa persona (distanza L2).
 
         Args:
             labeled_face: Volto appena etichettato (riferimento)
             person_id: ID persona da assegnare (valore catturato, non oggetto ORM)
             user_id: ID utente (valore catturato, non oggetto ORM)
-            min_similarity: Soglia similarità coseno minima
+            max_distance: Soglia distanza L2 massima
 
         Returns:
             Numero di volti auto-assegnati
@@ -655,15 +725,15 @@ class FaceRecognitionService:
 
         query = text("""
             SELECT f.id,
-                   (1 - (f.embedding <=> :embedding::vector)) AS similarity
+                   (f.embedding <-> :embedding::vector) AS distance
             FROM faces f
             JOIN photos ph ON f.photo_id = ph.id
             WHERE f.person_id IS NULL
               AND f.deleted_at IS NULL
               AND f.id != :face_id
               AND ph.user_id = :user_id
-              AND (1 - (f.embedding <=> :embedding::vector)) >= :min_similarity
-            ORDER BY f.embedding <=> :embedding::vector
+              AND (f.embedding <-> :embedding::vector) <= :max_distance
+            ORDER BY f.embedding <-> :embedding::vector
             LIMIT 100
         """)
 
@@ -673,12 +743,12 @@ class FaceRecognitionService:
                 "face_id": str(labeled_face.id),
                 "embedding": str(emb),
                 "user_id": str(user_id),
-                "min_similarity": min_similarity
+                "max_distance": max_distance
             }
         ).fetchall()
 
         if not results:
-            logger.info(f"Nessun volto simile trovato (threshold={min_similarity})")
+            logger.info(f"Nessun volto simile trovato (max_distance={max_distance})")
             return 0
 
         assigned_count = 0
@@ -687,12 +757,14 @@ class FaceRecognitionService:
             if face_to_assign and face_to_assign.person_id is None:
                 face_to_assign.person_id = person_id
                 face_to_assign.cluster_id = None
+                # Converti distanza L2 in confidenza
+                confidence = max(0.0, 1.0 - (float(row.distance) / max_distance))
                 label = FaceLabel(
                     face_id=face_to_assign.id,
                     person_id=person_id,
                     labeled_by_user_id=user_id,
                     label_type="auto",
-                    confidence=float(row.similarity)
+                    confidence=float(confidence)
                 )
                 self.db.add(label)
                 assigned_count += 1
@@ -762,11 +834,11 @@ class FaceRecognitionService:
         limit: int = 10
     ) -> List[Dict[str, Any]]:
         """
-        Trova volti simili usando pgvector similarity search.
+        Trova volti simili usando pgvector L2 distance search.
 
         Args:
             face_id: ID volto di riferimento
-            threshold: Distanza massima (0.6 = same person)
+            threshold: Distanza L2 massima (0.6 = same person per dlib)
             limit: Numero massimo risultati
 
         Returns:
@@ -776,28 +848,33 @@ class FaceRecognitionService:
         if not face:
             raise ValueError(f"Face {face_id} not found")
 
-        # pgvector similarity search (cosine distance)
+        # pgvector L2 distance search (metrica nativa dlib)
         query = text("""
             SELECT
                 f.id,
                 f.person_id,
                 p.name as person_name,
-                1 - (f.embedding <=> :embedding::vector) as similarity
+                (f.embedding <-> :embedding::vector) as distance
             FROM faces f
             LEFT JOIN persons p ON f.person_id = p.id
             WHERE f.id != :face_id
               AND f.deleted_at IS NULL
-              AND (1 - (f.embedding <=> :embedding::vector)) > :threshold
-            ORDER BY f.embedding <=> :embedding::vector
+              AND (f.embedding <-> :embedding::vector) <= :threshold
+            ORDER BY f.embedding <-> :embedding::vector
             LIMIT :limit
         """)
+
+        # Converti embedding in lista Python
+        emb = face.embedding
+        if hasattr(emb, 'tolist'):
+            emb = emb.tolist()
 
         results = self.db.execute(
             query,
             {
                 "face_id": str(face_id),
-                "embedding": str(face.embedding),
-                "threshold": 1 - threshold,  # Convert distance to similarity
+                "embedding": str(emb),
+                "threshold": threshold,
                 "limit": limit
             }
         ).fetchall()
@@ -807,8 +884,8 @@ class FaceRecognitionService:
                 "face_id": str(r.id),
                 "person_id": str(r.person_id) if r.person_id else None,
                 "person_name": r.person_name,
-                "similarity": round(r.similarity, 3),
-                "distance": round(1 - r.similarity, 3)
+                "similarity": round(max(0.0, 1.0 - (float(r.distance) / threshold)), 3),
+                "distance": round(float(r.distance), 3)
             }
             for r in results
         ]

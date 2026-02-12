@@ -199,8 +199,11 @@ CREATE INDEX IF NOT EXISTS idx_faces_not_deleted ON faces(photo_id) WHERE delete
 CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id);
 CREATE INDEX IF NOT EXISTS idx_prompt_templates_default ON prompt_templates(is_default) WHERE is_active = TRUE;
 
--- Vector similarity search index
+-- Vector similarity search index (photo_analysis: cosine per ricerca semantica)
 CREATE INDEX IF NOT EXISTS idx_embedding ON photo_analysis USING ivfflat (embedding vector_cosine_ops);
+
+-- Vector L2 distance index (faces: euclidea per dlib face embeddings)
+CREATE INDEX IF NOT EXISTS idx_faces_embedding_l2 ON faces USING ivfflat (embedding vector_l2_ops) WITH (lists = 1);
 
 -- Default prompt templates
 INSERT INTO prompt_templates (name, description, prompt_text, is_default, is_active)
