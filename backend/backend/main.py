@@ -730,17 +730,17 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             db.commit()
             print(f"Analysis completed for photo {photo_id}")
 
-            # Auto-trigger face detection if faces detected and user has consent
-            if FACE_RECOGNITION_AVAILABLE and analysis_result.get("detected_faces", 0) > 0:
-                # Check user consent (in separate session since we're closing current one)
+            # Auto-trigger face detection dopo ogni analisi (se disponibile)
+            # Non dipendere dal conteggio LLM: la libreria face_recognition
+            # rileva i volti reali indipendentemente da cosa dice il modello AI
+            if FACE_RECOGNITION_AVAILABLE:
                 consent_db = SessionLocal()
                 try:
                     face_service = FaceRecognitionService(consent_db)
                     if face_service.check_user_consent(photo.user_id):
-                        print(f"Photo {photo_id} has {analysis_result['detected_faces']} faces - enqueueing face detection")
+                        print(f"Photo {photo_id} analysis done - enqueueing face detection")
                         enqueue_face_detection(photo_id, file_path)
                     else:
-                        print(f"User {photo.user_id} has not given face recognition consent - skipping face detection")
                         photo.face_detection_status = "skipped"
                         consent_db.merge(photo)
                         consent_db.commit()
@@ -748,8 +748,6 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                     print(f"Failed to check face recognition consent: {e}")
                 finally:
                     consent_db.close()
-            elif not FACE_RECOGNITION_AVAILABLE and analysis_result.get("detected_faces", 0) > 0:
-                print(f"Photo {photo_id} has {analysis_result['detected_faces']} faces but face_recognition library not available")
 
         finally:
             db.close()
