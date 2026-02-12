@@ -76,28 +76,16 @@ curl http://192.168.200.4:11434/api/tags
 git clone https://github.com/alphagold/CLAUDIO.git
 cd CLAUDIO/backend
 docker compose -f docker-compose.yml up -d --build
-cd ../frontend && npm install && npm run build
 # Attendi ~60 secondi, poi login: test@example.com / test123
 
-# Aggiornamento codice (solo backend)
+# Aggiornamento codice
 cd CLAUDIO && git pull origin main
-cd backend && docker compose -f docker-compose.yml up -d --build api
-
-# Aggiornamento codice (solo frontend)
-cd CLAUDIO && git pull origin main
-cd frontend && npm install && npm run build
-
-# Aggiornamento completo (backend + frontend)
-cd CLAUDIO && git pull origin main
-cd backend && docker compose -f docker-compose.yml up -d --build api
-cd ../frontend && npm install && npm run build
+cd backend
+docker compose -f docker-compose.yml down
+docker compose -f docker-compose.yml up -d --build
 ```
 
 Il DB si auto-inizializza da `backend/init-complete.sql` solo al primo avvio (volume vuoto).
-Per migration manuali su DB esistente usare:
-```bash
-docker exec -it photomemory-postgres psql -U photomemory -d photomemory -c "SQL_QUERY_HERE;"
-```
 
 ### Server Ollama Remoto (PC Windows)
 ```powershell
@@ -137,6 +125,10 @@ Poi configurare nelle Settings dell'app: abilita server remoto, inserisci URL e 
 - Consenso GDPR richiesto (tabella `face_recognition_consent`)
 - Routes `/api/faces/*` registrate solo se `FACE_RECOGNITION_AVAILABLE=True`
 - Graceful degradation: `except (Exception, SystemExit)` cattura anche `quit()` di face_recognition
+- **Volto manuale**: `POST /api/faces/manual/{photo_id}` aggiunge volto senza detection (embedding=NULL)
+- `faces.embedding` è **nullable** (volti manuali non hanno embedding dlib)
+- FaceOverlay ha `drawMode` per disegnare bbox manualmente (click-drag → rettangolo verde)
+- Dopo labeling, `faceRefreshKey` incrementa per forzare refresh FaceOverlay senza reload pagina
 
 ### qwen3-vl
 - Usa `think: False` nel payload `/api/generate` per disabilitare reasoning mode
@@ -180,20 +172,26 @@ Deve essere sempre allineato con `backend/backend/models.py`.
 | `backend/backend/admin_routes.py` | Route admin + prompt templates CRUD |
 | `backend/backend/face_routes.py` | Route face recognition |
 | `backend/backend/face_recognition_service.py` | Detection, clustering, labeling volti |
-| `frontend/src/components/FaceOverlay.tsx` | Bounding box volti su foto |
+| `frontend/src/components/FaceOverlay.tsx` | Bounding box volti su foto + drawMode manuale |
+| `frontend/src/pages/PhotoDetailPage.tsx` | Dettaglio foto, labeling volti, volto manuale |
 | `frontend/src/pages/GalleryPage.tsx` | Gallery principale |
 | `frontend/src/pages/SettingsPage.tsx` | Settings utente + server remoto |
 | `frontend/src/pages/PromptConfigurationPage.tsx` | Config prompt AI |
+| `frontend/src/api/client.ts` | API client Axios (auth, photos, faces, albums) |
+| `frontend/src/types/index.ts` | TypeScript interfaces per tutti i tipi |
 
 ---
 
 ### Note Deploy
-- **Frontend NON è containerizzato**: gira direttamente sul server, servito da Vite (dev) o build statica
 - Dopo modifiche a **solo codice Python** (no Dockerfile): `up -d --build api` è sufficiente
-- Dopo modifiche a **solo frontend**: `cd frontend && npm install && npm run build`
-- Dopo modifiche a **entrambi**: rebuild api + rebuild frontend
 - Se il container usa layer cached vecchi: `build --no-cache api` poi `up -d api`
 - `restart api` NON ricarica codice (usa immagine esistente)
+- **Frontend non containerizzato**: gira direttamente sul server, rebuild con `cd frontend && npm install && npm run build`
+- Dopo modifiche frontend: serve rebuild manuale (`npm run build`)
+- Dopo modifiche schema DB su DB esistente: servono migration manuali (`ALTER TABLE ...`)
+
+### Migrations pendenti
+- `ALTER TABLE faces ALTER COLUMN embedding DROP NOT NULL;` (necessario per volti manuali, aggiunto 2026-02-12)
 
 ---
 
