@@ -76,16 +76,28 @@ curl http://192.168.200.4:11434/api/tags
 git clone https://github.com/alphagold/CLAUDIO.git
 cd CLAUDIO/backend
 docker compose -f docker-compose.yml up -d --build
+cd ../frontend && npm install && npm run build
 # Attendi ~60 secondi, poi login: test@example.com / test123
 
-# Aggiornamento codice
+# Aggiornamento codice (solo backend)
 cd CLAUDIO && git pull origin main
-cd backend
-docker compose -f docker-compose.yml down
-docker compose -f docker-compose.yml up -d --build
+cd backend && docker compose -f docker-compose.yml up -d --build api
+
+# Aggiornamento codice (solo frontend)
+cd CLAUDIO && git pull origin main
+cd frontend && npm install && npm run build
+
+# Aggiornamento completo (backend + frontend)
+cd CLAUDIO && git pull origin main
+cd backend && docker compose -f docker-compose.yml up -d --build api
+cd ../frontend && npm install && npm run build
 ```
 
 Il DB si auto-inizializza da `backend/init-complete.sql` solo al primo avvio (volume vuoto).
+Per migration manuali su DB esistente usare:
+```bash
+docker exec -it photomemory-postgres psql -U photomemory -d photomemory -c "SQL_QUERY_HERE;"
+```
 
 ### Server Ollama Remoto (PC Windows)
 ```powershell
@@ -176,10 +188,13 @@ Deve essere sempre allineato con `backend/backend/models.py`.
 ---
 
 ### Note Deploy
+- **Frontend NON è containerizzato**: gira direttamente sul server, servito da Vite (dev) o build statica
 - Dopo modifiche a **solo codice Python** (no Dockerfile): `up -d --build api` è sufficiente
+- Dopo modifiche a **solo frontend**: `cd frontend && npm install && npm run build`
+- Dopo modifiche a **entrambi**: rebuild api + rebuild frontend
 - Se il container usa layer cached vecchi: `build --no-cache api` poi `up -d api`
 - `restart api` NON ricarica codice (usa immagine esistente)
 
 ---
 
-**Aggiornato**: 2026-02-11 | **Stato**: Production-ready
+**Aggiornato**: 2026-02-12 | **Stato**: Production-ready
