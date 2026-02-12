@@ -230,7 +230,8 @@ class Face(Base):
     bbox_height = Column(Integer, nullable=False)
 
     # Face embedding vector (dlib 128-dimensional encoding)
-    embedding = Column(Vector(128), nullable=False)
+    # nullable=True per volti aggiunti manualmente (senza embedding)
+    embedding = Column(Vector(128))
 
     # Detection quality
     detection_confidence = Column(DECIMAL(3, 2), default=0.90)

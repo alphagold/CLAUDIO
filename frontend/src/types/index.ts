@@ -182,3 +182,12 @@ export interface FaceDetectionResponse {
   faces_detected: number;
   status: string;
 }
+
+export interface ManualFaceRequest {
+  bbox_x: number;
+  bbox_y: number;
+  bbox_width: number;
+  bbox_height: number;
+  person_name?: string;
+  person_id?: string;
+}

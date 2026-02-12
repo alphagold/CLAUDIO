@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS faces (
     bbox_y INTEGER NOT NULL,
     bbox_width INTEGER NOT NULL,
     bbox_height INTEGER NOT NULL,
-    embedding vector(128) NOT NULL,
+    embedding vector(128),
     detection_confidence DECIMAL(3, 2) DEFAULT 0.90,
     face_quality_score DECIMAL(3, 2),
     cluster_id INTEGER,

@@ -93,6 +93,16 @@ class PersonUpdateRequest(BaseModel):
     is_verified: Optional[bool] = None
 
 
+class ManualFaceRequest(BaseModel):
+    """Request per aggiungere volto manualmente"""
+    bbox_x: int = Field(..., description="Coordinata X del bounding box (pixel)")
+    bbox_y: int = Field(..., description="Coordinata Y del bounding box (pixel)")
+    bbox_width: int = Field(..., ge=1, description="Larghezza bounding box (pixel)")
+    bbox_height: int = Field(..., ge=1, description="Altezza bounding box (pixel)")
+    person_name: Optional[str] = Field(None, description="Nome nuova persona")
+    person_id: Optional[str] = Field(None, description="ID persona esistente")
+
+
 class FaceLabelRequest(BaseModel):
     """Request per etichettare volto"""
     person_id: Optional[str] = Field(None, description="ID persona esistente")
@@ -289,6 +299,119 @@ async def get_photo_faces(
         )
         for face in faces
     ]
+
+
+@router.post("/manual/{photo_id}", response_model=FaceResponse)
+async def add_manual_face(
+    photo_id: UUID,
+    body: ManualFaceRequest,
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db)
+):
+    """
+    Aggiunge un volto manualmente a una foto (senza embedding).
+    Utile quando il detection automatico non rileva un volto.
+    """
+    # Check photo exists and belongs to user
+    photo = db.query(Photo).filter(
+        Photo.id == photo_id,
+        Photo.user_id == current_user.id
+    ).first()
+
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    service = FaceRecognitionService(db)
+
+    # Check consent
+    if not service.check_user_consent(current_user.id):
+        raise HTTPException(
+            status_code=403,
+            detail="Face recognition consent required. Please enable in Settings."
+        )
+
+    try:
+        import uuid as uuid_mod
+        from datetime import datetime, timezone
+
+        # Crea Face con embedding=None (volto manuale)
+        face = Face(
+            id=uuid_mod.uuid4(),
+            photo_id=photo_id,
+            bbox_x=body.bbox_x,
+            bbox_y=body.bbox_y,
+            bbox_width=body.bbox_width,
+            bbox_height=body.bbox_height,
+            embedding=None,
+            detection_confidence=1.0,
+        )
+        db.add(face)
+
+        # Se person_name o person_id forniti, assegna persona
+        if body.person_id or body.person_name:
+            if body.person_id:
+                person = db.query(Person).filter(
+                    Person.id == UUID(body.person_id),
+                    Person.user_id == current_user.id
+                ).first()
+                if not person:
+                    raise HTTPException(status_code=404, detail="Person not found")
+            else:
+                # Crea nuova persona
+                person = Person(
+                    id=uuid_mod.uuid4(),
+                    user_id=current_user.id,
+                    name=body.person_name,
+                    photo_count=0,
+                    first_seen_at=datetime.now(timezone.utc),
+                    last_seen_at=datetime.now(timezone.utc),
+                )
+                db.add(person)
+                db.flush()
+
+            face.person_id = person.id
+            person.photo_count = (person.photo_count or 0) + 1
+            person.last_seen_at = datetime.now(timezone.utc)
+
+            # Crea FaceLabel per audit trail
+            from models import FaceLabel
+            label = FaceLabel(
+                id=uuid_mod.uuid4(),
+                face_id=face.id,
+                person_id=person.id,
+                labeled_by_user_id=current_user.id,
+                label_type="manual",
+                confidence=1.0,
+            )
+            db.add(label)
+
+        # Aggiorna stato face detection della foto
+        photo.face_detection_status = "completed"
+        photo.faces_detected_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(face)
+
+        return FaceResponse(
+            id=str(face.id),
+            person_id=str(face.person_id) if face.person_id else None,
+            person_name=face.person.name if face.person else None,
+            bbox={
+                "x": face.bbox_x,
+                "y": face.bbox_y,
+                "width": face.bbox_width,
+                "height": face.bbox_height
+            },
+            quality_score=float(face.face_quality_score) if face.face_quality_score else None,
+            cluster_id=face.cluster_id
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Manual face creation failed for photo {photo_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Errore creazione volto: {str(e)}")
 
 
 # ============================================================================

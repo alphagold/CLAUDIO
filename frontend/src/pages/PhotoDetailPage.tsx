@@ -25,6 +25,8 @@ import {
   MapPin,
   CheckCircle,
   Users,
+  UserPlus,
+  Pencil,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -48,11 +50,21 @@ export default function PhotoDetailPage() {
   const [showFaceLabelDialog, setShowFaceLabelDialog] = useState(false);
   const [labelPersonName, setLabelPersonName] = useState('');
   const [labelPersonId, setLabelPersonId] = useState<string>('');
+  const [isDrawingFace, setIsDrawingFace] = useState(false);
+  const [manualBbox, setManualBbox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [faceRefreshKey, setFaceRefreshKey] = useState(0);
 
   // Fetch all persons for labeling dropdown
   const { data: persons = [] } = useQuery({
     queryKey: ['persons'],
     queryFn: () => facesApi.listPersons(),
+  });
+
+  // Fetch faces for the panel list
+  const { data: photoFaces = [] } = useQuery({
+    queryKey: ['photoFaces', photoId, faceRefreshKey],
+    queryFn: () => facesApi.getPhotoFaces(photoId!),
+    enabled: !!photoId,
   });
 
   const { data: photo, isLoading } = useQuery({
@@ -100,9 +112,8 @@ export default function PhotoDetailPage() {
     onSuccess: () => {
       toast.success('Rianalisi avviata!');
       setShowModelDialog(false);
-      // Invalidate immediately to trigger refetch and show progress
       queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
-      queryClient.invalidateQueries({ queryKey: ['photos'] }); // Also invalidate gallery
+      queryClient.invalidateQueries({ queryKey: ['photos'] });
     },
     onError: () => {
       toast.error('Errore nell\'avvio della rianalisi');
@@ -133,6 +144,7 @@ export default function PhotoDetailPage() {
       toast.success('Volto etichettato con successo');
       setShowFaceLabelDialog(false);
       setSelectedFace(null);
+      setFaceRefreshKey(k => k + 1);
       queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
       queryClient.invalidateQueries({ queryKey: ['persons'] });
     },
@@ -141,10 +153,36 @@ export default function PhotoDetailPage() {
     },
   });
 
+  const addManualFaceMutation = useMutation({
+    mutationFn: (data: { bbox: { x: number; y: number; width: number; height: number }; personId?: string; personName?: string }) =>
+      facesApi.addManualFace(photoId!, {
+        bbox_x: data.bbox.x,
+        bbox_y: data.bbox.y,
+        bbox_width: data.bbox.width,
+        bbox_height: data.bbox.height,
+        person_id: data.personId,
+        person_name: data.personName,
+      }),
+    onSuccess: () => {
+      toast.success('Volto aggiunto manualmente');
+      setShowFaceLabelDialog(false);
+      setManualBbox(null);
+      setIsDrawingFace(false);
+      setFaceRefreshKey(k => k + 1);
+      queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
+      queryClient.invalidateQueries({ queryKey: ['persons'] });
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.detail || 'Errore nell\'aggiunta del volto';
+      toast.error(msg);
+    },
+  });
+
   const redetectFacesMutation = useMutation({
     mutationFn: () => facesApi.detectFaces(photoId!),
     onSuccess: () => {
       toast.success('Rilevamento volti completato');
+      setFaceRefreshKey(k => k + 1);
       queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
     },
     onError: (error: any) => {
@@ -154,7 +192,6 @@ export default function PhotoDetailPage() {
   });
 
   const handleRedetectFaces = () => {
-    // Avvisa se ci sono volti etichettati (labels verranno persi)
     const hasLabeledFaces = photo?.has_faces && photo?.face_detection_status === 'completed';
     if (hasLabeledFaces) {
       if (!window.confirm('La ri-analisi eliminerà i volti rilevati in precedenza e i nomi assegnati. Continuare?')) return;
@@ -170,6 +207,15 @@ export default function PhotoDetailPage() {
 
   const handleReanalyze = () => {
     setShowModelDialog(true);
+  };
+
+  const handleManualFaceDrawn = (bbox: { x: number; y: number; width: number; height: number }) => {
+    setManualBbox(bbox);
+    setIsDrawingFace(false);
+    setSelectedFace(null);
+    setLabelPersonId('');
+    setLabelPersonName('');
+    setShowFaceLabelDialog(true);
   };
 
   const formatDate = (dateString: string) => {
@@ -342,10 +388,6 @@ export default function PhotoDetailPage() {
     );
   };
 
-  // FaceLabelDialog è reso inline (non come componente nested) per evitare
-  // il problema di focus loss: un componente nested viene ricreato ad ogni
-  // re-render del parent, causando unmount/remount e perdita del focus sull'input.
-
   const ModelSelectionDialog = () => (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-md w-full p-6">
@@ -487,6 +529,8 @@ export default function PhotoDetailPage() {
     );
   }
 
+  const labeledFaces = photoFaces.filter(f => f.person_name);
+
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -520,30 +564,26 @@ export default function PhotoDetailPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          {/* Photo */}
+          {/* Photo - FaceOverlay sempre visibile */}
           <div className="lg:col-span-3 bg-white rounded-xl overflow-hidden shadow-lg border border-gray-200 animate-fade-in">
             <div className="relative w-full">
-              {photo.face_detection_status === 'completed' ? (
-                <FaceOverlay
-                  photoId={photo.id}
-                  imageUrl={photosApi.getPhotoUrl(photo.id)}
-                  onFaceClick={(face) => {
-                    setSelectedFace(face);
-                    setLabelPersonId(face.person_id || '');
-                    setLabelPersonName('');
-                    setShowFaceLabelDialog(true);
-                  }}
-                  showLabels={true}
-                  className={getOrientationClass(photo.exif_data?.Orientation)}
-                  refreshTrigger={photo.faces_detected_at}
-                />
-              ) : (
-                <img
-                  src={photosApi.getPhotoUrl(photo.id)}
-                  alt={photo.analysis?.description_short || 'Photo'}
-                  className={`w-full h-auto object-contain max-h-[80vh] ${getOrientationClass(photo.exif_data?.Orientation)}`}
-                />
-              )}
+              <FaceOverlay
+                photoId={photo.id}
+                imageUrl={photosApi.getPhotoUrl(photo.id)}
+                onFaceClick={(face) => {
+                  if (isDrawingFace) return;
+                  setSelectedFace(face);
+                  setManualBbox(null);
+                  setLabelPersonId(face.person_id || '');
+                  setLabelPersonName('');
+                  setShowFaceLabelDialog(true);
+                }}
+                showLabels={true}
+                className={getOrientationClass(photo.exif_data?.Orientation)}
+                refreshTrigger={`${photo.faces_detected_at}_${faceRefreshKey}`}
+                drawMode={isDrawingFace}
+                onManualFaceDrawn={handleManualFaceDrawn}
+              />
             </div>
           </div>
 
@@ -719,25 +759,51 @@ export default function PhotoDetailPage() {
               </div>
             )}
 
-            {/* Face Detection */}
+            {/* Face Detection - Panel migliorato */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-fade-in">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-2">
                   <Users className="w-5 h-5 text-blue-600" />
                   <h3 className="font-semibold text-gray-900">Riconoscimento Volti</h3>
+                  {photoFaces.length > 0 && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                      {labeledFaces.length}/{photoFaces.length}
+                    </span>
+                  )}
                 </div>
-                <button
-                  onClick={handleRedetectFaces}
-                  disabled={redetectFacesMutation.isPending}
-                  className="flex items-center space-x-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors text-sm font-medium"
-                  title="Rianalizza solo i volti (senza rianalisi AI)"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${redetectFacesMutation.isPending ? 'animate-spin' : ''}`} />
-                  <span>{redetectFacesMutation.isPending ? 'In corso...' : 'Rianalizza'}</span>
-                </button>
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    onClick={() => {
+                      if (isDrawingFace) {
+                        setIsDrawingFace(false);
+                      } else {
+                        setIsDrawingFace(true);
+                      }
+                    }}
+                    className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      isDrawingFace
+                        ? 'bg-green-600 text-white hover:bg-green-700'
+                        : 'bg-green-50 text-green-700 hover:bg-green-100'
+                    }`}
+                    title="Aggiungi volto manualmente disegnando un rettangolo"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>{isDrawingFace ? 'Annulla' : 'Aggiungi'}</span>
+                  </button>
+                  <button
+                    onClick={handleRedetectFaces}
+                    disabled={redetectFacesMutation.isPending}
+                    className="flex items-center space-x-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors text-sm font-medium"
+                    title="Rianalizza solo i volti (senza rianalisi AI)"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${redetectFacesMutation.isPending ? 'animate-spin' : ''}`} />
+                    <span>{redetectFacesMutation.isPending ? 'In corso...' : 'Rianalizza'}</span>
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center space-x-3 text-sm">
-                {/* Status badge */}
+
+              {/* Status badge */}
+              <div className="flex items-center space-x-3 text-sm mb-3">
                 {photo.face_detection_status === 'completed' && (
                   <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
                     Completato
@@ -745,7 +811,7 @@ export default function PhotoDetailPage() {
                 )}
                 {photo.face_detection_status === 'no_faces' && (
                   <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-                    Nessun volto
+                    Nessun volto rilevato
                   </span>
                 )}
                 {photo.face_detection_status === 'pending' && (
@@ -768,18 +834,67 @@ export default function PhotoDetailPage() {
                     Non eseguito
                   </span>
                 )}
-                {/* Faces count - solo quando completato (dato reale dal pipeline) */}
-                {photo.face_detection_status === 'completed' && photo.analysis?.detected_faces !== undefined && photo.analysis.detected_faces > 0 && (
-                  <span className="text-gray-600">
-                    {photo.analysis.detected_faces} {photo.analysis.detected_faces === 1 ? 'volto rilevato' : 'volti rilevati'}
-                  </span>
-                )}
               </div>
+
+              {/* Lista volti rilevati */}
+              {photoFaces.length > 0 && (
+                <div className="space-y-2 mt-3 pt-3 border-t border-gray-100">
+                  {photoFaces.map((face) => (
+                    <div
+                      key={face.id}
+                      className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors group"
+                    >
+                      <div className="flex items-center space-x-3">
+                        {/* Miniatura crop del volto */}
+                        <div
+                          className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 flex-shrink-0"
+                          style={{
+                            backgroundImage: `url(${photosApi.getPhotoUrl(photo.id)})`,
+                            backgroundPosition: photo.width && photo.height
+                              ? `-${(face.bbox.x / photo.width) * 40 * (photo.width / face.bbox.width)}px -${(face.bbox.y / photo.height) * 40 * (photo.height / face.bbox.height)}px`
+                              : 'center',
+                            backgroundSize: photo.width && face.bbox.width
+                              ? `${(photo.width / face.bbox.width) * 40}px auto`
+                              : 'cover',
+                          }}
+                        />
+                        <div>
+                          <div className={`text-sm font-medium ${face.person_name ? 'text-gray-900' : 'text-gray-400 italic'}`}>
+                            {face.person_name || 'Sconosciuto'}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {face.bbox.width}x{face.bbox.height}px
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedFace(face);
+                          setManualBbox(null);
+                          setLabelPersonId(face.person_id || '');
+                          setLabelPersonName('');
+                          setShowFaceLabelDialog(true);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded transition-all"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>{face.person_name ? 'Rinomina' : 'Etichetta'}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Hint per aggiungere volti quando non ce ne sono */}
+              {photoFaces.length === 0 && (photo.face_detection_status === 'no_faces' || photo.face_detection_status === 'completed') && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Usa il pulsante "Aggiungi" per segnare manualmente i volti nella foto
+                </p>
+              )}
             </div>
 
             {/* EXIF Metadata */}
             {photo.exif_data && Object.keys(photo.exif_data).length > 0 && (() => {
-              // Organize EXIF data into categories
               const cameraData: [string, any][] = [];
               const exposureData: [string, any][] = [];
               const imageData: [string, any][] = [];
@@ -816,7 +931,6 @@ export default function PhotoDetailPage() {
                   </div>
 
                   <div className="space-y-4">
-                    {/* Camera Info */}
                     {cameraData.length > 0 && (
                       <div>
                         <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
@@ -833,7 +947,6 @@ export default function PhotoDetailPage() {
                       </div>
                     )}
 
-                    {/* Exposure Info */}
                     {exposureData.length > 0 && (
                       <div>
                         <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
@@ -850,7 +963,6 @@ export default function PhotoDetailPage() {
                       </div>
                     )}
 
-                    {/* Image Info */}
                     {imageData.length > 0 && (
                       <div>
                         <h4 className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
@@ -867,7 +979,6 @@ export default function PhotoDetailPage() {
                       </div>
                     )}
 
-                    {/* Other Info */}
                     {otherData.length > 0 && (
                       <details className="group">
                         <summary className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide cursor-pointer hover:text-blue-600 transition-colors">
@@ -941,93 +1052,183 @@ export default function PhotoDetailPage() {
           )}
         </div>
 
-        {/* Dialogs */}
+        {/* Face Label Dialog - migliorato */}
         {showFaceLabelDialog && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-md w-full p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold">Chi è questa persona?</h3>
-                <button onClick={() => setShowFaceLabelDialog(false)}>
-                  <X className="w-5 h-5" />
-                </button>
+            <div className="bg-white rounded-xl max-w-md w-full shadow-2xl">
+              {/* Header colorato */}
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 rounded-t-xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center space-x-3">
+                    <Users className="w-6 h-6 text-white" />
+                    <h3 className="text-xl font-bold text-white">
+                      {manualBbox ? 'Nuovo Volto' : 'Chi è questa persona?'}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowFaceLabelDialog(false);
+                      setManualBbox(null);
+                      setSelectedFace(null);
+                    }}
+                    className="text-white hover:bg-white/20 rounded-lg p-1 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
-              <p className="text-gray-600 mb-6">
-                {selectedFace?.person_name
-                  ? `Attualmente etichettato come: ${selectedFace.person_name}`
-                  : 'Questo volto non è ancora stato identificato'}
-              </p>
+              {/* Body */}
+              <div className="p-6">
+                {/* Info */}
+                {selectedFace?.person_name && !manualBbox && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                    Attualmente etichettato come: <strong>{selectedFace.person_name}</strong>
+                  </div>
+                )}
+                {!selectedFace?.person_name && !manualBbox && (
+                  <p className="text-gray-600 mb-4 text-sm">
+                    Questo volto non è ancora stato identificato
+                  </p>
+                )}
+                {manualBbox && (
+                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                    Volto manuale: {manualBbox.width}x{manualBbox.height}px in posizione ({manualBbox.x}, {manualBbox.y})
+                  </div>
+                )}
 
-              <div className="space-y-4">
-                {persons.length > 0 && (
+                <div className="space-y-4">
+                  {persons.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Seleziona persona esistente
+                      </label>
+                      <select
+                        value={labelPersonId}
+                        onChange={(e) => {
+                          setLabelPersonId(e.target.value);
+                          setLabelPersonName('');
+                        }}
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">-- Seleziona --</option>
+                        {persons.map((person: Person) => (
+                          <option key={person.id} value={person.id}>
+                            {person.name || `Person ${person.id.slice(0, 8)}`} ({person.photo_count} foto)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {persons.length > 0 && (
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-300" />
+                      </div>
+                      <div className="relative flex justify-center text-sm">
+                        <span className="px-2 bg-white text-gray-500">OPPURE</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Seleziona persona esistente
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Nome nuova persona
                     </label>
-                    <select
-                      value={labelPersonId}
+                    <input
+                      type="text"
+                      value={labelPersonName}
                       onChange={(e) => {
-                        setLabelPersonId(e.target.value);
-                        setLabelPersonName('');
+                        setLabelPersonName(e.target.value);
+                        setLabelPersonId('');
                       }}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Es: Mario Rossi"
+                      autoFocus
+                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (labelPersonId || labelPersonName.trim())) {
+                          e.preventDefault();
+                          if (manualBbox) {
+                            addManualFaceMutation.mutate({
+                              bbox: manualBbox,
+                              personId: labelPersonId || undefined,
+                              personName: labelPersonName.trim() || undefined,
+                            });
+                          } else if (selectedFace) {
+                            labelFaceMutation.mutate({
+                              faceId: selectedFace.id,
+                              personId: labelPersonId || undefined,
+                              personName: labelPersonName.trim() || undefined,
+                            });
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex space-x-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowFaceLabelDialog(false);
+                        setManualBbox(null);
+                        setSelectedFace(null);
+                      }}
+                      className="flex-1 px-4 py-2.5 border-2 border-gray-300 rounded-lg hover:bg-gray-50 font-semibold text-gray-700 transition-colors"
                     >
-                      <option value="">-- Seleziona --</option>
-                      {persons.map((person: Person) => (
-                        <option key={person.id} value={person.id}>
-                          {person.name || `Person ${person.id.slice(0, 8)}`} ({person.photo_count} foto)
-                        </option>
-                      ))}
-                    </select>
+                      Annulla
+                    </button>
+                    {manualBbox && (
+                      <button
+                        onClick={() => {
+                          addManualFaceMutation.mutate({
+                            bbox: manualBbox,
+                          });
+                        }}
+                        disabled={addManualFaceMutation.isPending}
+                        className="flex-1 px-4 py-2.5 border-2 border-green-300 text-green-700 rounded-lg hover:bg-green-50 disabled:opacity-50 font-semibold transition-colors"
+                      >
+                        Solo Volto
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (!labelPersonId && !labelPersonName.trim()) {
+                          toast.error('Seleziona una persona o inserisci un nome');
+                          return;
+                        }
+                        if (manualBbox) {
+                          addManualFaceMutation.mutate({
+                            bbox: manualBbox,
+                            personId: labelPersonId || undefined,
+                            personName: labelPersonName.trim() || undefined,
+                          });
+                        } else if (selectedFace) {
+                          labelFaceMutation.mutate({
+                            faceId: selectedFace.id,
+                            personId: labelPersonId || undefined,
+                            personName: labelPersonName.trim() || undefined,
+                          });
+                        }
+                      }}
+                      disabled={(labelFaceMutation.isPending || addManualFaceMutation.isPending) || (!labelPersonId && !labelPersonName.trim())}
+                      className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg transition-all flex items-center justify-center space-x-2"
+                    >
+                      {(labelFaceMutation.isPending || addManualFaceMutation.isPending) ? (
+                        <>
+                          <Loader className="w-4 h-4 animate-spin" />
+                          <span>Salvataggio...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          <span>Salva</span>
+                        </>
+                      )}
+                    </button>
                   </div>
-                )}
-
-                {persons.length > 0 && (
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-300" />
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                      <span className="px-2 bg-white text-gray-500">OPPURE</span>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nome nuova persona
-                  </label>
-                  <input
-                    type="text"
-                    value={labelPersonName}
-                    onChange={(e) => {
-                      setLabelPersonName(e.target.value);
-                      setLabelPersonId('');
-                    }}
-                    placeholder="Es: Mario Rossi"
-                    autoFocus
-                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
                 </div>
-
-                <button
-                  onClick={() => {
-                    if (!selectedFace) return;
-                    if (!labelPersonId && !labelPersonName.trim()) {
-                      toast.error('Seleziona una persona o inserisci un nome');
-                      return;
-                    }
-                    labelFaceMutation.mutate({
-                      faceId: selectedFace.id,
-                      personId: labelPersonId || undefined,
-                      personName: labelPersonName.trim() || undefined,
-                    });
-                  }}
-                  disabled={labelFaceMutation.isPending || (!labelPersonId && !labelPersonName.trim())}
-                  className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
-                >
-                  {labelFaceMutation.isPending ? 'Salvataggio...' : 'Salva Etichetta'}
-                </button>
               </div>
             </div>
           </div>

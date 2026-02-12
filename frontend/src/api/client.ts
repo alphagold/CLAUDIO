@@ -18,6 +18,7 @@ import type {
   Cluster,
   ConsentResponse,
   FaceDetectionResponse,
+  ManualFaceRequest,
 } from '../types';
 
 // API base URL - change this to your backend URL
@@ -242,6 +243,11 @@ export const facesApi = {
 
   getPhotoFaces: async (photoId: string): Promise<Face[]> => {
     const response = await apiClient.get<Face[]>(`/api/faces/photo/${photoId}`);
+    return response.data;
+  },
+
+  addManualFace: async (photoId: string, data: ManualFaceRequest): Promise<Face> => {
+    const response = await apiClient.post<Face>(`/api/faces/manual/${photoId}`, data);
     return response.data;
   },
 
