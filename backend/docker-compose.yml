@@ -17,6 +17,7 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - JWT_SECRET=change-this-secret-key-in-production-please
       - ANALYSIS_TIMEOUT=900
+      - CORS_ORIGINS=http://192.168.200.4:5173,http://localhost:5173
       - PYTHONUNBUFFERED=1
     depends_on:
       postgres:
@@ -24,20 +25,26 @@ services:
       redis:
         condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
       ollama:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./uploads:/app/uploads
+      # Docker socket necessario per admin: logs container e status
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - photomemory
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # Ollama Vision AI
   ollama:
@@ -56,6 +63,17 @@ services:
       - OLLAMA_MAX_QUEUE=50
     networks:
       - photomemory
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   # PostgreSQL + pgvector
   postgres:
@@ -87,6 +105,17 @@ services:
       - "max_connections=100"
       - "-c"
       - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=512MB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "maintenance_work_mem=128MB"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # Redis Cache & Queue
   redis:
@@ -110,6 +139,11 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # MinIO Object Storage
   minio:
@@ -128,6 +162,17 @@ services:
     command: server /data --console-address ":9001"
     networks:
       - photomemory
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
 
 volumes:
   postgres_data:
