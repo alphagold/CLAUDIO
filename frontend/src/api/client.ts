@@ -3,6 +3,7 @@ import type {
   AuthResponse,
   LoginRequest,
   RegisterRequest,
+  User,
   Photo,
   PhotosResponse,
   PhotoUploadResponse,
@@ -25,6 +26,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://192.168.200.4:8000'
 // Create axios instance
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -36,24 +38,13 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  console.log('Request config:', {
-    url: config.url,
-    method: config.method,
-    headers: config.headers,
-    data: config.data,
-  });
   return config;
 });
 
-// Log response errors
+// Handle response errors
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Error:', {
-      status: error.response?.status,
-      data: error.response?.data,
-      config: error.config,
-    });
     return Promise.reject(error);
   }
 );
@@ -61,13 +52,10 @@ apiClient.interceptors.response.use(
 // Auth API
 export const authApi = {
   login: async (data: LoginRequest): Promise<AuthResponse> => {
-    console.log('Login request data:', data);
-    const payload = {
+    const response = await apiClient.post<AuthResponse>('/api/auth/login', {
       email: data.email,
       password: data.password,
-    };
-    console.log('Sending payload:', payload);
-    const response = await apiClient.post<AuthResponse>('/api/auth/login', payload);
+    });
     return response.data;
   },
 
@@ -76,8 +64,8 @@ export const authApi = {
     return response.data;
   },
 
-  me: async (): Promise<any> => {
-    const response = await apiClient.get('/api/auth/me');
+  me: async (): Promise<User> => {
+    const response = await apiClient.get<User>('/api/auth/me');
     return response.data;
   },
 };

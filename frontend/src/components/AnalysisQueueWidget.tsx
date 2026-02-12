@@ -4,31 +4,18 @@ import apiClient from '../api/client';
 import type { QueueStatus } from '../types';
 
 export function AnalysisQueueWidget() {
-  // Poll queue status every 1s
-  const { data: queueStatus, isLoading, error, isError } = useQuery<QueueStatus>({
+  const { data: queueStatus, isLoading, error } = useQuery<QueueStatus>({
     queryKey: ['queueStatus'],
     queryFn: async () => {
-      console.log('[AnalysisQueueWidget] Fetching queue status...');
-      try {
-        const response = await apiClient.get('/api/photos/queue-status');
-        console.log('[AnalysisQueueWidget] Response received:', response.data);
-        return response.data;
-      } catch (err) {
-        console.error('[AnalysisQueueWidget] Fetch error:', err);
-        throw err;
-      }
+      const response = await apiClient.get('/api/photos/queue-status');
+      return response.data;
     },
-    refetchInterval: 1000, // Poll every 1s
+    refetchInterval: 5000,
     staleTime: 0,
-    retry: 3,
+    retry: 1,
   });
 
-  // Debug logging
-  console.log('[AnalysisQueueWidget] Render - isLoading:', isLoading, 'isError:', isError, 'queueStatus:', queueStatus);
-
   if (error) {
-    console.error('[AnalysisQueueWidget] Error fetching queue status:', error);
-    // Show error state instead of hiding
     return (
       <div className="bg-red-100 border border-red-300 text-red-800 rounded-lg p-4 mb-6">
         <p className="font-semibold">Errore caricamento stato coda</p>
@@ -38,17 +25,12 @@ export function AnalysisQueueWidget() {
   }
 
   if (isLoading || !queueStatus) {
-    console.log('[AnalysisQueueWidget] Loading or no data, returning null');
     return null;
   }
 
   const hasActivity = queueStatus.total_in_progress > 0 || queueStatus.queue_size > 0;
 
-  // Debug logging
-  console.log('[AnalysisQueueWidget] Queue status:', queueStatus, 'hasActivity:', hasActivity);
-
   if (!hasActivity) {
-    console.log('[AnalysisQueueWidget] No activity, hiding widget');
     return null;
   }
 
@@ -57,6 +39,11 @@ export function AnalysisQueueWidget() {
     const secs = seconds % 60;
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
+
+  const total = queueStatus.total_in_progress + queueStatus.queue_size;
+  const progressPercent = total > 0
+    ? (queueStatus.total_in_progress / total) * 100
+    : 0;
 
   return (
     <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg shadow-lg p-4 mb-6">
@@ -97,9 +84,7 @@ export function AnalysisQueueWidget() {
           <div className="flex items-center space-x-2 bg-white/20 px-3 py-2 rounded-lg">
             <div className="flex flex-col items-center">
               <span className="text-xs opacity-80">Totale</span>
-              <span className="text-xl font-bold">
-                {queueStatus.total_in_progress + queueStatus.queue_size}
-              </span>
+              <span className="text-xl font-bold">{total}</span>
             </div>
           </div>
         </div>
@@ -111,9 +96,7 @@ export function AnalysisQueueWidget() {
           <div className="bg-white/20 rounded-full h-2 overflow-hidden">
             <div
               className="bg-white h-full transition-all duration-500 ease-out"
-              style={{
-                width: `${(queueStatus.total_in_progress / (queueStatus.total_in_progress + queueStatus.queue_size)) * 100}%`
-              }}
+              style={{ width: `${progressPercent}%` }}
             />
           </div>
         </div>

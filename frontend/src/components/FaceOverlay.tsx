@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { Face } from '../types';
 import { facesApi } from '../api/client';
 
@@ -65,21 +65,29 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
     }
   };
 
-  // Update display size on resize
-  const updateDisplaySize = () => {
+  // Update display size on resize (debounced)
+  const updateDisplaySize = useCallback(() => {
     if (imgRef.current) {
       setDisplaySize({
         width: imgRef.current.clientWidth,
         height: imgRef.current.clientHeight,
       });
     }
-  };
-
-  // Listen for window resize
-  useEffect(() => {
-    window.addEventListener('resize', updateDisplaySize);
-    return () => window.removeEventListener('resize', updateDisplaySize);
   }, []);
+
+  // Listen for window resize with debounce
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const debouncedResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(updateDisplaySize, 150);
+    };
+    window.addEventListener('resize', debouncedResize);
+    return () => {
+      window.removeEventListener('resize', debouncedResize);
+      clearTimeout(timeoutId);
+    };
+  }, [updateDisplaySize]);
 
   // Re-calculate display size when image loads
   useEffect(() => {
@@ -144,7 +152,7 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
                 {/* Quality indicator */}
                 {face.quality_score && face.quality_score < 0.5 && (
                   <div className="absolute bottom-0 right-0 bg-yellow-500 text-white text-xs px-1 rounded-tl">
-                    Low quality
+                    Bassa qualità
                   </div>
                 )}
               </div>
@@ -157,7 +165,7 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/20">
           <div className="bg-white px-4 py-2 rounded shadow">
-            Loading faces...
+            Caricamento volti...
           </div>
         </div>
       )}

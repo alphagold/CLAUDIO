@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { photosApi } from '../api/client';
 import toast from 'react-hot-toast';
@@ -24,6 +24,15 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
     mutationFn: photosApi.uploadPhoto,
   });
 
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      files.forEach(file => {
+        if (file.preview) URL.revokeObjectURL(file.preview);
+      });
+    };
+  }, []);
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
@@ -45,8 +54,25 @@ export default function PhotoUpload({ onUploadComplete }: PhotoUploadProps) {
     e.target.value = ''; // Reset input
   };
 
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
   const addFiles = (newFiles: File[]) => {
-    const filesWithPreview: FileWithPreview[] = newFiles.map(file => {
+    const validFiles: File[] = [];
+    const rejected: string[] = [];
+
+    for (const file of newFiles) {
+      if (file.size > MAX_FILE_SIZE) {
+        rejected.push(`${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (rejected.length > 0) {
+      toast.error(`File troppo grandi (max 50MB): ${rejected.join(', ')}`);
+    }
+
+    const filesWithPreview: FileWithPreview[] = validFiles.map(file => {
       const fileWithPreview = file as FileWithPreview;
       fileWithPreview.preview = URL.createObjectURL(file);
       fileWithPreview.uploadStatus = 'pending';

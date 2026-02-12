@@ -166,8 +166,7 @@ export default function GalleryPage() {
       setSelectMode(false);
       refetch();
     } catch (error) {
-      console.error('Errore durante l\'eliminazione:', error);
-      alert('Errore durante l\'eliminazione delle foto');
+      toast.error('Errore durante l\'eliminazione delle foto');
     }
   };
 
