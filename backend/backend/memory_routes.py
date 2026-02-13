@@ -68,10 +68,11 @@ async def ask_question_get(
     """Domanda con contesto (GET). Cerca nell'indice e risponde con Ollama."""
     service = MemoryService(db)
 
+    # Ollama locale o remoto in base a preferenza utente
     ollama_url = "http://ollama:11434"
     ollama_model = model or getattr(current_user, 'text_model', None) or "llama3.2:latest"
 
-    if current_user.remote_ollama_enabled and current_user.remote_ollama_url:
+    if getattr(current_user, 'text_use_remote', False) and current_user.remote_ollama_url:
         ollama_url = current_user.remote_ollama_url
 
     result = await service.ask_with_context(
@@ -92,10 +93,11 @@ async def ask_question_post(
     """Domanda con contesto (POST). Cerca nell'indice e risponde con Ollama."""
     service = MemoryService(db)
 
+    # Ollama locale o remoto in base a preferenza utente
     ollama_url = "http://ollama:11434"
     ollama_model = request.model or getattr(current_user, 'text_model', None) or "llama3.2:latest"
 
-    if current_user.remote_ollama_enabled and current_user.remote_ollama_url:
+    if getattr(current_user, 'text_use_remote', False) and current_user.remote_ollama_url:
         ollama_url = current_user.remote_ollama_url
 
     result = await service.ask_with_context(

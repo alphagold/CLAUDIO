@@ -18,6 +18,7 @@ interface UserProfile {
   remote_ollama_url: string;
   remote_ollama_model: string;
   text_model: string;
+  text_use_remote: boolean;
   created_at: string;
 }
 
@@ -95,6 +96,7 @@ export default function SettingsPage() {
   const [remoteUrl, setRemoteUrl] = useState(profile?.remote_ollama_url || 'http://localhost:11434');
   const [remoteModel, setRemoteModel] = useState(profile?.remote_ollama_model || 'moondream');
   const [textModel, setTextModel] = useState(profile?.text_model || 'llama3.2:latest');
+  const [textUseRemote, setTextUseRemote] = useState(profile?.text_use_remote ?? false);
 
   // Stati per remote server
   const [testingConnection, setTestingConnection] = useState(false);
@@ -112,6 +114,7 @@ export default function SettingsPage() {
       setRemoteUrl(profile.remote_ollama_url || 'http://localhost:11434');
       setRemoteModel(profile.remote_ollama_model || 'moondream');
       setTextModel(profile.text_model || 'llama3.2:latest');
+      setTextUseRemote(profile.text_use_remote ?? false);
     }
   }, [profile]);
 
@@ -152,6 +155,7 @@ export default function SettingsPage() {
       remote_ollama_url?: string;
       remote_ollama_model?: string;
       text_model?: string;
+      text_use_remote?: boolean;
     }) => {
       const params = new URLSearchParams();
       if (data.preferred_model) params.append('preferred_model', data.preferred_model);
@@ -160,6 +164,7 @@ export default function SettingsPage() {
       if (data.remote_ollama_url) params.append('remote_ollama_url', data.remote_ollama_url);
       if (data.remote_ollama_model) params.append('remote_ollama_model', data.remote_ollama_model);
       if (data.text_model) params.append('text_model', data.text_model);
+      if (data.text_use_remote !== undefined) params.append('text_use_remote', String(data.text_use_remote));
 
       const response = await apiClient.patch(`/api/user/preferences?${params.toString()}`);
       return response.data;
@@ -254,6 +259,7 @@ export default function SettingsPage() {
       remote_ollama_url: remoteUrl,
       remote_ollama_model: remoteModel,
       text_model: textModel,
+      text_use_remote: textUseRemote,
     });
   };
 
@@ -374,21 +380,76 @@ export default function SettingsPage() {
             <MessageSquareText className="w-6 h-6 text-amber-600" />
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Modello Testo (Memoria e Diario)</h2>
-              <p className="text-sm text-gray-600">Usato per Q&A, generazione storie e chat memoria</p>
+              <p className="text-sm text-gray-600">Usato per Q&A memoria e generazione storie diario</p>
             </div>
           </div>
-          <div>
-            <input
-              type="text"
-              value={textModel}
-              onChange={(e) => setTextModel(e.target.value)}
-              placeholder="es. llama3.2:latest, qwen3:latest"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              Nome del modello Ollama per testo. Se usi il server remoto, verra' sovrascritto dalla selezione nel pannello sotto.
-            </p>
+
+          {/* Toggle locale/remoto */}
+          <div className="mb-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setTextUseRemote(false)}
+                className={`flex-1 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                  !textUseRemote
+                    ? 'border-amber-500 bg-amber-50 text-amber-700'
+                    : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                Ollama Locale (server)
+              </button>
+              <button
+                onClick={() => setTextUseRemote(true)}
+                disabled={!remoteEnabled}
+                className={`flex-1 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                  textUseRemote
+                    ? 'border-purple-500 bg-purple-50 text-purple-700'
+                    : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                Ollama Remoto (PC)
+              </button>
+            </div>
+            {!remoteEnabled && (
+              <p className="text-xs text-gray-400 mt-2">
+                Abilita il server remoto sotto per poter usarlo anche per il testo
+              </p>
+            )}
           </div>
+
+          {/* Model selection */}
+          {textUseRemote && allRemoteModels.length > 0 ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Modello</label>
+              <select
+                value={textModel}
+                onChange={(e) => setTextModel(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              >
+                {allRemoteModels.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {model.name} ({(model.size / 1024 / 1024 / 1024).toFixed(1)} GB)
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Modelli disponibili sul server remoto</p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Modello</label>
+              <input
+                type="text"
+                value={textModel}
+                onChange={(e) => setTextModel(e.target.value)}
+                placeholder="es. llama3.2:latest, qwen3:latest"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                {textUseRemote
+                  ? 'Testa la connessione remota per vedere i modelli disponibili'
+                  : 'Nome del modello installato sul container Ollama del server'}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Remote Ollama Server Configuration */}
@@ -481,51 +542,26 @@ export default function SettingsPage() {
                   <Loader className="w-5 h-5 animate-spin mr-2" />
                   <span>Caricamento modelli...</span>
                 </div>
-              ) : allRemoteModels.length > 0 ? (
-                <div className="space-y-4">
-                  {/* Vision Model */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                      <Eye className="w-4 h-4 text-blue-600" />
-                      Modello Vision (analisi foto)
-                    </label>
-                    <select
-                      value={remoteModel}
-                      onChange={(e) => setRemoteModel(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {availableModels.map((model) => (
-                        <option key={model.name} value={model.name}>
-                          {model.name} ({(model.size / 1024 / 1024 / 1024).toFixed(1)} GB)
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Usato per descrivere e analizzare le immagini
-                    </p>
-                  </div>
-
-                  {/* Text Model */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                      <MessageSquareText className="w-4 h-4 text-amber-600" />
-                      Modello Testo (memoria e diario)
-                    </label>
-                    <select
-                      value={textModel}
-                      onChange={(e) => setTextModel(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                    >
-                      {allRemoteModels.map((model) => (
-                        <option key={model.name} value={model.name}>
-                          {model.name} ({(model.size / 1024 / 1024 / 1024).toFixed(1)} GB)
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Usato per Q&A memoria e generazione storie diario
-                    </p>
-                  </div>
+              ) : availableModels.length > 0 ? (
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                    <Eye className="w-4 h-4 text-blue-600" />
+                    Modello Vision (analisi foto)
+                  </label>
+                  <select
+                    value={remoteModel}
+                    onChange={(e) => setRemoteModel(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {availableModels.map((model) => (
+                      <option key={model.name} value={model.name}>
+                        {model.name} ({(model.size / 1024 / 1024 / 1024).toFixed(1)} GB)
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Usato per descrivere e analizzare le immagini
+                  </p>
                 </div>
               ) : (
                 <div>
