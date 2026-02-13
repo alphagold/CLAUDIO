@@ -437,7 +437,7 @@ class FaceRecognitionService:
 
         query = text("""
             SELECT f.person_id,
-                   (f.embedding <=> :embedding::vector) AS distance
+                   (f.embedding <=> CAST(:embedding AS vector)) AS distance
             FROM faces f
             JOIN photos ph ON f.photo_id = ph.id
             WHERE f.person_id IS NOT NULL
@@ -445,8 +445,8 @@ class FaceRecognitionService:
               AND f.id != :face_id
               AND f.embedding IS NOT NULL
               AND ph.user_id = :user_id
-              AND (f.embedding <=> :embedding::vector) <= :max_distance
-            ORDER BY f.embedding <=> :embedding::vector
+              AND (f.embedding <=> CAST(:embedding AS vector)) <= :max_distance
+            ORDER BY f.embedding <=> CAST(:embedding AS vector)
             LIMIT 1
         """)
 
@@ -495,7 +495,7 @@ class FaceRecognitionService:
 
         query = text("""
             SELECT f.id,
-                   (f.embedding <=> :embedding::vector) AS distance
+                   (f.embedding <=> CAST(:embedding AS vector)) AS distance
             FROM faces f
             JOIN photos ph ON f.photo_id = ph.id
             WHERE f.person_id IS NULL
@@ -503,8 +503,8 @@ class FaceRecognitionService:
               AND f.id != :face_id
               AND f.embedding IS NOT NULL
               AND ph.user_id = :user_id
-              AND (f.embedding <=> :embedding::vector) <= :max_distance
-            ORDER BY f.embedding <=> :embedding::vector
+              AND (f.embedding <=> CAST(:embedding AS vector)) <= :max_distance
+            ORDER BY f.embedding <=> CAST(:embedding AS vector)
             LIMIT 100
         """)
 
@@ -750,14 +750,14 @@ class FaceRecognitionService:
                 f.id,
                 f.person_id,
                 p.name as person_name,
-                (f.embedding <=> :embedding::vector) as distance
+                (f.embedding <=> CAST(:embedding AS vector)) as distance
             FROM faces f
             LEFT JOIN persons p ON f.person_id = p.id
             WHERE f.id != :face_id
               AND f.deleted_at IS NULL
               AND f.embedding IS NOT NULL
-              AND (f.embedding <=> :embedding::vector) <= :threshold
-            ORDER BY f.embedding <=> :embedding::vector
+              AND (f.embedding <=> CAST(:embedding AS vector)) <= :threshold
+            ORDER BY f.embedding <=> CAST(:embedding AS vector)
             LIMIT :limit
         """)
 
