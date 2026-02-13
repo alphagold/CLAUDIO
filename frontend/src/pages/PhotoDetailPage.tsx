@@ -6,7 +6,7 @@ import apiClient from '../api/client';
 import Layout from '../components/Layout';
 import PhotoMap from '../components/PhotoMap';
 import FaceOverlay from '../components/FaceOverlay';
-import type { Face, Person, MemoryQuestion } from '../types';
+import type { Face, Person } from '../types';
 import {
   ArrowLeft,
   Loader,
