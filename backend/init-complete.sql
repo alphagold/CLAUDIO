@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
     remote_ollama_enabled BOOLEAN DEFAULT FALSE NOT NULL,
     remote_ollama_url VARCHAR(255) DEFAULT 'http://localhost:11434',
     remote_ollama_model VARCHAR(50) DEFAULT 'moondream',
+    text_model VARCHAR(100) DEFAULT 'llama3.2:latest',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

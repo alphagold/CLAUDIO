@@ -239,7 +239,7 @@ Scrivi la storia (3-5 paragrafi):"""
 
     # Determina server e modello Ollama
     ollama_url = "http://ollama:11434"
-    ollama_model = model or "llama3.2:latest"
+    ollama_model = model or getattr(current_user, 'text_model', None) or "llama3.2:latest"
 
     if current_user.remote_ollama_enabled and current_user.remote_ollama_url:
         ollama_url = current_user.remote_ollama_url

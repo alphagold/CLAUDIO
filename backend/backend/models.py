@@ -25,6 +25,7 @@ class User(Base):
     remote_ollama_enabled = Column(Boolean, default=False, nullable=False)
     remote_ollama_url = Column(String(255), default="http://localhost:11434")
     remote_ollama_model = Column(String(50), default="moondream")
+    text_model = Column(String(100), default="llama3.2:latest")
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 

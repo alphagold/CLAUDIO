@@ -4,7 +4,7 @@ import axios from 'axios';
 import Layout from '../components/Layout';
 import apiClient, { remoteOllamaApi, facesApi } from '../api/client';
 import type { ConsentResponse } from '../types';
-import { Settings, Sparkles, Zap, Save, Loader, Wifi, WifiOff, RefreshCw, User, Shield, AlertCircle } from 'lucide-react';
+import { Settings, Sparkles, Zap, Save, Loader, Wifi, WifiOff, RefreshCw, User, Shield, AlertCircle, Eye, MessageSquareText } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface UserProfile {
@@ -17,6 +17,7 @@ interface UserProfile {
   remote_ollama_enabled: boolean;
   remote_ollama_url: string;
   remote_ollama_model: string;
+  text_model: string;
   created_at: string;
 }
 
@@ -93,10 +94,12 @@ export default function SettingsPage() {
   const [remoteEnabled, setRemoteEnabled] = useState(profile?.remote_ollama_enabled ?? false);
   const [remoteUrl, setRemoteUrl] = useState(profile?.remote_ollama_url || 'http://localhost:11434');
   const [remoteModel, setRemoteModel] = useState(profile?.remote_ollama_model || 'moondream');
+  const [textModel, setTextModel] = useState(profile?.text_model || 'llama3.2:latest');
 
   // Stati per remote server
   const [testingConnection, setTestingConnection] = useState(false);
   const [availableModels, setAvailableModels] = useState<Array<{ name: string; size: number }>>([]);
+  const [allRemoteModels, setAllRemoteModels] = useState<Array<{ name: string; size: number }>>([]);
   const [connectionTested, setConnectionTested] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
 
@@ -108,6 +111,7 @@ export default function SettingsPage() {
       setRemoteEnabled(profile.remote_ollama_enabled ?? false);
       setRemoteUrl(profile.remote_ollama_url || 'http://localhost:11434');
       setRemoteModel(profile.remote_ollama_model || 'moondream');
+      setTextModel(profile.text_model || 'llama3.2:latest');
     }
   }, [profile]);
 
@@ -147,6 +151,7 @@ export default function SettingsPage() {
       remote_ollama_enabled?: boolean;
       remote_ollama_url?: string;
       remote_ollama_model?: string;
+      text_model?: string;
     }) => {
       const params = new URLSearchParams();
       if (data.preferred_model) params.append('preferred_model', data.preferred_model);
@@ -154,6 +159,7 @@ export default function SettingsPage() {
       if (data.remote_ollama_enabled !== undefined) params.append('remote_ollama_enabled', String(data.remote_ollama_enabled));
       if (data.remote_ollama_url) params.append('remote_ollama_url', data.remote_ollama_url);
       if (data.remote_ollama_model) params.append('remote_ollama_model', data.remote_ollama_model);
+      if (data.text_model) params.append('text_model', data.text_model);
 
       const response = await apiClient.patch(`/api/user/preferences?${params.toString()}`);
       return response.data;
@@ -176,6 +182,7 @@ export default function SettingsPage() {
     setTestingConnection(true);
     setConnectionTested(false);
     setAvailableModels([]);
+    setAllRemoteModels([]);
 
     try {
       // Test connessione
@@ -190,15 +197,21 @@ export default function SettingsPage() {
         try {
           const modelsData = await remoteOllamaApi.fetchModels(remoteUrl);
           setAvailableModels(modelsData.models);
+          setAllRemoteModels(modelsData.all_models);
 
-          if (modelsData.models.length === 0) {
+          if (modelsData.all_models.length === 0) {
             toast.error('Nessun modello disponibile sul server remoto');
           } else {
-            toast.success(`Trovati ${modelsData.models.length} modelli disponibili`);
-            // Auto-select first model if current selection not in list
-            const currentModelExists = modelsData.models.some((m) => m.name === remoteModel);
-            if (!currentModelExists && modelsData.models.length > 0) {
+            toast.success(`Trovati ${modelsData.all_models.length} modelli (${modelsData.models.length} vision)`);
+            // Auto-select first vision model if current not in list
+            const currentVisionExists = modelsData.models.some((m) => m.name === remoteModel);
+            if (!currentVisionExists && modelsData.models.length > 0) {
               setRemoteModel(modelsData.models[0].name);
+            }
+            // Auto-select first text model if current not in list
+            const currentTextExists = modelsData.all_models.some((m) => m.name === textModel);
+            if (!currentTextExists && modelsData.all_models.length > 0) {
+              setTextModel(modelsData.all_models[0].name);
             }
           }
         } catch (err) {
@@ -240,6 +253,7 @@ export default function SettingsPage() {
       remote_ollama_enabled: remoteEnabled,
       remote_ollama_url: remoteUrl,
       remote_ollama_model: remoteModel,
+      text_model: textModel,
     });
   };
 
@@ -354,6 +368,29 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Text Model for Memory & Diary */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <MessageSquareText className="w-6 h-6 text-amber-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Modello Testo (Memoria e Diario)</h2>
+              <p className="text-sm text-gray-600">Usato per Q&A, generazione storie e chat memoria</p>
+            </div>
+          </div>
+          <div>
+            <input
+              type="text"
+              value={textModel}
+              onChange={(e) => setTextModel(e.target.value)}
+              placeholder="es. llama3.2:latest, qwen3:latest"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              Nome del modello Ollama per testo. Se usi il server remoto, verra' sovrascritto dalla selezione nel pannello sotto.
+            </p>
+          </div>
+        </div>
+
         {/* Remote Ollama Server Configuration */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center space-x-3 mb-6">
@@ -392,8 +429,9 @@ export default function SettingsPage() {
                   value={remoteUrl}
                   onChange={(e) => {
                     setRemoteUrl(e.target.value);
-                    setConnectionTested(false); // Reset test status on URL change
+                    setConnectionTested(false);
                     setAvailableModels([]);
+                    setAllRemoteModels([]);
                   }}
                   placeholder="http://192.168.1.100:11434"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -437,23 +475,24 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              {/* Remote Model Selection - Dynamic or Fallback */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Modello sul Server Remoto
-                </label>
-
-                {loadingModels ? (
-                  <div className="flex items-center justify-center py-4 text-gray-500">
-                    <Loader className="w-5 h-5 animate-spin mr-2" />
-                    <span>Caricamento modelli...</span>
-                  </div>
-                ) : availableModels.length > 0 ? (
-                  <>
+              {/* Remote Model Selection */}
+              {loadingModels ? (
+                <div className="flex items-center justify-center py-4 text-gray-500">
+                  <Loader className="w-5 h-5 animate-spin mr-2" />
+                  <span>Caricamento modelli...</span>
+                </div>
+              ) : allRemoteModels.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Vision Model */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                      <Eye className="w-4 h-4 text-blue-600" />
+                      Modello Vision (analisi foto)
+                    </label>
                     <select
                       value={remoteModel}
                       onChange={(e) => setRemoteModel(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       {availableModels.map((model) => (
                         <option key={model.name} value={model.name}>
@@ -462,30 +501,43 @@ export default function SettingsPage() {
                       ))}
                     </select>
                     <p className="text-xs text-gray-500 mt-1">
-                      Seleziona il modello installato sul server remoto
+                      Usato per descrivere e analizzare le immagini
                     </p>
-                  </>
-                ) : (
-                  <>
+                  </div>
+
+                  {/* Text Model */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                      <MessageSquareText className="w-4 h-4 text-amber-600" />
+                      Modello Testo (memoria e diario)
+                    </label>
                     <select
-                      value={remoteModel}
-                      onChange={(e) => setRemoteModel(e.target.value)}
-                      disabled={!connectionTested}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                      value={textModel}
+                      onChange={(e) => setTextModel(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                     >
-                      {MODELS.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name} ({model.size})
+                      {allRemoteModels.map((model) => (
+                        <option key={model.name} value={model.name}>
+                          {model.name} ({(model.size / 1024 / 1024 / 1024).toFixed(1)} GB)
                         </option>
                       ))}
                     </select>
-                    <p className="text-xs text-yellow-600 mt-1 flex items-center space-x-1">
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Testa la connessione per vedere i modelli realmente disponibili</span>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Usato per Q&A memoria e generazione storie diario
                     </p>
-                  </>
-                )}
-              </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Modelli sul Server Remoto
+                  </label>
+                  <p className="text-xs text-yellow-600 flex items-center space-x-1 py-2">
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Testa la connessione per vedere i modelli disponibili</span>
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>

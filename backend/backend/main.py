@@ -793,6 +793,7 @@ async def get_user_profile(
         "remote_ollama_enabled": current_user.remote_ollama_enabled,
         "remote_ollama_url": current_user.remote_ollama_url,
         "remote_ollama_model": current_user.remote_ollama_model,
+        "text_model": current_user.text_model or "llama3.2:latest",
         "created_at": current_user.created_at.isoformat()
     }
 
@@ -804,6 +805,7 @@ async def update_user_preferences(
     remote_ollama_enabled: Optional[bool] = None,
     remote_ollama_url: Optional[str] = None,
     remote_ollama_model: Optional[str] = None,
+    text_model: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -853,6 +855,9 @@ async def update_user_preferences(
     if remote_ollama_model is not None:
         current_user.remote_ollama_model = remote_ollama_model
 
+    if text_model is not None:
+        current_user.text_model = text_model
+
     db.commit()
     db.refresh(current_user)
 
@@ -862,7 +867,8 @@ async def update_user_preferences(
         "auto_analyze": current_user.auto_analyze,
         "remote_ollama_enabled": current_user.remote_ollama_enabled,
         "remote_ollama_url": current_user.remote_ollama_url,
-        "remote_ollama_model": current_user.remote_ollama_model
+        "remote_ollama_model": current_user.remote_ollama_model,
+        "text_model": current_user.text_model or "llama3.2:latest"
     }
 
 
