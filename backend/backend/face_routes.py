@@ -84,6 +84,8 @@ class PersonResponse(BaseModel):
     last_seen_at: Optional[str] = None
     is_verified: bool
     representative_face_id: Optional[str] = None
+    representative_photo_id: Optional[str] = None
+    representative_bbox: Optional[dict] = None
 
 
 class PersonUpdateRequest(BaseModel):
@@ -419,13 +421,41 @@ async def list_persons(
 ):
     """
     Lista tutte le persone identificate dall'utente.
+    Include dati volto rappresentativo per miniatura (photo_id + bbox).
     """
     persons = db.query(Person).filter(
         Person.user_id == current_user.id
     ).order_by(Person.photo_count.desc()).all()
 
-    return [
-        PersonResponse(
+    results = []
+    for p in persons:
+        rep_photo_id = None
+        rep_bbox = None
+
+        # Cerca volto rappresentativo: prima representative_face_id, poi il primo volto disponibile
+        rep_face = None
+        if p.representative_face_id:
+            rep_face = db.query(Face).filter(
+                Face.id == p.representative_face_id,
+                Face.deleted_at.is_(None)
+            ).first()
+
+        if not rep_face:
+            rep_face = db.query(Face).filter(
+                Face.person_id == p.id,
+                Face.deleted_at.is_(None)
+            ).first()
+
+        if rep_face:
+            rep_photo_id = str(rep_face.photo_id)
+            rep_bbox = {
+                "x": rep_face.bbox_x,
+                "y": rep_face.bbox_y,
+                "width": rep_face.bbox_width,
+                "height": rep_face.bbox_height,
+            }
+
+        results.append(PersonResponse(
             id=str(p.id),
             name=p.name,
             notes=p.notes,
@@ -433,10 +463,12 @@ async def list_persons(
             first_seen_at=p.first_seen_at.isoformat() if p.first_seen_at else None,
             last_seen_at=p.last_seen_at.isoformat() if p.last_seen_at else None,
             is_verified=p.is_verified,
-            representative_face_id=str(p.representative_face_id) if p.representative_face_id else None
-        )
-        for p in persons
-    ]
+            representative_face_id=str(p.representative_face_id) if p.representative_face_id else None,
+            representative_photo_id=rep_photo_id,
+            representative_bbox=rep_bbox,
+        ))
+
+    return results
 
 
 @router.get("/persons/{person_id}", response_model=PersonResponse)

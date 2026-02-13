@@ -10,8 +10,6 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const GalleryPage = lazy(() => import('./pages/GalleryPage'));
 const PhotoDetailPage = lazy(() => import('./pages/PhotoDetailPage'));
-const AlbumsPage = lazy(() => import('./pages/AlbumsPage'));
-const AlbumDetailPage = lazy(() => import('./pages/AlbumDetailPage'));
 const MapPage = lazy(() => import('./pages/MapPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'));
@@ -124,22 +122,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <PhotoDetailPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/albums"
-            element={
-              <ProtectedRoute>
-                <AlbumsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/albums/:albumId"
-            element={
-              <ProtectedRoute>
-                <AlbumDetailPage />
               </ProtectedRoute>
             }
           />

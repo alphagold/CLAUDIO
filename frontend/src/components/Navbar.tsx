@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Brain, Album, Map, LogOut, User, Shield, Settings, ImageIcon, Users, MessageCircle } from 'lucide-react';
+import { Brain, Map, LogOut, User, Shield, Settings, ImageIcon, Users, MessageCircle } from 'lucide-react';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -44,21 +44,6 @@ export default function Navbar() {
               <ImageIcon className="w-5 h-5" />
               <span className="font-medium">Gallery</span>
               {isActive('/gallery') && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full"></div>
-              )}
-            </Link>
-
-            <Link
-              to="/albums"
-              className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                isActive('/albums')
-                  ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
-            >
-              <Album className="w-5 h-5" />
-              <span className="font-medium">Albums</span>
-              {isActive('/albums') && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full"></div>
               )}
             </Link>

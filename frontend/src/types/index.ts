@@ -143,6 +143,13 @@ export interface Person {
   last_seen_at: string | null;
   is_verified: boolean;
   representative_face_id: string | null;
+  representative_photo_id?: string | null;
+  representative_bbox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
 }
 
 export interface PersonUpdateRequest {

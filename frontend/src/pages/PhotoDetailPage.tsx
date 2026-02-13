@@ -583,15 +583,26 @@ export default function PhotoDetailPage() {
                             {/* Face thumbnail */}
                             <div
                               className="w-10 h-10 rounded-lg overflow-hidden border border-gray-200 bg-gray-100 flex-shrink-0 mr-3"
-                              style={{
-                                backgroundImage: `url(${photosApi.getPhotoUrl(photo.id)})`,
-                                backgroundPosition: photo.width && photo.height
-                                  ? `-${(face.bbox.x / photo.width) * 40 * (photo.width / face.bbox.width)}px -${(face.bbox.y / photo.height) * 40 * (photo.height / face.bbox.height)}px`
-                                  : 'center',
-                                backgroundSize: photo.width && face.bbox.width
-                                  ? `${(photo.width / face.bbox.width) * 40}px auto`
-                                  : 'cover',
-                              }}
+                              style={(() => {
+                                if (!photo.width || !photo.height || !face.bbox.width || !face.bbox.height) {
+                                  return { backgroundImage: `url(${photosApi.getThumbnailUrl(photo.id, 512)})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+                                }
+                                const containerSize = 40;
+                                const scaleX = containerSize / face.bbox.width;
+                                const scaleY = containerSize / face.bbox.height;
+                                const scale = Math.max(scaleX, scaleY);
+                                const bgW = photo.width * scale;
+                                const bgH = photo.height * scale;
+                                const centerX = face.bbox.x + face.bbox.width / 2;
+                                const centerY = face.bbox.y + face.bbox.height / 2;
+                                const posX = -(centerX * scale - containerSize / 2);
+                                const posY = -(centerY * scale - containerSize / 2);
+                                return {
+                                  backgroundImage: `url(${photosApi.getThumbnailUrl(photo.id, 512)})`,
+                                  backgroundSize: `${bgW}px ${bgH}px`,
+                                  backgroundPosition: `${posX}px ${posY}px`,
+                                };
+                              })()}
                             />
 
                             {/* Name */}

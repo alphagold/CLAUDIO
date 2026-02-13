@@ -775,6 +775,37 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
 
 
 # ============================================================================
+# ROUTES - OLLAMA LOCAL MODELS
+# ============================================================================
+
+@app.get("/api/ollama/local/models")
+async def get_local_ollama_models(
+    current_user: User = Depends(get_current_user)
+):
+    """Lista modelli Ollama installati sul server locale. Accessibile a tutti gli utenti autenticati."""
+    import httpx
+    from config import settings
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{settings.OLLAMA_HOST}/api/tags")
+            response.raise_for_status()
+            data = response.json()
+
+            models = []
+            for model in data.get("models", []):
+                models.append({
+                    "name": model.get("name", ""),
+                    "size": model.get("size", 0),
+                })
+
+            return {"models": models, "count": len(models)}
+
+    except Exception as e:
+        return {"models": [], "count": 0, "error": str(e)}
+
+
+# ============================================================================
 # ROUTES - USER PROFILE & PREFERENCES
 # ============================================================================
 
@@ -814,9 +845,6 @@ async def update_user_preferences(
     """Update user preferences for AI model and auto-analysis"""
 
     if preferred_model is not None:
-        valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest", "remote"]
-        if preferred_model not in valid_models:
-            raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
         current_user.preferred_model = preferred_model
 
     if auto_analyze is not None:

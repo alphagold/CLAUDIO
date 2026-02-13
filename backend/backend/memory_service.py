@@ -181,7 +181,17 @@ class MemoryService:
     ) -> Dict:
         """
         Risponde a una domanda cercando contesto nell'indice e usando Ollama.
+        Auto-reindicizza se l'indice è vuoto.
         """
+        # 0. Auto-reindex se indice vuoto per questo utente
+        index_count = self.db.query(func.count(MemoryIndex.id)).filter(
+            MemoryIndex.user_id == user_id
+        ).scalar() or 0
+
+        if index_count == 0:
+            logger.info(f"Indice vuoto per utente {user_id}, eseguo reindex automatico")
+            self.reindex_all(user_id)
+
         # 1. Cerca contesto rilevante
         context_items = self.search_context(user_id, question, limit=15)
 
@@ -194,9 +204,10 @@ class MemoryService:
         # 3. Costruisci prompt
         context_text = ""
         if context_items:
-            context_text = "Informazioni disponibili nelle foto dell'utente:\n"
+            context_text = "\n--- DATI DISPONIBILI ---\n"
             for item in context_items:
                 context_text += f"- [{item['entity_type']}] {item['content']}\n"
+            context_text += "--- FINE DATI ---\n"
 
         directives_text = ""
         if directives:
@@ -204,13 +215,14 @@ class MemoryService:
             for d in directives:
                 directives_text += f"- {d.directive}\n"
 
-        prompt = f"""Sei un assistente personale per una galleria fotografica. Rispondi in italiano.
+        prompt = f"""Sei un assistente che risponde a domande basandosi su un DATABASE TESTUALE di informazioni estratte automaticamente da foto.
+NON hai accesso a immagini. Hai SOLO dati testuali (descrizioni, luoghi, persone, oggetti, testi) già estratti.
+Rispondi in italiano basandoti ESCLUSIVAMENTE sui dati forniti sotto.
 {directives_text}
 {context_text}
-Domanda dell'utente: {question}
+Domanda: {question}
 
-Rispondi basandoti sulle informazioni disponibili. Se non hai abbastanza informazioni, dillo chiaramente.
-Rispondi in modo conciso e utile."""
+Se i dati forniti non contengono informazioni sufficienti, dillo chiaramente."""
 
         # 4. Chiama Ollama
         try:

@@ -155,6 +155,14 @@ export const photosApi = {
   },
 };
 
+// Ollama API (local server models)
+export const ollamaApi = {
+  getLocalModels: async (): Promise<{ models: Array<{ name: string; size: number }>; count: number }> => {
+    const response = await apiClient.get('/api/ollama/local/models');
+    return response.data;
+  },
+};
+
 // Remote Ollama API
 export const remoteOllamaApi = {
   fetchModels: async (url: string): Promise<{
