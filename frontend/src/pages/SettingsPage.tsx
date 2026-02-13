@@ -294,9 +294,6 @@ export default function SettingsPage() {
                 onChange={(e) => setPreferredModel(e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               >
-                {remoteEnabled && (
-                  <option value="remote">Server Remoto ({remoteModel || '...'})</option>
-                )}
                 {localModels.map((model) => (
                   <option key={model.name} value={model.name}>
                     {model.name} ({(model.size / 1024 / 1024 / 1024).toFixed(1)} GB)
@@ -304,7 +301,8 @@ export default function SettingsPage() {
                 ))}
               </select>
               <p className="text-xs text-gray-500 mt-1">
-                {localModels.length} modelli disponibili sul server locale
+                {localModels.length} modelli sul server locale.
+                {remoteEnabled && ' Il server remoto verrà usato automaticamente quando abilitato.'}
               </p>
             </div>
           ) : (

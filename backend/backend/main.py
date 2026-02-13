@@ -1043,10 +1043,12 @@ async def upload_photo(
     print(f"[UPLOAD] User {current_user.email} - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}, remote_enabled: {current_user.remote_ollama_enabled}")
 
     if current_user.auto_analyze:
-        model = current_user.preferred_model or "moondream"
-        if model == "remote":
+        # Se il server remoto è abilitato, usalo automaticamente
+        if current_user.remote_ollama_enabled and current_user.remote_ollama_url and current_user.remote_ollama_model:
+            model = "remote"
             print(f"[UPLOAD] Auto-analysis enabled, using REMOTE server (url={current_user.remote_ollama_url}, model={current_user.remote_ollama_model})")
         else:
+            model = current_user.preferred_model or "moondream"
             print(f"[UPLOAD] Auto-analysis enabled, using LOCAL model: {model}")
 
         # Face detection prima dell'analisi LLM (se disponibile e consenso dato)
