@@ -257,10 +257,20 @@ INSERT INTO prompt_templates (name, description, prompt_text, is_default, is_act
 VALUES
 (
     'simple_description',
-    'Descrizione libera dettagliata in italiano - il parsing lo fa il backend (default)',
-    'IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.
+    'Descrizione dettagliata strutturata in italiano con focus su persone e luoghi (default)',
+    'Descrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint}
 
-Descrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint} Descrivi solo ciò che è chiaramente visibile, senza ipotesi o supposizioni. Includi: oggetti principali, persone (quante sono e cosa fanno), colori, atmosfera, ambiente (interno o esterno). Se nell''immagine è presente testo leggibile (scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.',
+Persone: Descrivi ogni persona nel dettaglio. Cosa indossano? Quali sono le loro espressioni, la postura, l''aspetto fisico (capelli, occhi, etc.)? Cosa stanno facendo esattamente?
+
+Oggetti principali: Elenca e descrivi gli oggetti chiave visibili nell''immagine.
+
+Ambiente: Specifica se la scena è in interni o esterni e descrivi lo sfondo.
+
+Colori e atmosfera: Definisci la tavolozza dei colori dominante e l''atmosfera generale dell''immagine (allegra, malinconica, formale, etc.).
+
+Testo: Se è presente testo leggibile (come scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.
+
+Fondamentale: Descrivi solo ciò che è chiaramente visibile, senza fare ipotesi o supposizioni. Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.',
     TRUE,
     TRUE
 ),

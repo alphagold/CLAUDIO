@@ -246,9 +246,9 @@ class OllamaVisionClient:
         except Exception as e:
             print(f"[VISION] Failed to load prompt from database: {e}, using hardcoded fallback")
 
-        # Fallback hardcoded - descrizione libera in italiano
+        # Fallback hardcoded - descrizione strutturata in italiano
         print(f"[VISION] Using hardcoded fallback prompt, location='{location_hint.strip()}', faces='{faces_hint.strip()}'")
-        return f"IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.\n\nDescrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint} Descrivi tutto ciò che vedi: oggetti principali, persone (quante e cosa fanno), colori, atmosfera, ambiente (interno o esterno). Se nell'immagine è presente testo leggibile (scritte, etichette, insegne), trascrivilo esattamente tra virgolette."
+        return f"Descrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint}\n\nPersone: Descrivi ogni persona nel dettaglio. Cosa indossano? Quali sono le loro espressioni, la postura, l'aspetto fisico (capelli, occhi, etc.)? Cosa stanno facendo esattamente?\n\nOggetti principali: Elenca e descrivi gli oggetti chiave visibili nell'immagine.\n\nAmbiente: Specifica se la scena è in interni o esterni e descrivi lo sfondo.\n\nColori e atmosfera: Definisci la tavolozza dei colori dominante e l'atmosfera generale dell'immagine (allegra, malinconica, formale, etc.).\n\nTesto: Se è presente testo leggibile (come scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.\n\nFondamentale: Descrivi solo ciò che è chiaramente visibile, senza fare ipotesi o supposizioni. Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese."
 
     def _validate_analysis_quality(self, analysis: Dict) -> tuple[bool, List[str]]:
         """Valida qualità analisi e restituisce warnings"""
