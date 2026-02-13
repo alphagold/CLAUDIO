@@ -27,6 +27,8 @@ from models import User, Photo, PhotoAnalysis, SearchHistory, FaceRecognitionCon
 import schemas
 from vision import vision_client
 import admin_routes
+import diary_routes
+import memory_routes
 
 # Face recognition (optional)
 try:
@@ -1473,6 +1475,16 @@ if FACE_RECOGNITION_AVAILABLE and face_routes:
     print("Face recognition routes registered")
 else:
     print("Face recognition routes NOT available - feature disabled")
+
+# Include diary routes
+diary_routes.get_current_user_dependency = get_current_user
+app.include_router(diary_routes.router)
+print("Diary routes registered")
+
+# Include memory routes
+memory_routes.get_current_user_dependency = get_current_user
+app.include_router(memory_routes.router)
+print("Memory routes registered")
 
 
 @app.on_event("startup")

@@ -297,6 +297,71 @@ class FaceRecognitionConsent(Base):
 # PROMPT TEMPLATES (Configurable AI Prompts)
 # ============================================================================
 
+# ============================================================================
+# MEMORY SYSTEM MODELS
+# ============================================================================
+
+class MemoryIndex(Base):
+    """Indice semantico globale per ricerca conversazionale"""
+    __tablename__ = "memory_index"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # Tipo entita' indicizzata
+    entity_type = Column(String(50), nullable=False)  # 'face', 'place', 'object', 'text', 'date', 'event'
+    entity_id = Column(UUID(as_uuid=True))  # FK a foto/persona/ecc
+
+    # Contenuto testuale indicizzato
+    content = Column(Text, nullable=False)
+
+    # Embedding semantico (sentence-transformers 384-dim)
+    # Definito in init-complete.sql: embedding vector(384)
+
+    # Metadata aggiuntivi
+    metadata = Column(JSONB)
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+
+class MemoryConversation(Base):
+    """Conversazioni Q&A memorizzate"""
+    __tablename__ = "memory_conversations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+
+    # Contesto: foto/persone coinvolte
+    context = Column(JSONB)
+
+    # Feedback utente
+    feedback = Column(String(20))  # 'positive', 'negative', 'corrected'
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+
+class MemoryDirective(Base):
+    """Direttive personali (estratte o manuali)"""
+    __tablename__ = "memory_directives"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    directive = Column(Text, nullable=False)
+    source = Column(String(20), nullable=False, default="manual")  # 'auto', 'manual'
+    confidence = Column(DECIMAL(3, 2), default=1.00)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class PromptTemplate(Base):
     """Configurable AI prompt templates for photo analysis"""
     __tablename__ = "prompt_templates"

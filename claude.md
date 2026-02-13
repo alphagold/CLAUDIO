@@ -119,9 +119,9 @@ Poi configurare nelle Settings dell'app: abilita server remoto, inserisci URL e 
 
 ### Face Recognition (InsightFace buffalo_l)
 - **Motore**: InsightFace buffalo_l (ONNX Runtime CPU, 512-dim embeddings)
-- **Metrica**: cosine distance (`<=>` pgvector), soglia match 0.4
+- **Metrica**: cosine distance (`<=>` pgvector), soglia match 0.6
 - **Detection**: soglia 0.5, det_size 640x640, confidence reale da det_score
-- **Clustering**: DBSCAN metric='cosine', eps=0.4
+- **Clustering**: DBSCAN metric='cosine', eps=0.6
 - **Modello**: ~300MB, scaricato al primo uso, persistito in volume Docker `insightface_models`
 - **Singleton**: `get_insightface_app()` lazy init, env `INSIGHTFACE_MODEL=buffalo_l`
 - Al boot: foto con `face_detection_status=pending/processing` vengono accodate automaticamente
@@ -132,6 +132,21 @@ Poi configurare nelle Settings dell'app: abilita server remoto, inserisci URL e 
 - `faces.embedding` è **nullable** vector(512) (volti manuali non hanno embedding)
 - FaceOverlay ha `drawMode` per disegnare bbox manualmente (click-drag → rettangolo verde)
 - Dopo labeling, `faceRefreshKey` incrementa per forzare refresh FaceOverlay senza reload pagina
+- **Soft delete volto**: `DELETE /api/faces/{face_id}` imposta `deleted_at` (GDPR)
+
+### Diary API
+- `GET /api/diary/person/{person_id}` - Timeline persona con capitoli (gap > 3 giorni)
+- `POST /api/diary/person/{person_id}/story` - Genera storia narrativa con Ollama (text model)
+- Titoli automatici da location + date range
+- Usa server Ollama locale o remoto (configurazione utente)
+
+### Memory API (Memoria Conversazionale)
+- **Tabelle**: `memory_index`, `memory_conversations`, `memory_directives`
+- `POST /api/memory/ask` - Q&A con contesto (ricerca indice + Ollama)
+- `POST /api/memory/learn` - Feedback su risposte (positive/negative/corrected)
+- `POST /api/memory/reindex` - Reindicizza foto, persone, luoghi, oggetti, testi
+- `GET/POST/PATCH/DELETE /api/memory/directives` - CRUD direttive personali
+- Ricerca testuale ILIKE come fallback (embeddings semantici futuri)
 
 ### qwen3-vl
 - Usa `think: False` nel payload `/api/generate` per disabilitare reasoning mode
@@ -175,12 +190,15 @@ Deve essere sempre allineato con `backend/backend/models.py`.
 | `backend/backend/admin_routes.py` | Route admin + prompt templates CRUD |
 | `backend/backend/face_routes.py` | Route face recognition |
 | `backend/backend/face_recognition_service.py` | Detection, clustering, labeling volti |
+| `backend/backend/diary_routes.py` | API diario persona (timeline + storia) |
+| `backend/backend/memory_routes.py` | API memoria conversazionale (Q&A, direttive) |
+| `backend/backend/memory_service.py` | Servizio indicizzazione e ricerca semantica |
 | `frontend/src/components/FaceOverlay.tsx` | Bounding box volti su foto + drawMode manuale |
 | `frontend/src/pages/PhotoDetailPage.tsx` | Dettaglio foto, labeling volti, volto manuale |
 | `frontend/src/pages/GalleryPage.tsx` | Gallery principale |
 | `frontend/src/pages/SettingsPage.tsx` | Settings utente + server remoto |
 | `frontend/src/pages/PromptConfigurationPage.tsx` | Config prompt AI |
-| `frontend/src/api/client.ts` | API client Axios (auth, photos, faces, albums) |
+| `frontend/src/api/client.ts` | API client Axios (auth, photos, faces, albums, diary, memory) |
 | `frontend/src/types/index.ts` | TypeScript interfaces per tutti i tipi |
 
 ---
@@ -195,6 +213,7 @@ Deve essere sempre allineato con `backend/backend/models.py`.
 
 ### Migrations pendenti
 - **InsightFace migration**: `backend/migration-insightface.sql` (128→512 dim, L2→cosine, reset embeddings)
+- **Memory tables**: `memory_index`, `memory_conversations`, `memory_directives` (nuove tabelle P4)
 
 ---
 

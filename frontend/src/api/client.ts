@@ -301,4 +301,67 @@ export const facesApi = {
   },
 };
 
+// Diary API
+export const diaryApi = {
+  getPersonDiary: async (personId: string): Promise<any> => {
+    const response = await apiClient.get(`/api/diary/person/${personId}`);
+    return response.data;
+  },
+
+  generatePersonStory: async (personId: string, model?: string): Promise<any> => {
+    const params = model ? { model } : {};
+    const response = await apiClient.post(`/api/diary/person/${personId}/story`, null, {
+      params,
+    });
+    return response.data;
+  },
+};
+
+// Memory API
+export const memoryApi = {
+  ask: async (question: string, model?: string): Promise<any> => {
+    const response = await apiClient.post('/api/memory/ask', {
+      question,
+      model,
+    });
+    return response.data;
+  },
+
+  learn: async (conversationId: string, feedback: 'positive' | 'negative' | 'corrected'): Promise<any> => {
+    const response = await apiClient.post('/api/memory/learn', {
+      conversation_id: conversationId,
+      feedback,
+    });
+    return response.data;
+  },
+
+  reindex: async (): Promise<any> => {
+    const response = await apiClient.post('/api/memory/reindex');
+    return response.data;
+  },
+
+  getDirectives: async (activeOnly: boolean = true): Promise<any> => {
+    const response = await apiClient.get('/api/memory/directives', {
+      params: { active_only: activeOnly },
+    });
+    return response.data;
+  },
+
+  createDirective: async (directive: string): Promise<any> => {
+    const response = await apiClient.post('/api/memory/directives', {
+      directive,
+    });
+    return response.data;
+  },
+
+  updateDirective: async (directiveId: string, data: { directive?: string; is_active?: boolean }): Promise<any> => {
+    const response = await apiClient.patch(`/api/memory/directives/${directiveId}`, data);
+    return response.data;
+  },
+
+  deleteDirective: async (directiveId: string): Promise<void> => {
+    await apiClient.delete(`/api/memory/directives/${directiveId}`);
+  },
+};
+
 export default apiClient;
