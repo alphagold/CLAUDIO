@@ -209,19 +209,34 @@ class OllamaVisionClient:
         faces_hint = f" {faces_context}" if faces_context else ""
 
         # Try to load prompt from database
+        # Se ci sono persone → usa template "focus_persone", altrimenti → default
         try:
             from database import SessionLocal
             from models import PromptTemplate
 
             db = SessionLocal()
             try:
-                template = db.query(PromptTemplate).filter(
-                    PromptTemplate.is_default == True,
-                    PromptTemplate.is_active == True
-                ).first()
+                template = None
+
+                # Se ci sono volti, cerca il template focus_persone
+                if faces_context:
+                    template = db.query(PromptTemplate).filter(
+                        PromptTemplate.name == "focus_persone",
+                        PromptTemplate.is_active == True
+                    ).first()
+                    if template:
+                        print(f"[VISION] Volti rilevati → usando template: {template.name}")
+
+                # Fallback al template default
+                if not template:
+                    template = db.query(PromptTemplate).filter(
+                        PromptTemplate.is_default == True,
+                        PromptTemplate.is_active == True
+                    ).first()
+                    if template:
+                        print(f"[VISION] Using default template: {template.name}")
 
                 if template:
-                    print(f"[VISION] Using prompt template: {template.name}")
                     prompt_text = template.prompt_text
 
                     # Sostituisci placeholder se presenti nel template
@@ -240,7 +255,7 @@ class OllamaVisionClient:
 
                     return prompt_text
                 else:
-                    print(f"[VISION] No default template found, using hardcoded prompt")
+                    print(f"[VISION] No template found, using hardcoded prompt")
             finally:
                 db.close()
         except Exception as e:
