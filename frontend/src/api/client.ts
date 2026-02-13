@@ -107,8 +107,16 @@ export const photosApi = {
     await Promise.all(photoIds.map(id => apiClient.delete(`/api/photos/${id}`)));
   },
 
-  reanalyzePhoto: async (photoId: string, model: string = 'llama3.2-vision'): Promise<any> => {
-    const response = await apiClient.post(`/api/photos/${photoId}/reanalyze`, null, {
+  reanalyzePhoto: async (photoId: string, model: string = 'llama3.2-vision', customPrompt?: string): Promise<any> => {
+    const response = await apiClient.post(`/api/photos/${photoId}/reanalyze`, {
+      model,
+      custom_prompt: customPrompt || null,
+    });
+    return response.data;
+  },
+
+  getPromptPreview: async (photoId: string, model: string): Promise<{ prompt: string; faces_context: string | null; location_name: string | null; model: string }> => {
+    const response = await apiClient.get(`/api/photos/${photoId}/prompt-preview`, {
       params: { model },
     });
     return response.data;

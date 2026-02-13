@@ -39,7 +39,8 @@ class OllamaVisionClient:
         detailed: bool = False,
         location_name: Optional[str] = None,
         allow_fallback: bool = True,
-        faces_context: Optional[str] = None
+        faces_context: Optional[str] = None,
+        custom_prompt: Optional[str] = None
     ) -> Dict:
         """
         Analyze photo with Vision AI
@@ -64,7 +65,11 @@ class OllamaVisionClient:
         image_b64 = self._encode_image(image_path)
 
         # Prepare prompt WITH location context, faces context, and model-specific optimizations
-        prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model, faces_context=faces_context)
+        if custom_prompt:
+            prompt = custom_prompt
+            print(f"[VISION] Using custom prompt ({len(prompt)} chars)")
+        else:
+            prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model, faces_context=faces_context)
 
         # Adjust parameters based on model
         is_qwen = "qwen" in selected_model.lower()
@@ -170,6 +175,8 @@ class OllamaVisionClient:
             analysis_data = self._parse_analysis_response(analysis_text)
             analysis_data["processing_time_ms"] = processing_time
             analysis_data["model_version"] = selected_model
+            analysis_data["prompt_used"] = prompt
+            analysis_data["raw_response"] = analysis_text
 
             return analysis_data
 

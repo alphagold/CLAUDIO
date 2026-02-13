@@ -37,6 +37,10 @@ export default function PhotoDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showModelDialog, setShowModelDialog] = useState(false);
+  const [reanalyzeStep, setReanalyzeStep] = useState<'model' | 'prompt'>('model');
+  const [selectedModel, setSelectedModel] = useState('');
+  const [editablePrompt, setEditablePrompt] = useState('');
+  const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedFace, setSelectedFace] = useState<Face | null>(null);
   const [showFaceLabelDialog, setShowFaceLabelDialog] = useState(false);
@@ -118,10 +122,12 @@ export default function PhotoDetailPage() {
   });
 
   const reanalyzeMutation = useMutation({
-    mutationFn: (model: string) => photosApi.reanalyzePhoto(photoId!, model),
+    mutationFn: ({ model, customPrompt }: { model: string; customPrompt?: string }) =>
+      photosApi.reanalyzePhoto(photoId!, model, customPrompt),
     onSuccess: () => {
       toast.success('Rianalisi avviata');
       setShowModelDialog(false);
+      setReanalyzeStep('model');
       queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
     },
     onError: () => toast.error('Errore rianalisi'),
@@ -197,6 +203,21 @@ export default function PhotoDetailPage() {
     },
     onError: (error: any) => toast.error(error?.response?.data?.detail || 'Errore rilevamento volti'),
   });
+
+  const handleSelectModel = async (model: string) => {
+    setSelectedModel(model);
+    setIsLoadingPrompt(true);
+    setReanalyzeStep('prompt');
+    try {
+      const preview = await photosApi.getPromptPreview(photoId!, model);
+      setEditablePrompt(preview.prompt);
+    } catch {
+      setEditablePrompt('');
+      toast.error('Errore caricamento prompt');
+    } finally {
+      setIsLoadingPrompt(false);
+    }
+  };
 
   const handleRedetectFaces = () => {
     if (photo?.face_detection_status === 'completed' && photoFaces.length > 0) {
@@ -517,6 +538,32 @@ export default function PhotoDetailPage() {
                       </div>
                     )}
 
+                    {/* Prompt utilizzato */}
+                    {photo.analysis?.prompt_used && (
+                      <div className="p-4">
+                        <details>
+                          <summary className="flex items-center space-x-1.5 cursor-pointer text-xs font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-700">
+                            <ChevronRight className="w-3.5 h-3.5 transition-transform details-open:rotate-90" />
+                            <span>Prompt utilizzato</span>
+                          </summary>
+                          <pre className="mt-3 text-xs text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 whitespace-pre-wrap max-h-60 overflow-y-auto font-mono">{photo.analysis.prompt_used}</pre>
+                        </details>
+                      </div>
+                    )}
+
+                    {/* Risposta raw LLM */}
+                    {photo.analysis?.raw_response && (
+                      <div className="p-4">
+                        <details>
+                          <summary className="flex items-center space-x-1.5 cursor-pointer text-xs font-semibold text-gray-500 uppercase tracking-wide hover:text-gray-700">
+                            <ChevronRight className="w-3.5 h-3.5 transition-transform details-open:rotate-90" />
+                            <span>Risposta raw LLM</span>
+                          </summary>
+                          <pre className="mt-3 text-xs text-gray-600 bg-gray-50 p-3 rounded-lg border border-gray-100 whitespace-pre-wrap max-h-60 overflow-y-auto font-mono">{photo.analysis.raw_response}</pre>
+                        </details>
+                      </div>
+                    )}
+
                     {/* Analisi meta */}
                     {photo.analyzed_at && (
                       <div className="p-4 text-xs text-gray-400 space-y-1">
@@ -815,61 +862,120 @@ export default function PhotoDetailPage() {
         </div>
       )}
 
-      {/* Model Selection Dialog */}
+      {/* Reanalyze Dialog (2-step: model → prompt) */}
       {showModelDialog && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden">
             <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-5 py-4">
               <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold text-white">Scegli Modello AI</h3>
-                <button onClick={() => setShowModelDialog(false)} className="text-white/70 hover:text-white rounded-lg p-1">
+                <div className="flex items-center space-x-2">
+                  {reanalyzeStep === 'prompt' && (
+                    <button
+                      onClick={() => setReanalyzeStep('model')}
+                      className="text-white/70 hover:text-white rounded-lg p-1"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                  )}
+                  <h3 className="text-lg font-bold text-white">
+                    {reanalyzeStep === 'model' ? 'Scegli Modello AI' : 'Modifica Prompt'}
+                  </h3>
+                </div>
+                <button onClick={() => { setShowModelDialog(false); setReanalyzeStep('model'); }} className="text-white/70 hover:text-white rounded-lg p-1">
                   <X className="w-5 h-5" />
                 </button>
               </div>
-            </div>
-            <div className="p-4 space-y-2">
-              {[
-                { id: 'moondream', name: 'Moondream', desc: '1.7GB — ~10s', speed: 'Veloce' },
-                { id: 'llava-phi3', name: 'LLaVA-Phi3', desc: '3.8GB — ~30s', speed: 'Medio' },
-                { id: 'qwen3-vl:latest', name: 'Qwen3-VL', desc: '4GB — ~1min', speed: 'Italiano' },
-                { id: 'llava:latest', name: 'LLaVA', desc: '4.5GB — ~45s', speed: 'Medio' },
-                { id: 'llama3.2-vision', name: 'Llama 3.2 Vision', desc: '11B — ~10min', speed: 'Preciso' },
-              ].map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => reanalyzeMutation.mutate(m.id)}
-                  disabled={reanalyzeMutation.isPending}
-                  className="w-full p-3 text-left border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50/50 transition-all disabled:opacity-50"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold text-gray-900 text-sm">{m.name}</span>
-                      <span className="text-xs text-gray-400 ml-2">{m.desc}</span>
-                    </div>
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{m.speed}</span>
-                  </div>
-                </button>
-              ))}
-              {profile?.remote_ollama_enabled && (
-                <button
-                  onClick={() => reanalyzeMutation.mutate('remote')}
-                  disabled={reanalyzeMutation.isPending}
-                  className="w-full p-3 text-left border border-purple-200 rounded-xl hover:border-purple-400 hover:bg-purple-50/50 transition-all disabled:opacity-50"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold text-gray-900 text-sm">Server Remoto</span>
-                      <span className="text-xs text-gray-400 ml-2">{profile.remote_ollama_model}</span>
-                    </div>
-                    <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">Remoto</span>
-                  </div>
-                </button>
+              {reanalyzeStep === 'prompt' && (
+                <div className="text-xs text-white/60 mt-1">
+                  Modello: {selectedModel}
+                </div>
               )}
             </div>
-            {reanalyzeMutation.isPending && (
-              <div className="px-5 pb-4 flex items-center justify-center space-x-2 text-blue-600">
-                <Loader className="w-4 h-4 animate-spin" />
-                <span className="text-sm">Avvio analisi...</span>
+
+            {reanalyzeStep === 'model' && (
+              <div className="p-4 space-y-2">
+                {[
+                  { id: 'moondream', name: 'Moondream', desc: '1.7GB — ~10s', speed: 'Veloce' },
+                  { id: 'llava-phi3', name: 'LLaVA-Phi3', desc: '3.8GB — ~30s', speed: 'Medio' },
+                  { id: 'qwen3-vl:latest', name: 'Qwen3-VL', desc: '4GB — ~1min', speed: 'Italiano' },
+                  { id: 'llava:latest', name: 'LLaVA', desc: '4.5GB — ~45s', speed: 'Medio' },
+                  { id: 'llama3.2-vision', name: 'Llama 3.2 Vision', desc: '11B — ~10min', speed: 'Preciso' },
+                ].map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => handleSelectModel(m.id)}
+                    className="w-full p-3 text-left border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50/50 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-gray-900 text-sm">{m.name}</span>
+                        <span className="text-xs text-gray-400 ml-2">{m.desc}</span>
+                      </div>
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{m.speed}</span>
+                    </div>
+                  </button>
+                ))}
+                {profile?.remote_ollama_enabled && (
+                  <button
+                    onClick={() => handleSelectModel('remote')}
+                    className="w-full p-3 text-left border border-purple-200 rounded-xl hover:border-purple-400 hover:bg-purple-50/50 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-gray-900 text-sm">Server Remoto</span>
+                        <span className="text-xs text-gray-400 ml-2">{profile.remote_ollama_model}</span>
+                      </div>
+                      <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">Remoto</span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {reanalyzeStep === 'prompt' && (
+              <div className="p-4 space-y-3">
+                {isLoadingPrompt ? (
+                  <div className="flex items-center justify-center py-8 space-x-2 text-gray-500">
+                    <Loader className="w-5 h-5 animate-spin" />
+                    <span className="text-sm">Caricamento prompt...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                        Prompt (editabile)
+                      </label>
+                      <textarea
+                        value={editablePrompt}
+                        onChange={(e) => setEditablePrompt(e.target.value)}
+                        rows={12}
+                        className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-y"
+                      />
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => setReanalyzeStep('model')}
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700 transition-colors"
+                      >
+                        Indietro
+                      </button>
+                      <button
+                        onClick={() => reanalyzeMutation.mutate({ model: selectedModel, customPrompt: editablePrompt || undefined })}
+                        disabled={reanalyzeMutation.isPending || !editablePrompt.trim()}
+                        className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center space-x-1.5 transition-colors"
+                      >
+                        {reanalyzeMutation.isPending ? (
+                          <Loader className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            <span>Analizza</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -78,6 +78,9 @@ CREATE TABLE IF NOT EXISTS photo_analysis (
 
     embedding vector(384),
 
+    prompt_used TEXT,
+    raw_response TEXT,
+
     model_version VARCHAR(50),
     processing_time_ms INTEGER,
     confidence_score DECIMAL(3, 2),

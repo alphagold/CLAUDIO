@@ -126,6 +126,10 @@ class PhotoAnalysis(Base):
     # Embeddings (pgvector)
     # Note: embedding column definito manualmente in init.sql
 
+    # Prompt e risposta raw (per tracciabilità)
+    prompt_used = Column(Text)
+    raw_response = Column(Text)
+
     # Metadata
     model_version = Column(String(50))
     processing_time_ms = Column(Integer)

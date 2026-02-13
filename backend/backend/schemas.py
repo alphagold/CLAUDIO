@@ -58,6 +58,8 @@ class PhotoAnalysisResponse(BaseModel):
     scene_category: Optional[str]
     scene_subcategory: Optional[str]
     tags: Optional[List[str]]
+    prompt_used: Optional[str] = None
+    raw_response: Optional[str] = None
     model_version: Optional[str]
     processing_time_ms: Optional[int]
     confidence_score: Optional[float]

@@ -34,6 +34,8 @@ export interface PhotoAnalysis {
   scene_category: string | null;
   scene_subcategory: string | null;
   tags: string[] | null;
+  prompt_used: string | null;
+  raw_response: string | null;
   model_version: string | null;
   processing_time_ms: number | null;
   confidence_score: number | null;

@@ -270,7 +270,7 @@ async def analysis_worker():
                 # Clear the queue
                 while not analysis_queue.empty():
                     try:
-                        photo_id, file_path, model, _fc = analysis_queue.get_nowait()
+                        photo_id, file_path, model, _fc, _cp = analysis_queue.get_nowait()
                         analysis_queue.task_done()
                         # Reset photo state in DB
                         db = SessionLocal()
@@ -290,10 +290,10 @@ async def analysis_worker():
                 current_analyzing_photo_id = None
                 continue
 
-            photo_id, file_path, model, faces_context = await analysis_queue.get()
+            photo_id, file_path, model, faces_context, custom_prompt = await analysis_queue.get()
             current_analyzing_photo_id = photo_id  # Set current photo
             print(f"Processing analysis for photo {photo_id} (queue size: {analysis_queue.qsize()})")
-            await analyze_photo_background(photo_id, file_path, model, faces_context=faces_context)
+            await analyze_photo_background(photo_id, file_path, model, faces_context=faces_context, custom_prompt=custom_prompt)
             current_analyzing_photo_id = None  # Reset after completion
             analysis_queue.task_done()
         except Exception as e:
@@ -347,9 +347,16 @@ async def face_detection_worker():
             # Se richiesto, accoda analisi LLM con contesto volti
             if then_analyze_model:
                 faces_context = None
+                total_faces = len(faces or [])
                 if face_names:
                     unique_names = list(dict.fromkeys(face_names))
-                    faces_context = f"Nella foto sono presenti: {', '.join(unique_names)}."
+                    unnamed = total_faces - len(unique_names)
+                    if unnamed > 0:
+                        faces_context = f"Nella foto sono presenti: {', '.join(unique_names)} e {unnamed} altra/e persona/e."
+                    else:
+                        faces_context = f"Nella foto sono presenti: {', '.join(unique_names)}."
+                elif total_faces > 0:
+                    faces_context = f"Nella foto sono state rilevate {total_faces} persone."
                 enqueue_analysis(photo_id, file_path, then_analyze_model, faces_context=faces_context)
 
             face_detection_queue.task_done()
@@ -377,7 +384,7 @@ def enqueue_face_detection(photo_id: uuid.UUID, file_path: str, then_analyze_mod
         print(f"Face detection queue full! Skipping photo {photo_id}")
 
 
-def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None):
+def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None, custom_prompt: str = None):
     """Add photo to analysis queue"""
     global analysis_worker_started
 
@@ -388,9 +395,10 @@ def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None, fac
 
     # Add to queue (non-blocking)
     try:
-        analysis_queue.put_nowait((photo_id, file_path, model, faces_context))
+        analysis_queue.put_nowait((photo_id, file_path, model, faces_context, custom_prompt))
         print(f"Added photo {photo_id} to analysis queue (position: {analysis_queue.qsize()})"
-              + (f" [faces: {faces_context[:60]}]" if faces_context else ""))
+              + (f" [faces: {faces_context[:60]}]" if faces_context else "")
+              + (" [custom_prompt]" if custom_prompt else ""))
     except asyncio.QueueFull:
         print(f"Analysis queue full! Skipping photo {photo_id}")
 
@@ -636,7 +644,7 @@ def calculate_elapsed_time(photo: Photo) -> Optional[int]:
 # BACKGROUND TASKS
 # ============================================================================
 
-async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None):
+async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None, custom_prompt: str = None):
     """Analyze photo in background with Vision AI"""
     try:
         model_name = model or "llama3.2-vision"
@@ -687,7 +695,8 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 model=actual_model,
                 location_name=location_name,
                 allow_fallback=False,
-                faces_context=faces_context
+                faces_context=faces_context,
+                custom_prompt=custom_prompt
             )
         elif model == "remote" and (not user_config or not user_config["remote_enabled"]):
             print(f"[ANALYSIS] WARNING: model='remote' but remote not enabled! user_config={user_config}")
@@ -696,17 +705,20 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 file_path,
                 model=None,
                 location_name=location_name,
-                faces_context=faces_context
+                faces_context=faces_context,
+                custom_prompt=custom_prompt
             )
         else:
             print(f"[ANALYSIS] Using LOCAL server, model={model}"
                   + (f", location={location_name}" if location_name else "")
-                  + (f", faces={faces_context}" if faces_context else ""))
+                  + (f", faces={faces_context}" if faces_context else "")
+                  + (" [custom_prompt]" if custom_prompt else ""))
             analysis_result = await vision_client.analyze_photo(
                 file_path,
                 model=model,
                 location_name=location_name,
-                faces_context=faces_context
+                faces_context=faces_context,
+                custom_prompt=custom_prompt
             )
 
         # Create new DB session for background task
@@ -746,6 +758,8 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 scene_category=analysis_result.get("scene_category"),
                 scene_subcategory=analysis_result.get("scene_subcategory"),
                 tags=analysis_result.get("tags", []),
+                prompt_used=analysis_result.get("prompt_used"),
+                raw_response=analysis_result.get("raw_response"),
                 model_version=model_display,
                 processing_time_ms=analysis_result.get("processing_time_ms"),
                 confidence_score=analysis_result.get("confidence_score"),
@@ -1043,12 +1057,10 @@ async def upload_photo(
     print(f"[UPLOAD] User {current_user.email} - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}, remote_enabled: {current_user.remote_ollama_enabled}")
 
     if current_user.auto_analyze:
-        # Se il server remoto è abilitato, usalo automaticamente
-        if current_user.remote_ollama_enabled and current_user.remote_ollama_url and current_user.remote_ollama_model:
-            model = "remote"
+        model = current_user.preferred_model or "moondream"
+        if model == "remote":
             print(f"[UPLOAD] Auto-analysis enabled, using REMOTE server (url={current_user.remote_ollama_url}, model={current_user.remote_ollama_model})")
         else:
-            model = current_user.preferred_model or "moondream"
             print(f"[UPLOAD] Auto-analysis enabled, using LOCAL model: {model}")
 
         # Face detection prima dell'analisi LLM (se disponibile e consenso dato)
@@ -1262,14 +1274,88 @@ async def get_photo_thumbnail(
     return FileResponse(file_path)
 
 
-@app.post("/api/photos/{photo_id}/reanalyze")
-async def reanalyze_photo(
+class ReanalyzeRequest(schemas.BaseModel):
+    model: str = "llama3.2-vision"
+    custom_prompt: Optional[str] = None
+
+
+def _build_faces_context(db: Session, photo_id: uuid.UUID) -> Optional[str]:
+    """Costruisce contesto volti per una foto (named + unnamed count)"""
+    if not FACE_RECOGNITION_AVAILABLE:
+        return None
+    try:
+        all_faces = db.query(Face).filter(
+            Face.photo_id == photo_id,
+            Face.deleted_at.is_(None)
+        ).all()
+        if not all_faces:
+            return None
+        named_faces = []
+        for f in all_faces:
+            if f.person_id:
+                try:
+                    person = db.query(Person).filter(Person.id == f.person_id).first()
+                    if person and person.name:
+                        named_faces.append(person.name)
+                except Exception:
+                    pass
+        names = list(dict.fromkeys(named_faces))
+        unnamed_count = len(all_faces) - len(names)
+        if names and unnamed_count > 0:
+            return f"Nella foto sono presenti: {', '.join(names)} e {unnamed_count} altra/e persona/e."
+        elif names:
+            return f"Nella foto sono presenti: {', '.join(names)}."
+        else:
+            return f"Nella foto sono state rilevate {len(all_faces)} persone."
+    except Exception as e:
+        print(f"[FACES_CONTEXT] Errore: {e}")
+        return None
+
+
+@app.get("/api/photos/{photo_id}/prompt-preview")
+async def get_prompt_preview(
     photo_id: uuid.UUID,
     model: str = "llama3.2-vision",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    """Anteprima prompt che verrà inviato al LLM per questa foto"""
+    photo = (
+        db.query(Photo)
+        .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
+        .first()
+    )
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    faces_context = _build_faces_context(db, photo_id)
+    location_name = photo.location_name
+
+    prompt = vision_client._get_analysis_prompt(
+        location_name=location_name,
+        model=model,
+        faces_context=faces_context
+    )
+
+    return {
+        "prompt": prompt,
+        "faces_context": faces_context,
+        "location_name": location_name,
+        "model": model
+    }
+
+
+@app.post("/api/photos/{photo_id}/reanalyze")
+async def reanalyze_photo(
+    photo_id: uuid.UUID,
+    request: ReanalyzeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Reanalyze photo with vision AI"""
+    model = request.model
+    custom_prompt = request.custom_prompt
+
     photo = (
         db.query(Photo)
         .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
@@ -1288,30 +1374,19 @@ async def reanalyze_photo(
     photo.analysis_duration_seconds = None
     db.commit()
 
-    # Recupera contesto volti già noti per questa foto
-    faces_context = None
-    if FACE_RECOGNITION_AVAILABLE:
-        try:
-            known_faces = db.query(Face).join(Person).filter(
-                Face.photo_id == photo_id,
-                Face.deleted_at.is_(None),
-                Face.person_id.isnot(None),
-                Person.name.isnot(None)
-            ).all()
-            if known_faces:
-                names = list(dict.fromkeys(f.person.name for f in known_faces))
-                faces_context = f"Nella foto sono presenti: {', '.join(names)}."
-                print(f"[REANALYZE] Contesto volti: {faces_context}")
-        except Exception as e:
-            print(f"[REANALYZE] Errore recupero volti: {e}")
+    # Recupera contesto volti (tutti, non solo named)
+    faces_context = _build_faces_context(db, photo_id)
+    if faces_context:
+        print(f"[REANALYZE] Contesto volti: {faces_context}")
 
-    # Add to analysis queue with specified model and faces context
-    enqueue_analysis(photo.id, str(file_path), model, faces_context=faces_context)
+    # Add to analysis queue with specified model, faces context, and custom prompt
+    enqueue_analysis(photo.id, str(file_path), model, faces_context=faces_context, custom_prompt=custom_prompt)
 
     return {
         "message": "Reanalysis started",
         "photo_id": str(photo.id),
         "model": model,
+        "custom_prompt": bool(custom_prompt),
         "queue_position": analysis_queue.qsize()
     }
 
