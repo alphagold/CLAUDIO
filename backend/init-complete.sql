@@ -146,7 +146,7 @@ CREATE TABLE IF NOT EXISTS faces (
     bbox_y INTEGER NOT NULL,
     bbox_width INTEGER NOT NULL,
     bbox_height INTEGER NOT NULL,
-    embedding vector(128),
+    embedding vector(512),
     detection_confidence DECIMAL(3, 2) DEFAULT 0.90,
     face_quality_score DECIMAL(3, 2),
     cluster_id INTEGER,
@@ -202,8 +202,8 @@ CREATE INDEX IF NOT EXISTS idx_prompt_templates_default ON prompt_templates(is_d
 -- Vector similarity search index (photo_analysis: cosine per ricerca semantica)
 CREATE INDEX IF NOT EXISTS idx_embedding ON photo_analysis USING ivfflat (embedding vector_cosine_ops);
 
--- Vector L2 distance index (faces: euclidea per dlib face embeddings)
-CREATE INDEX IF NOT EXISTS idx_faces_embedding_l2 ON faces USING ivfflat (embedding vector_l2_ops) WITH (lists = 1);
+-- Vector cosine distance index (faces: InsightFace embeddings 512-dim)
+CREATE INDEX IF NOT EXISTS idx_faces_embedding_cosine ON faces USING ivfflat (embedding vector_cosine_ops) WITH (lists = 1);
 
 -- Default prompt templates
 INSERT INTO prompt_templates (name, description, prompt_text, is_default, is_active)

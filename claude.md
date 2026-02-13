@@ -117,16 +117,19 @@ Poi configurare nelle Settings dell'app: abilita server remoto, inserisci URL e 
 - Variabili supportate: `{location_hint}`, `{model}`
 - Fallback hardcoded se DB non disponibile
 
-### Face Recognition
-- **ATTIVA** con `dlib-bin` (wheel pre-compilato, no sorgente)
-- `face_recognition_models` installato da GitHub (PyPI omette file .dat)
-- `pkg_resources` patchato post-install (setuptools rimosso da pip)
+### Face Recognition (InsightFace buffalo_l)
+- **Motore**: InsightFace buffalo_l (ONNX Runtime CPU, 512-dim embeddings)
+- **Metrica**: cosine distance (`<=>` pgvector), soglia match 0.4
+- **Detection**: soglia 0.5, det_size 640x640, confidence reale da det_score
+- **Clustering**: DBSCAN metric='cosine', eps=0.4
+- **Modello**: ~300MB, scaricato al primo uso, persistito in volume Docker `insightface_models`
+- **Singleton**: `get_insightface_app()` lazy init, env `INSIGHTFACE_MODEL=buffalo_l`
 - Al boot: foto con `face_detection_status=pending/processing` vengono accodate automaticamente
 - Consenso GDPR richiesto (tabella `face_recognition_consent`)
 - Routes `/api/faces/*` registrate solo se `FACE_RECOGNITION_AVAILABLE=True`
-- Graceful degradation: `except (Exception, SystemExit)` cattura anche `quit()` di face_recognition
+- Graceful degradation: se InsightFace non disponibile, feature disabilitata
 - **Volto manuale**: `POST /api/faces/manual/{photo_id}` aggiunge volto senza detection (embedding=NULL)
-- `faces.embedding` è **nullable** (volti manuali non hanno embedding dlib)
+- `faces.embedding` è **nullable** vector(512) (volti manuali non hanno embedding)
 - FaceOverlay ha `drawMode` per disegnare bbox manualmente (click-drag → rettangolo verde)
 - Dopo labeling, `faceRefreshKey` incrementa per forzare refresh FaceOverlay senza reload pagina
 
@@ -191,8 +194,8 @@ Deve essere sempre allineato con `backend/backend/models.py`.
 - Dopo modifiche schema DB su DB esistente: servono migration manuali (`ALTER TABLE ...`)
 
 ### Migrations pendenti
-- `ALTER TABLE faces ALTER COLUMN embedding DROP NOT NULL;` (necessario per volti manuali, aggiunto 2026-02-12)
+- **InsightFace migration**: `backend/migration-insightface.sql` (128→512 dim, L2→cosine, reset embeddings)
 
 ---
 
-**Aggiornato**: 2026-02-12 | **Stato**: Production-ready
+**Aggiornato**: 2026-02-13 | **Stato**: Production-ready

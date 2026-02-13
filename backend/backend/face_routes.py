@@ -211,17 +211,12 @@ async def revoke_consent(
 @router.post("/detect/{photo_id}", response_model=FaceDetectionResponse)
 async def detect_faces(
     photo_id: UUID,
-    model: str = "hog",  # 'hog' (CPU) or 'cnn' (GPU)
     current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
     Rileva volti in una foto specifica.
-    Genera embeddings 128-dim per ogni volto.
-
-    Args:
-        photo_id: ID foto
-        model: 'hog' (veloce, CPU) o 'cnn' (accurato, GPU)
+    Genera embeddings 512-dim per ogni volto (InsightFace buffalo_l).
     """
     # Check photo exists and belongs to user
     photo = db.query(Photo).filter(
@@ -244,8 +239,7 @@ async def detect_faces(
     try:
         faces = service.detect_faces_in_photo(
             photo_id,
-            photo.original_path,
-            model=model
+            photo.original_path
         )
 
         return FaceDetectionResponse(
@@ -603,17 +597,17 @@ async def label_face(
 @router.get("/similar/{face_id}", response_model=List[SimilarFaceResponse])
 async def get_similar_faces(
     face_id: UUID,
-    threshold: float = 0.6,
+    threshold: float = 0.4,
     limit: int = 10,
     current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
 ):
     """
-    Trova volti simili usando pgvector similarity search.
+    Trova volti simili usando pgvector cosine distance search.
 
     Args:
         face_id: ID volto di riferimento
-        threshold: Distanza massima (0.6 = stessa persona)
+        threshold: Cosine distance massima (0.4 = stessa persona)
         limit: Numero massimo risultati
     """
     # Verify face belongs to user's photos

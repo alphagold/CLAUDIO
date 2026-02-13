@@ -229,9 +229,9 @@ class Face(Base):
     bbox_width = Column(Integer, nullable=False)
     bbox_height = Column(Integer, nullable=False)
 
-    # Face embedding vector (dlib 128-dimensional encoding)
+    # Face embedding vector (InsightFace buffalo_l 512-dimensional, cosine similarity)
     # nullable=True per volti aggiunti manualmente (senza embedding)
-    embedding = Column(Vector(128))
+    embedding = Column(Vector(512))
 
     # Detection quality
     detection_confidence = Column(DECIMAL(3, 2), default=0.90)

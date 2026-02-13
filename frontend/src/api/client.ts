@@ -234,10 +234,8 @@ export const facesApi = {
   },
 
   // Face Detection
-  detectFaces: async (photoId: string, model: string = 'hog'): Promise<FaceDetectionResponse> => {
-    const response = await apiClient.post<FaceDetectionResponse>(`/api/faces/detect/${photoId}`, null, {
-      params: { model },
-    });
+  detectFaces: async (photoId: string): Promise<FaceDetectionResponse> => {
+    const response = await apiClient.post<FaceDetectionResponse>(`/api/faces/detect/${photoId}`);
     return response.data;
   },
 

@@ -322,8 +322,7 @@ async def face_detection_worker():
                 await asyncio.to_thread(
                     service.detect_faces_in_photo,
                     photo_id,
-                    file_path,
-                    model="hog"  # CPU-friendly model
+                    file_path
                 )
                 print(f"Face detection completed for photo {photo_id}")
             except Exception as e:

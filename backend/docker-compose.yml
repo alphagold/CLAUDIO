@@ -19,6 +19,7 @@ services:
       - ANALYSIS_TIMEOUT=900
       - CORS_ORIGINS=http://192.168.200.4:5173,http://localhost:5173,http://192.168.52.15:5173
       - PYTHONUNBUFFERED=1
+      - INSIGHTFACE_MODEL=buffalo_l
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,6 +33,8 @@ services:
       - ./uploads:/app/uploads
       # Docker socket necessario per admin: logs container e status
       - /var/run/docker.sock:/var/run/docker.sock
+      # Modelli InsightFace persistenti (~300MB, scaricati al primo uso)
+      - insightface_models:/root/.insightface
     networks:
       - photomemory
     healthcheck:
@@ -182,6 +185,8 @@ volumes:
   minio_data:
     driver: local
   ollama_models:
+    driver: local
+  insightface_models:
     driver: local
 
 networks:
