@@ -319,7 +319,7 @@ class MemoryIndex(Base):
     # Definito in init-complete.sql: embedding vector(384)
 
     # Metadata aggiuntivi
-    metadata = Column(JSONB)
+    extra_metadata = Column("metadata", JSONB)
 
     # Timestamps
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())

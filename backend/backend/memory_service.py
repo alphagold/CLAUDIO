@@ -119,7 +119,7 @@ class MemoryService:
 
     def _add_index_entry(
         self, user_id: UUID, entity_type: str, entity_id: UUID, content: str,
-        metadata: Optional[Dict] = None
+        extra_metadata: Optional[Dict] = None
     ):
         """Aggiunge una voce all'indice semantico."""
         entry = MemoryIndex(
@@ -127,7 +127,7 @@ class MemoryService:
             entity_type=entity_type,
             entity_id=entity_id,
             content=content,
-            metadata=metadata,
+            extra_metadata=extra_metadata,
         )
         self.db.add(entry)
 
