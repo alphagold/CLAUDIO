@@ -38,7 +38,8 @@ class OllamaVisionClient:
         model: Optional[str] = None,
         detailed: bool = False,
         location_name: Optional[str] = None,
-        allow_fallback: bool = True
+        allow_fallback: bool = True,
+        faces_context: Optional[str] = None
     ) -> Dict:
         """
         Analyze photo with Vision AI
@@ -62,8 +63,8 @@ class OllamaVisionClient:
         # Encode image
         image_b64 = self._encode_image(image_path)
 
-        # Prepare prompt WITH location context and model-specific optimizations
-        prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model)
+        # Prepare prompt WITH location context, faces context, and model-specific optimizations
+        prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model, faces_context=faces_context)
 
         # Adjust parameters based on model
         is_qwen = "qwen" in selected_model.lower()
@@ -194,10 +195,11 @@ class OllamaVisionClient:
                 raise
             return self._get_fallback_analysis(processing_time)
 
-    def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None) -> str:
+    def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None, faces_context: Optional[str] = None) -> str:
         """Get prompt from database or fallback to hardcoded default"""
 
         location_hint = f" La foto è stata scattata a {location_name}." if location_name else ""
+        faces_hint = f" {faces_context}" if faces_context else ""
 
         # Try to load prompt from database
         try:
@@ -215,6 +217,7 @@ class OllamaVisionClient:
                     print(f"[VISION] Using prompt template: {template.name}")
                     prompt_text = template.prompt_text.replace("{location_hint}", location_hint)
                     prompt_text = prompt_text.replace("{model}", model or "default")
+                    prompt_text = prompt_text.replace("{faces_hint}", faces_hint)
                     return prompt_text
                 else:
                     print(f"[VISION] No default template found, using hardcoded prompt")
@@ -224,7 +227,7 @@ class OllamaVisionClient:
             print(f"[VISION] Failed to load prompt from database: {e}, using hardcoded fallback")
 
         # Fallback hardcoded - descrizione libera in italiano
-        return f"IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.\n\nDescrivi questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi tutto ciò che vedi: oggetti principali, persone (quante e cosa fanno), colori, atmosfera, ambiente (interno o esterno). Se nell'immagine è presente testo leggibile (scritte, etichette, insegne), trascrivilo esattamente tra virgolette."
+        return f"IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.\n\nDescrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint} Descrivi tutto ciò che vedi: oggetti principali, persone (quante e cosa fanno), colori, atmosfera, ambiente (interno o esterno). Se nell'immagine è presente testo leggibile (scritte, etichette, insegne), trascrivilo esattamente tra virgolette."
 
     def _validate_analysis_quality(self, analysis: Dict) -> tuple[bool, List[str]]:
         """Valida qualità analisi e restituisce warnings"""

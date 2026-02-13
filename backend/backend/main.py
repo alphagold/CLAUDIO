@@ -270,7 +270,7 @@ async def analysis_worker():
                 # Clear the queue
                 while not analysis_queue.empty():
                     try:
-                        photo_id, file_path, model = analysis_queue.get_nowait()
+                        photo_id, file_path, model, _fc = analysis_queue.get_nowait()
                         analysis_queue.task_done()
                         # Reset photo state in DB
                         db = SessionLocal()
@@ -290,10 +290,10 @@ async def analysis_worker():
                 current_analyzing_photo_id = None
                 continue
 
-            photo_id, file_path, model = await analysis_queue.get()
+            photo_id, file_path, model, faces_context = await analysis_queue.get()
             current_analyzing_photo_id = photo_id  # Set current photo
             print(f"Processing analysis for photo {photo_id} (queue size: {analysis_queue.qsize()})")
-            await analyze_photo_background(photo_id, file_path, model)
+            await analyze_photo_background(photo_id, file_path, model, faces_context=faces_context)
             current_analyzing_photo_id = None  # Reset after completion
             analysis_queue.task_done()
         except Exception as e:
@@ -304,7 +304,8 @@ async def analysis_worker():
 
 
 async def face_detection_worker():
-    """Worker dedicato per face detection in background"""
+    """Worker dedicato per face detection in background.
+    Se then_analyze_model è presente, dopo detection accoda analisi LLM con contesto volti."""
     global face_detection_worker_started
 
     if not FACE_RECOGNITION_AVAILABLE:
@@ -314,23 +315,42 @@ async def face_detection_worker():
     print("Face detection worker started")
     while True:
         try:
-            photo_id, file_path = await face_detection_queue.get()
+            photo_id, file_path, then_analyze_model = await face_detection_queue.get()
             print(f"Processing face detection for photo {photo_id} (queue size: {face_detection_queue.qsize()})")
 
             # Run face detection in thread pool (CPU-intensive)
             db = SessionLocal()
+            face_names = []
             try:
                 service = FaceRecognitionService(db)
-                await asyncio.to_thread(
+                faces = await asyncio.to_thread(
                     service.detect_faces_in_photo,
                     photo_id,
                     file_path
                 )
-                print(f"Face detection completed for photo {photo_id}")
+                # Raccogli nomi persone riconosciute (auto-match)
+                for face in (faces or []):
+                    if face.person_id:
+                        try:
+                            db.refresh(face, ['person'])
+                            if face.person and face.person.name:
+                                face_names.append(face.person.name)
+                        except Exception:
+                            pass
+                print(f"Face detection completed for photo {photo_id}: {len(faces or [])} volti"
+                      + (f", riconosciuti: {face_names}" if face_names else ""))
             except Exception as e:
                 print(f"Face detection error for photo {photo_id}: {e}")
             finally:
                 db.close()
+
+            # Se richiesto, accoda analisi LLM con contesto volti
+            if then_analyze_model:
+                faces_context = None
+                if face_names:
+                    unique_names = list(dict.fromkeys(face_names))
+                    faces_context = f"Nella foto sono presenti: {', '.join(unique_names)}."
+                enqueue_analysis(photo_id, file_path, then_analyze_model, faces_context=faces_context)
 
             face_detection_queue.task_done()
         except Exception as e:
@@ -338,8 +358,9 @@ async def face_detection_worker():
             face_detection_queue.task_done()
 
 
-def enqueue_face_detection(photo_id: uuid.UUID, file_path: str):
-    """Add photo to face detection queue"""
+def enqueue_face_detection(photo_id: uuid.UUID, file_path: str, then_analyze_model: str = None):
+    """Add photo to face detection queue.
+    Se then_analyze_model è fornito, dopo face detection accoda analisi LLM con contesto volti."""
     global face_detection_worker_started
 
     # Start worker if not already running
@@ -349,13 +370,14 @@ def enqueue_face_detection(photo_id: uuid.UUID, file_path: str):
 
     # Add to queue (non-blocking)
     try:
-        face_detection_queue.put_nowait((photo_id, file_path))
-        print(f"Added photo {photo_id} to face detection queue (position: {face_detection_queue.qsize()})")
+        face_detection_queue.put_nowait((photo_id, file_path, then_analyze_model))
+        print(f"Added photo {photo_id} to face detection queue (position: {face_detection_queue.qsize()})"
+              + (f", then LLM with {then_analyze_model}" if then_analyze_model else ""))
     except asyncio.QueueFull:
         print(f"Face detection queue full! Skipping photo {photo_id}")
 
 
-def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None):
+def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None):
     """Add photo to analysis queue"""
     global analysis_worker_started
 
@@ -366,8 +388,9 @@ def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None):
 
     # Add to queue (non-blocking)
     try:
-        analysis_queue.put_nowait((photo_id, file_path, model))
-        print(f"Added photo {photo_id} to analysis queue (position: {analysis_queue.qsize()})")
+        analysis_queue.put_nowait((photo_id, file_path, model, faces_context))
+        print(f"Added photo {photo_id} to analysis queue (position: {analysis_queue.qsize()})"
+              + (f" [faces: {faces_context[:60]}]" if faces_context else ""))
     except asyncio.QueueFull:
         print(f"Analysis queue full! Skipping photo {photo_id}")
 
@@ -613,11 +636,12 @@ def calculate_elapsed_time(photo: Photo) -> Optional[int]:
 # BACKGROUND TASKS
 # ============================================================================
 
-async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: str = None):
+async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None):
     """Analyze photo in background with Vision AI"""
     try:
         model_name = model or "llama3.2-vision"
-        print(f"[ANALYSIS] Starting for photo {photo_id}, model={model_name}")
+        print(f"[ANALYSIS] Starting for photo {photo_id}, model={model_name}"
+              + (f", faces_context={faces_context}" if faces_context else ""))
 
         # Mark analysis start time immediately and get user preferences
         db = SessionLocal()
@@ -660,14 +684,16 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 file_path,
                 model=actual_model,
                 location_name=location_name,
-                allow_fallback=False
+                allow_fallback=False,
+                faces_context=faces_context
             )
         else:
             print(f"[ANALYSIS] Using LOCAL server, model={model}")
             analysis_result = await vision_client.analyze_photo(
                 file_path,
                 model=model,
-                location_name=location_name
+                location_name=location_name,
+                faces_context=faces_context
             )
 
         # Create new DB session for background task
@@ -731,15 +757,14 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             db.commit()
             print(f"Analysis completed for photo {photo_id}")
 
-            # Auto-trigger face detection dopo ogni analisi (se disponibile)
-            # Non dipendere dal conteggio LLM: la libreria face_recognition
-            # rileva i volti reali indipendentemente da cosa dice il modello AI
-            if FACE_RECOGNITION_AVAILABLE:
+            # Face detection ora avviene PRIMA dell'analisi LLM (nel flusso upload).
+            # Per reanalyze manuali dove face detection non è stato fatto, accodalo dopo.
+            if FACE_RECOGNITION_AVAILABLE and photo.face_detection_status not in ("completed", "processing"):
                 consent_db = SessionLocal()
                 try:
                     face_service = FaceRecognitionService(consent_db)
                     if face_service.check_user_consent(photo.user_id):
-                        print(f"Photo {photo_id} analysis done - enqueueing face detection")
+                        print(f"Photo {photo_id} analysis done, face detection pending - enqueueing")
                         enqueue_face_detection(photo_id, file_path)
                     else:
                         photo.face_detection_status = "skipped"
@@ -1007,9 +1032,21 @@ async def upload_photo(
     if current_user.auto_analyze:
         model = current_user.preferred_model or "moondream"
         print(f"[UPLOAD] Auto-analysis enabled, using model: {model}")
-        # Add to analysis queue (processed one at a time)
-        # User gets immediate response, analysis happens in background
-        enqueue_analysis(photo.id, str(file_path), model)
+
+        # Face detection prima dell'analisi LLM (se disponibile e consenso dato)
+        face_first = False
+        if FACE_RECOGNITION_AVAILABLE:
+            try:
+                face_svc = FaceRecognitionService(db)
+                if face_svc.check_user_consent(current_user.id):
+                    face_first = True
+                    print(f"[UPLOAD] Face detection first, then LLM analysis")
+                    enqueue_face_detection(photo.id, str(file_path), then_analyze_model=model)
+            except Exception as e:
+                print(f"[UPLOAD] Face detection check failed: {e}")
+
+        if not face_first:
+            enqueue_analysis(photo.id, str(file_path), model)
     else:
         print(f"[UPLOAD] Auto-analysis disabled, skipping analysis")
 
@@ -1214,12 +1251,7 @@ async def reanalyze_photo(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Reanalyze photo with vision AI (choose model: moondream, llava-phi3 or llama3.2-vision)"""
-    # Validate model
-    valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest", "remote"]
-    if model not in valid_models:
-        raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
-
+    """Reanalyze photo with vision AI"""
     photo = (
         db.query(Photo)
         .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
@@ -1238,8 +1270,25 @@ async def reanalyze_photo(
     photo.analysis_duration_seconds = None
     db.commit()
 
-    # Add to analysis queue with specified model
-    enqueue_analysis(photo.id, str(file_path), model)
+    # Recupera contesto volti già noti per questa foto
+    faces_context = None
+    if FACE_RECOGNITION_AVAILABLE:
+        try:
+            known_faces = db.query(Face).join(Person).filter(
+                Face.photo_id == photo_id,
+                Face.deleted_at.is_(None),
+                Face.person_id.isnot(None),
+                Person.name.isnot(None)
+            ).all()
+            if known_faces:
+                names = list(dict.fromkeys(f.person.name for f in known_faces))
+                faces_context = f"Nella foto sono presenti: {', '.join(names)}."
+                print(f"[REANALYZE] Contesto volti: {faces_context}")
+        except Exception as e:
+            print(f"[REANALYZE] Errore recupero volti: {e}")
+
+    # Add to analysis queue with specified model and faces context
+    enqueue_analysis(photo.id, str(file_path), model, faces_context=faces_context)
 
     return {
         "message": "Reanalysis started",
@@ -1259,11 +1308,6 @@ async def bulk_analyze_photos(
     """Analyze or reanalyze multiple photos at once"""
     # Use user's preferred model if not specified
     selected_model = model or current_user.preferred_model or "moondream"
-
-    # Validate model
-    valid_models = ["moondream", "llava-phi3", "llama3.2-vision", "qwen3-vl:latest", "llava:latest", "remote"]
-    if selected_model not in valid_models:
-        raise HTTPException(status_code=400, detail=f"Invalid model. Choose from: {', '.join(valid_models)}")
 
     # Verify all photos belong to user
     photos = db.query(Photo).filter(
