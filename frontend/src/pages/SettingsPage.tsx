@@ -81,6 +81,35 @@ export default function SettingsPage() {
     fetchLocalModels();
   }, []);
 
+  // Fix React <select> desync: quando i modelli locali caricano,
+  // se preferredModel non è tra le opzioni valide, aggiorna allo stato corretto
+  useEffect(() => {
+    if (localModels.length === 0) return;
+    const validValues = localModels.map(m => m.name);
+    if (remoteEnabled) validValues.unshift('remote');
+
+    setPreferredModel(prev => {
+      if (!validValues.includes(prev)) {
+        const fallback = remoteEnabled ? 'remote' : validValues[0];
+        console.warn(`[Settings] preferred_model '${prev}' non disponibile, reset a '${fallback}'`);
+        return fallback;
+      }
+      return prev;
+    });
+
+    // Stessa cosa per textModel (se non usa remote)
+    if (!textUseRemote) {
+      const textValidValues = localModels.map(m => m.name);
+      setTextModel(prev => {
+        if (!textValidValues.includes(prev)) {
+          console.warn(`[Settings] text_model '${prev}' non disponibile, reset a '${textValidValues[0]}'`);
+          return textValidValues[0];
+        }
+        return prev;
+      });
+    }
+  }, [localModels, remoteEnabled, textUseRemote]);
+
   // Face Recognition Consent (optional - may not be available)
   const { data: consentData, error: consentError } = useQuery<ConsentResponse>({
     queryKey: ['faces', 'consent'],
@@ -294,6 +323,9 @@ export default function SettingsPage() {
                 onChange={(e) => setPreferredModel(e.target.value)}
                 className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               >
+                {remoteEnabled && (
+                  <option value="remote">Server Remoto ({remoteModel || '...'})</option>
+                )}
                 {localModels.map((model) => (
                   <option key={model.name} value={model.name}>
                     {model.name} ({(model.size / 1024 / 1024 / 1024).toFixed(1)} GB)
@@ -301,8 +333,7 @@ export default function SettingsPage() {
                 ))}
               </select>
               <p className="text-xs text-gray-500 mt-1">
-                {localModels.length} modelli sul server locale.
-                {remoteEnabled && ' Il server remoto verrà usato automaticamente quando abilitato.'}
+                {localModels.length} modelli disponibili sul server locale
               </p>
             </div>
           ) : (
