@@ -8,6 +8,7 @@ interface FaceOverlayProps {
   onFaceClick?: (face: Face) => void;
   showLabels?: boolean;
   className?: string;
+  imageClassName?: string;
   refreshTrigger?: string | number | null;
   drawMode?: boolean;
   onManualFaceDrawn?: (bbox: { x: number; y: number; width: number; height: number }) => void;
@@ -26,6 +27,7 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
   onFaceClick,
   showLabels = true,
   className = '',
+  imageClassName,
   refreshTrigger,
   drawMode = false,
   onManualFaceDrawn,
@@ -209,7 +211,7 @@ export const FaceOverlay: React.FC<FaceOverlayProps> = ({
         ref={imgRef}
         src={imageUrl}
         alt="Photo with faces"
-        className="w-full h-auto"
+        className={imageClassName || 'w-full h-auto'}
         onLoad={handleImageLoad}
         draggable={false}
       />
