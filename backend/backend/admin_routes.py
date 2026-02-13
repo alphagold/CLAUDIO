@@ -1072,62 +1072,61 @@ async def reset_prompt_templates(
     # Delete all existing templates
     db.query(PromptTemplate).delete()
 
-    # Re-run the default inserts (same as migration)
+    # Re-run the default inserts (same as init-complete.sql)
     default_templates = [
         {
-            "name": "structured_detailed",
-            "description": "Prompt strutturato con sezioni MAIUSCOLE per analisi dettagliate (default)",
-            "prompt_text": """Analizza questa immagine in modo MOLTO DETTAGLIATO in italiano.{location_hint}
+            "name": "completo",
+            "description": "Analisi completa: persone, oggetti, ambiente, colori, testo (default)",
+            "prompt_text": """Descrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint}
 
-Organizza la tua analisi in queste sezioni (rispetta esattamente i titoli in MAIUSCOLO):
+Persone: Descrivi ogni persona nel dettaglio. Cosa indossano? Quali sono le loro espressioni, la postura, l'aspetto fisico (capelli, occhi, etc.)? Cosa stanno facendo esattamente?
 
-DESCRIZIONE COMPLETA:
-[Scrivi almeno 5-6 frasi molto dettagliate descrivendo:
-- Il soggetto principale e contesto generale
-- Oggetti visibili e loro posizione nello spazio
-- Colori dominanti e atmosfera
-- Dettagli importanti (materiali, texture, condizioni)
-- Se è interno (indoor) o esterno (outdoor)
-- Emozioni o sensazioni trasmesse dalla foto]
+Oggetti principali: Elenca e descrivi gli oggetti chiave visibili nell'immagine.
 
-OGGETTI IDENTIFICATI:
-[Lista di 8-12 oggetti/elementi visibili nell'immagine, separati da virgola.
-Includi sia oggetti principali che secondari. Es: laptop, tazza, libro, finestra, lampada, mouse, tastiera, quadro, pianta, scrivania]
+Ambiente: Specifica se la scena è in interni o esterni e descrivi lo sfondo.
 
-PERSONE E VOLTI:
-[Numero di persone visibili (anche parzialmente). Formato: "N persone" oppure "Nessuna persona visibile".
-Se ci sono persone, descrivi brevemente: età approssimativa, posizione, attività]
+Colori e atmosfera: Definisci la tavolozza dei colori dominante e l'atmosfera generale dell'immagine (allegra, malinconica, formale, etc.).
 
-TESTO VISIBILE:
-[Trascrivi ESATTAMENTE eventuali testi, scritte, etichette, insegne visibili nell'immagine.
-Se non c'è testo visibile, scrivi: "Nessun testo"]
+Testo: Se è presente testo leggibile (come scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.
 
-CATEGORIA SCENA:
-[Una sola parola tra: indoor, outdoor, food, document, people, nature, urban, vehicle, other]
-
-TAG CHIAVE:
-[5-8 tag descrittivi ad alta confidenza che riassumono l'immagine. Evita tag troppo generici.
-Separa con virgola. Es: lavoro, tecnologia, ambiente-moderno, illuminazione-naturale, minimalista]
-
-CONFIDENZA ANALISI:
-[Un numero da 0.0 a 1.0 che indica quanto sei sicuro della tua analisi. Es: 0.85]
-
-Importante: scrivi descrizioni lunghe e ricche di dettagli. Non essere sintetico.""",
+Fondamentale: Descrivi solo ciò che è chiaramente visibile, senza fare ipotesi o supposizioni. Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.""",
             "is_default": True,
             "is_active": True
         },
         {
-            "name": "simple_natural",
-            "description": "Prompt semplice e naturale per analisi rapide",
-            "prompt_text": """Descrivi in italiano cosa vedi in questa immagine.{location_hint}
+            "name": "focus_persone",
+            "description": "Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni",
+            "prompt_text": """Analizza questa foto concentrandoti sulle persone presenti.{location_hint}{faces_hint}
 
-Includi nella tua descrizione:
-- Cosa c'è nell'immagine (oggetti, persone, ambiente)
-- Colori e dettagli importanti
-- Se è un luogo interno (indoor) o esterno (outdoor)
-- Eventuali testi o scritte visibili nell'immagine
+Per ogni persona visibile descrivi in dettaglio:
+- Aspetto fisico: sesso, età approssimativa, corporatura, colore e stile dei capelli, colore degli occhi se visibile
+- Abbigliamento: cosa indossano, colori, stile (casual, elegante, sportivo, etc.)
+- Espressione del viso: emozioni, direzione dello sguardo
+- Postura e azione: cosa stanno facendo, come sono posizionati
+- Relazioni: se interagiscono tra loro, distanza reciproca, linguaggio corporeo
 
-Descrivi in modo naturale e dettagliato.""",
+Se non ci sono persone, descrivi brevemente la scena.
+
+Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in italiano.""",
+            "is_default": False,
+            "is_active": True
+        },
+        {
+            "name": "focus_scena",
+            "description": "Focus su ambiente e oggetti: luogo, arredi, dettagli, atmosfera",
+            "prompt_text": """Analizza questa foto concentrandoti sull'ambiente e sugli oggetti.{location_hint}{faces_hint}
+
+Ambiente: È un luogo interno o esterno? Descrivi il tipo di luogo (casa, ufficio, ristorante, parco, strada, spiaggia, etc.) con il maggior dettaglio possibile.
+
+Oggetti: Elenca e descrivi tutti gli oggetti visibili, dal più importante al meno rilevante. Per ciascuno indica colore, materiale, dimensione, posizione nella scena.
+
+Luce e colori: Descrivi il tipo di illuminazione (naturale, artificiale, calda, fredda), i colori dominanti, i contrasti.
+
+Atmosfera: Che sensazione trasmette la scena? (accogliente, fredda, caotica, ordinata, lussuosa, spartana, etc.)
+
+Testo: Se è presente testo leggibile (scritte, etichette, insegne), trascrivilo ESATTAMENTE tra virgolette.
+
+Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in italiano.""",
             "is_default": False,
             "is_active": True
         },

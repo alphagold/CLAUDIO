@@ -256,8 +256,8 @@ CREATE INDEX IF NOT EXISTS idx_memory_directives_active ON memory_directives(use
 INSERT INTO prompt_templates (name, description, prompt_text, is_default, is_active)
 VALUES
 (
-    'simple_description',
-    'Descrizione dettagliata strutturata in italiano con focus su persone e luoghi (default)',
+    'completo',
+    'Analisi completa: persone, oggetti, ambiente, colori, testo (default)',
     'Descrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint}
 
 Persone: Descrivi ogni persona nel dettaglio. Cosa indossano? Quali sono le loro espressioni, la postura, l''aspetto fisico (capelli, occhi, etc.)? Cosa stanno facendo esattamente?
@@ -275,26 +275,39 @@ Fondamentale: Descrivi solo ciò che è chiaramente visibile, senza fare ipotesi
     TRUE
 ),
 (
-    'simple_natural',
-    'Prompt semplice e naturale per descrizioni fluide in italiano',
-    'IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.
+    'focus_persone',
+    'Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni',
+    'Analizza questa foto concentrandoti sulle persone presenti.{location_hint}{faces_hint}
 
-Descrivi questa immagine in modo naturale e dettagliato.{location_hint}{faces_hint}
+Per ogni persona visibile descrivi in dettaglio:
+- Aspetto fisico: sesso, età approssimativa, corporatura, colore e stile dei capelli, colore degli occhi se visibile
+- Abbigliamento: cosa indossano, colori, stile (casual, elegante, sportivo, etc.)
+- Espressione del viso: emozioni, direzione dello sguardo
+- Postura e azione: cosa stanno facendo, come sono posizionati
+- Relazioni: se interagiscono tra loro, distanza reciproca, linguaggio corporeo
 
-Includi nella tua descrizione:
-- Cosa vedi nell''immagine (scena generale, oggetti principali, persone se presenti e quante sono)
-- Colori dominanti e atmosfera
-- Se è un ambiente interno o esterno
-- Eventuali testi o scritte visibili (trascrivili tra virgolette)
+Se non ci sono persone, descrivi brevemente la scena.
 
-Scrivi in modo discorsivo e completo, sempre in italiano.',
+Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in italiano.',
     FALSE,
     TRUE
 ),
 (
-    'compact_json',
-    'Prompt compatto per output JSON strutturato (italiano)',
-    'IMPORTANTE: Rispondi in italiano. Analizza questa immagine e fornisci una risposta JSON con: description (2-3 frasi in italiano), objects (array di 5-8 oggetti in italiano), category (indoor/outdoor/food/document/people/nature/urban/vehicle/other), tags (array di 3-5 parole chiave in italiano).{location_hint}{faces_hint}',
+    'focus_scena',
+    'Focus su ambiente e oggetti: luogo, arredi, dettagli, atmosfera',
+    'Analizza questa foto concentrandoti sull''ambiente e sugli oggetti.{location_hint}{faces_hint}
+
+Ambiente: È un luogo interno o esterno? Descrivi il tipo di luogo (casa, ufficio, ristorante, parco, strada, spiaggia, etc.) con il maggior dettaglio possibile.
+
+Oggetti: Elenca e descrivi tutti gli oggetti visibili, dal più importante al meno rilevante. Per ciascuno indica colore, materiale, dimensione, posizione nella scena.
+
+Luce e colori: Descrivi il tipo di illuminazione (naturale, artificiale, calda, fredda), i colori dominanti, i contrasti.
+
+Atmosfera: Che sensazione trasmette la scena? (accogliente, fredda, caotica, ordinata, lussuosa, spartana, etc.)
+
+Testo: Se è presente testo leggibile (scritte, etichette, insegne), trascrivilo ESATTAMENTE tra virgolette.
+
+Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in italiano.',
     FALSE,
     TRUE
 )
