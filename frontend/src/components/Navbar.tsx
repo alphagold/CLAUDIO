@@ -1,6 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Brain, Album, Map, LogOut, User, Shield, Settings, ImageIcon } from 'lucide-react';
+import { Brain, Album, Map, LogOut, User, Shield, Settings, ImageIcon, Users, MessageCircle } from 'lucide-react';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -75,6 +75,36 @@ export default function Navbar() {
               <span className="font-medium">Mappa</span>
               {isActive('/map') && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full"></div>
+              )}
+            </Link>
+
+            <Link
+              to="/people"
+              className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                isActive('/people') || location.pathname.startsWith('/people')
+                  ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <Users className="w-5 h-5" />
+              <span className="font-medium">Persone</span>
+              {(isActive('/people') || location.pathname.startsWith('/people')) && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full"></div>
+              )}
+            </Link>
+
+            <Link
+              to="/memory"
+              className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                isActive('/memory')
+                  ? 'bg-gradient-to-r from-purple-50 to-purple-100 text-purple-600 shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`}
+            >
+              <MessageCircle className="w-5 h-5" />
+              <span className="font-medium">Memoria</span>
+              {isActive('/memory') && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-600 to-purple-400 rounded-full"></div>
               )}
             </Link>
 

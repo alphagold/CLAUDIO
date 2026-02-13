@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Trash2, Edit2, Check, X } from 'lucide-react';
+import { User, Trash2, Edit2, Check, X, BookOpen } from 'lucide-react';
+import Layout from '../components/Layout';
 import { facesApi } from '../api/client';
 import type { Person } from '../types';
 import toast from 'react-hot-toast';
@@ -88,61 +89,67 @@ export const PeoplePage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading people...</div>
-      </div>
+      <Layout>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-500">Loading people...</div>
+        </div>
+      </Layout>
     );
   }
 
   if (featureNotAvailable) {
     return (
-      <div className="max-w-4xl mx-auto p-8">
-        <h1 className="text-3xl font-bold mb-6">People</h1>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8">
-          <User className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
-          <h2 className="text-xl font-semibold mb-2 text-center">Feature Not Available</h2>
-          <p className="text-gray-600 mb-4 text-center">
-            Face recognition is not currently available on this server.
-            The <code className="bg-yellow-100 px-1 rounded">face_recognition</code> library was not installed during deployment.
-          </p>
-          <div className="text-center">
-            <button
-              onClick={() => navigate('/gallery')}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-            >
-              Go to Gallery
-            </button>
+      <Layout>
+        <div className="max-w-4xl mx-auto p-8">
+          <h1 className="text-3xl font-bold mb-6">Persone</h1>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8">
+            <User className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
+            <h2 className="text-xl font-semibold mb-2 text-center">Funzione non disponibile</h2>
+            <p className="text-gray-600 mb-4 text-center">
+              Il riconoscimento facciale non e' disponibile su questo server.
+            </p>
+            <div className="text-center">
+              <button
+                onClick={() => navigate('/gallery')}
+                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+              >
+                Torna alla Gallery
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   if (persons.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto p-8">
-        <h1 className="text-3xl font-bold mb-6">People</h1>
-        <div className="bg-gray-50 rounded-lg p-8 text-center">
-          <User className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-          <h2 className="text-xl font-semibold mb-2">No people identified yet</h2>
-          <p className="text-gray-600 mb-4">
-            Upload photos and enable face recognition to start identifying people.
-          </p>
-          <button
-            onClick={() => navigate('/settings')}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Go to Settings
-          </button>
+      <Layout>
+        <div className="max-w-4xl mx-auto p-8">
+          <h1 className="text-3xl font-bold mb-6">Persone</h1>
+          <div className="bg-gray-50 rounded-lg p-8 text-center">
+            <User className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+            <h2 className="text-xl font-semibold mb-2">Nessuna persona identificata</h2>
+            <p className="text-gray-600 mb-4">
+              Carica foto e abilita il riconoscimento facciale per iniziare.
+            </p>
+            <button
+              onClick={() => navigate('/settings')}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+              Vai alle Impostazioni
+            </button>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
+    <Layout>
     <div className="max-w-6xl mx-auto p-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">People ({persons.length})</h1>
+        <h1 className="text-3xl font-bold">Persone ({persons.length})</h1>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -223,15 +230,22 @@ export const PeoplePage: React.FC = () => {
 
                   <div className="flex gap-2">
                     <button
+                      onClick={() => navigate(`/people/${person.id}/diary`)}
+                      className="flex-1 bg-amber-500 text-white px-3 py-2 rounded hover:bg-amber-600 flex items-center justify-center gap-1"
+                      title="Diario"
+                    >
+                      <BookOpen className="w-4 h-4" /> Diario
+                    </button>
+                    <button
                       onClick={() => startEdit(person)}
                       className="flex-1 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 flex items-center justify-center gap-1"
                     >
-                      <Edit2 className="w-4 h-4" /> Edit
+                      <Edit2 className="w-4 h-4" /> Modifica
                     </button>
                     <button
                       onClick={() => deletePerson(person.id, person.name)}
                       className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700"
-                      title="Delete person"
+                      title="Elimina persona"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -243,6 +257,7 @@ export const PeoplePage: React.FC = () => {
         ))}
       </div>
     </div>
+    </Layout>
   );
 };
 

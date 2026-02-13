@@ -191,3 +191,73 @@ export interface ManualFaceRequest {
   person_name?: string;
   person_id?: string;
 }
+
+// Diary types
+export interface DiaryPhoto {
+  id: string;
+  taken_at: string | null;
+  location_name: string | null;
+  description_short: string | null;
+  description_full: string | null;
+  tags: string[];
+}
+
+export interface DiaryChapter {
+  chapter_num: number;
+  title: string;
+  date_from: string | null;
+  date_to: string | null;
+  locations: string[];
+  photo_count: number;
+  photos: DiaryPhoto[];
+}
+
+export interface DiaryPerson {
+  id: string;
+  name: string;
+  photo_count: number;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+}
+
+export interface PersonDiary {
+  person: DiaryPerson;
+  total_photos: number;
+  total_chapters: number;
+  chapters: DiaryChapter[];
+}
+
+export interface PersonStory {
+  person_name: string;
+  story: string;
+  model: string;
+  photo_count: number;
+}
+
+// Memory types
+export interface MemoryAnswer {
+  answer: string;
+  conversation_id: string;
+  context_items: number;
+  model: string;
+}
+
+export interface MemoryReindexResult {
+  message: string;
+  indexed: Record<string, number>;
+  total: number;
+}
+
+export interface MemoryDirective {
+  id: string;
+  directive: string;
+  source: string;
+  confidence?: number;
+  is_active: boolean;
+  created_at?: string;
+}
+
+export interface MemoryDirectivesResponse {
+  directives: MemoryDirective[];
+  count: number;
+}

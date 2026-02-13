@@ -19,6 +19,12 @@ import type {
   ConsentResponse,
   FaceDetectionResponse,
   ManualFaceRequest,
+  PersonDiary,
+  PersonStory,
+  MemoryAnswer,
+  MemoryReindexResult,
+  MemoryDirective,
+  MemoryDirectivesResponse,
 } from '../types';
 
 // API base URL - change this to your backend URL
@@ -303,15 +309,16 @@ export const facesApi = {
 
 // Diary API
 export const diaryApi = {
-  getPersonDiary: async (personId: string): Promise<any> => {
-    const response = await apiClient.get(`/api/diary/person/${personId}`);
+  getPersonDiary: async (personId: string): Promise<PersonDiary> => {
+    const response = await apiClient.get<PersonDiary>(`/api/diary/person/${personId}`);
     return response.data;
   },
 
-  generatePersonStory: async (personId: string, model?: string): Promise<any> => {
+  generatePersonStory: async (personId: string, model?: string): Promise<PersonStory> => {
     const params = model ? { model } : {};
-    const response = await apiClient.post(`/api/diary/person/${personId}/story`, null, {
+    const response = await apiClient.post<PersonStory>(`/api/diary/person/${personId}/story`, null, {
       params,
+      timeout: 120000,
     });
     return response.data;
   },
@@ -319,15 +326,15 @@ export const diaryApi = {
 
 // Memory API
 export const memoryApi = {
-  ask: async (question: string, model?: string): Promise<any> => {
-    const response = await apiClient.post('/api/memory/ask', {
+  ask: async (question: string, model?: string): Promise<MemoryAnswer> => {
+    const response = await apiClient.post<MemoryAnswer>('/api/memory/ask', {
       question,
       model,
-    });
+    }, { timeout: 60000 });
     return response.data;
   },
 
-  learn: async (conversationId: string, feedback: 'positive' | 'negative' | 'corrected'): Promise<any> => {
+  learn: async (conversationId: string, feedback: 'positive' | 'negative' | 'corrected'): Promise<{ message: string; feedback: string }> => {
     const response = await apiClient.post('/api/memory/learn', {
       conversation_id: conversationId,
       feedback,
@@ -335,27 +342,29 @@ export const memoryApi = {
     return response.data;
   },
 
-  reindex: async (): Promise<any> => {
-    const response = await apiClient.post('/api/memory/reindex');
+  reindex: async (): Promise<MemoryReindexResult> => {
+    const response = await apiClient.post<MemoryReindexResult>('/api/memory/reindex', null, {
+      timeout: 120000,
+    });
     return response.data;
   },
 
-  getDirectives: async (activeOnly: boolean = true): Promise<any> => {
-    const response = await apiClient.get('/api/memory/directives', {
+  getDirectives: async (activeOnly: boolean = true): Promise<MemoryDirectivesResponse> => {
+    const response = await apiClient.get<MemoryDirectivesResponse>('/api/memory/directives', {
       params: { active_only: activeOnly },
     });
     return response.data;
   },
 
-  createDirective: async (directive: string): Promise<any> => {
-    const response = await apiClient.post('/api/memory/directives', {
+  createDirective: async (directive: string): Promise<MemoryDirective> => {
+    const response = await apiClient.post<MemoryDirective>('/api/memory/directives', {
       directive,
     });
     return response.data;
   },
 
-  updateDirective: async (directiveId: string, data: { directive?: string; is_active?: boolean }): Promise<any> => {
-    const response = await apiClient.patch(`/api/memory/directives/${directiveId}`, data);
+  updateDirective: async (directiveId: string, data: { directive?: string; is_active?: boolean }): Promise<MemoryDirective> => {
+    const response = await apiClient.patch<MemoryDirective>(`/api/memory/directives/${directiveId}`, data);
     return response.data;
   },
 

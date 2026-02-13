@@ -19,6 +19,9 @@ const SystemMonitoringPage = lazy(() => import('./pages/SystemMonitoringPage'));
 const OllamaModelsPage = lazy(() => import('./pages/OllamaModelsPage'));
 const PromptConfigurationPage = lazy(() => import('./pages/PromptConfigurationPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const PeoplePage = lazy(() => import('./pages/PeoplePage'));
+const MemoryPage = lazy(() => import('./pages/MemoryPage'));
+const PersonDiaryPage = lazy(() => import('./pages/PersonDiaryPage'));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -193,6 +196,30 @@ function App() {
             element={
               <ProtectedRoute>
                 <PromptConfigurationPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/people"
+            element={
+              <ProtectedRoute>
+                <PeoplePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/people/:personId/diary"
+            element={
+              <ProtectedRoute>
+                <PersonDiaryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/memory"
+            element={
+              <ProtectedRoute>
+                <MemoryPage />
               </ProtectedRoute>
             }
           />
