@@ -404,7 +404,8 @@ async def face_detection_worker():
                     elif len(unique_names) == 2 and unnamed == 0:
                         faces_names_str = f"{unique_names[0]} e {unique_names[1]}"
                     elif unnamed > 0:
-                        faces_names_str = f"{', '.join(unique_names)} e {'l\\'altra persona' if unnamed == 1 else f'le altre {unnamed} persone'}"
+                        other_part = "l'altra persona" if unnamed == 1 else f"le altre {unnamed} persone"
+                        faces_names_str = f"{', '.join(unique_names)} e {other_part}"
                     else:
                         faces_names_str = f"{', '.join(unique_names[:-1])} e {unique_names[-1]}"
                 elif total_faces > 0:
@@ -1616,7 +1617,8 @@ def _build_faces_context(db: Session, photo_id: uuid.UUID) -> dict:
             if len(names) == 1:
                 result["faces_names"] = f"{names[0]} e l'altra persona"
             else:
-                result["faces_names"] = f"{', '.join(names[:-1])}, {names[-1]} e {'l\\'altra persona' if unnamed_count == 1 else f'le altre {unnamed_count} persone'}"
+                other_label = "l'altra persona" if unnamed_count == 1 else f"le altre {unnamed_count} persone"
+                result["faces_names"] = f"{', '.join(names[:-1])}, {names[-1]} e {other_label}"
         elif names:
             if len(names) == 1:
                 result["faces_names"] = names[0]
