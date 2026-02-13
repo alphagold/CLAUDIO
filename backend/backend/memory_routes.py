@@ -54,6 +54,10 @@ class DirectiveUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class AnswerRequest(BaseModel):
+    answer: str = Field(..., min_length=1, max_length=2000)
+
+
 # ============================================================================
 # ROUTES - Q&A
 # ============================================================================
@@ -217,3 +221,123 @@ async def delete_directive(
     if not success:
         raise HTTPException(status_code=404, detail="Direttiva non trovata")
     return {"message": "Direttiva eliminata"}
+
+
+# ============================================================================
+# ROUTES - MEMORY QUESTIONS
+# ============================================================================
+
+@router.get("/questions")
+async def list_questions(
+    photo_id: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db),
+):
+    """Lista domande memoria, opzionalmente filtrate per foto e/o status."""
+    service = MemoryService(db)
+    pid = UUID(photo_id) if photo_id else None
+    questions = service.get_questions(user_id=current_user.id, photo_id=pid, status=status)
+    return {"questions": questions, "count": len(questions)}
+
+
+@router.get("/questions/count")
+async def get_questions_count(
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db),
+):
+    """Conteggio domande pending."""
+    service = MemoryService(db)
+    count = service.get_pending_count(user_id=current_user.id)
+    return {"pending_count": count}
+
+
+@router.post("/questions/{question_id}/answer")
+async def answer_question(
+    question_id: UUID,
+    request: AnswerRequest,
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db),
+):
+    """Risponde a una domanda memoria e la indicizza."""
+    service = MemoryService(db)
+    result = service.answer_question(
+        question_id=question_id,
+        user_id=current_user.id,
+        answer=request.answer,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Domanda non trovata")
+    return result
+
+
+@router.post("/questions/{question_id}/skip")
+async def skip_question(
+    question_id: UUID,
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db),
+):
+    """Salta una domanda."""
+    service = MemoryService(db)
+    success = service.skip_question(
+        question_id=question_id,
+        user_id=current_user.id,
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Domanda non trovata")
+    return {"message": "Domanda saltata"}
+
+
+@router.post("/questions/generate/{photo_id}")
+async def generate_questions_for_photo(
+    photo_id: UUID,
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db),
+):
+    """Genera domande manualmente per una foto."""
+    from models import Photo, PhotoAnalysis, Person, Face, MemoryQuestion
+
+    # Verifica foto e analisi
+    photo = db.query(Photo).filter(
+        Photo.id == photo_id,
+        Photo.user_id == current_user.id,
+        Photo.deleted_at.is_(None),
+    ).first()
+    if not photo:
+        raise HTTPException(status_code=404, detail="Foto non trovata")
+
+    analysis = db.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == photo_id).first()
+    if not analysis:
+        raise HTTPException(status_code=400, detail="Foto non ancora analizzata")
+
+    # Importa helper da main.py
+    try:
+        from main import _build_faces_context, _generate_memory_questions_sync
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Servizio non disponibile")
+
+    faces_info = _build_faces_context(db, photo_id)
+
+    # Costruisci user_config
+    user_config = {
+        "remote_enabled": current_user.remote_ollama_enabled,
+        "remote_url": current_user.remote_ollama_url,
+        "remote_model": current_user.remote_ollama_model,
+        "text_model": getattr(current_user, 'text_model', None) or "llama3.2:latest",
+        "text_use_remote": getattr(current_user, 'text_use_remote', False),
+    }
+
+    analysis_result = {
+        "raw_response": analysis.raw_response or analysis.description_full,
+        "description_full": analysis.description_full,
+    }
+
+    _generate_memory_questions_sync(
+        db, photo_id, photo, current_user, analysis_result,
+        faces_info, photo.location_name, user_config
+    )
+
+    # Ritorna le domande generate
+    service = MemoryService(db)
+    questions = service.get_questions(user_id=current_user.id, photo_id=photo_id)
+    return {"questions": questions, "count": len(questions)}

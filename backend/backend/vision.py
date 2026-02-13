@@ -40,6 +40,7 @@ class OllamaVisionClient:
         location_name: Optional[str] = None,
         allow_fallback: bool = True,
         faces_context: Optional[str] = None,
+        faces_names: Optional[str] = None,
         custom_prompt: Optional[str] = None
     ) -> Dict:
         """
@@ -69,7 +70,7 @@ class OllamaVisionClient:
             prompt = custom_prompt
             print(f"[VISION] Using custom prompt ({len(prompt)} chars)")
         else:
-            prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model, faces_context=faces_context)
+            prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model, faces_context=faces_context, faces_names=faces_names)
 
         # Adjust parameters based on model
         is_qwen = "qwen" in selected_model.lower()
@@ -202,11 +203,17 @@ class OllamaVisionClient:
                 raise
             return self._get_fallback_analysis(processing_time)
 
-    def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None, faces_context: Optional[str] = None) -> str:
-        """Get prompt from database or fallback to hardcoded default"""
+    def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None, faces_context: Optional[str] = None, faces_names: Optional[str] = None) -> str:
+        """Get prompt from database or fallback to hardcoded default.
+        faces_context: frase completa es. "Nella foto sono presenti: Andrea, Silvia."
+        faces_names: solo nomi es. "Andrea e Silvia" (per {faces_names} nel template)
+        """
 
         location_hint = f" La foto è stata scattata a {location_name}." if location_name else ""
         faces_hint = f" {faces_context}" if faces_context else ""
+        # Default faces_names per template: "ogni persona" se nessun nome disponibile
+        if not faces_names:
+            faces_names = "ogni persona"
 
         # Try to load prompt from database
         # Se ci sono persone → usa template "focus_persone", altrimenti → default
@@ -243,6 +250,7 @@ class OllamaVisionClient:
                     prompt_text = prompt_text.replace("{location_hint}", location_hint)
                     prompt_text = prompt_text.replace("{model}", model or "default")
                     prompt_text = prompt_text.replace("{faces_hint}", faces_hint)
+                    prompt_text = prompt_text.replace("{faces_names}", faces_names)
 
                     # Se il template non conteneva i placeholder, aggiungi contesto alla fine
                     if location_hint and location_hint not in prompt_text:
@@ -251,7 +259,7 @@ class OllamaVisionClient:
                         prompt_text += faces_hint
 
                     if faces_hint or location_hint:
-                        print(f"[VISION] Prompt context: location='{location_hint.strip()}', faces='{faces_hint.strip()}'")
+                        print(f"[VISION] Prompt context: location='{location_hint.strip()}', faces='{faces_hint.strip()}', names='{faces_names}'")
 
                     return prompt_text
                 else:
@@ -261,9 +269,9 @@ class OllamaVisionClient:
         except Exception as e:
             print(f"[VISION] Failed to load prompt from database: {e}, using hardcoded fallback")
 
-        # Fallback hardcoded - descrizione strutturata in italiano
+        # Fallback hardcoded
         print(f"[VISION] Using hardcoded fallback prompt, location='{location_hint.strip()}', faces='{faces_hint.strip()}'")
-        return f"Descrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint}\n\nPersone: Descrivi ogni persona nel dettaglio. Cosa indossano? Quali sono le loro espressioni, la postura, l'aspetto fisico (capelli, occhi, etc.)? Cosa stanno facendo esattamente?\n\nOggetti principali: Elenca e descrivi gli oggetti chiave visibili nell'immagine.\n\nAmbiente: Specifica se la scena è in interni o esterni e descrivi lo sfondo.\n\nColori e atmosfera: Definisci la tavolozza dei colori dominante e l'atmosfera generale dell'immagine (allegra, malinconica, formale, etc.).\n\nTesto: Se è presente testo leggibile (come scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.\n\nFondamentale: Descrivi solo ciò che è chiaramente visibile, senza fare ipotesi o supposizioni. Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese."
+        return f"Analizza questa immagine estraendo il massimo di informazioni possibili.{location_hint}{faces_hint}\n\nDescrivi la scena generale: cosa sta succedendo, dove ci troviamo, qual è il contesto.\n\nOggetti: Elenca e descrivi ogni oggetto visibile — colore, materiale, dimensione, posizione.\n\nAmbiente: Interno o esterno? Tipo di luogo. Descrivi pavimento, pareti, soffitto o terreno, vegetazione, cielo se visibili.\n\nLuce e colori: Tipo di illuminazione, colori dominanti e contrasti.\n\nAtmosfera: Che sensazione trasmette la scena?\n\nTesto: Se è presente testo leggibile, trascrivilo ESATTAMENTE tra virgolette.\n\nRiporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano."
 
     def _validate_analysis_quality(self, analysis: Dict) -> tuple[bool, List[str]]:
         """Valida qualità analisi e restituisce warnings"""

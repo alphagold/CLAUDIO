@@ -23,7 +23,7 @@ from PIL.ExifTags import TAGS
 # Local imports
 from config import settings
 from database import get_db, engine, Base, SessionLocal
-from models import User, Photo, PhotoAnalysis, SearchHistory, FaceRecognitionConsent, Face, Person
+from models import User, Photo, PhotoAnalysis, SearchHistory, FaceRecognitionConsent, Face, Person, MemoryQuestion
 import schemas
 from vision import vision_client
 import admin_routes
@@ -237,10 +237,52 @@ async def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     }
 
 
-@app.get("/api/auth/me", response_model=schemas.UserResponse)
+@app.get("/api/auth/me")
 async def get_me(current_user: User = Depends(get_current_user)):
     """Get current user info"""
-    return current_user
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "is_admin": current_user.is_admin,
+        "self_person_id": str(current_user.self_person_id) if current_user.self_person_id else None,
+        "memory_questions_enabled": getattr(current_user, 'memory_questions_enabled', False),
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+    }
+
+
+from pydantic import BaseModel as PydanticBaseModel
+
+class UpdateMeRequest(PydanticBaseModel):
+    self_person_id: Optional[str] = None
+    memory_questions_enabled: Optional[bool] = None
+
+
+@app.patch("/api/auth/me")
+async def update_me(
+    request: UpdateMeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update current user settings (self_person_id, memory_questions_enabled)"""
+    if request.self_person_id is not None:
+        if request.self_person_id == "" or request.self_person_id == "null":
+            current_user.self_person_id = None
+        else:
+            current_user.self_person_id = uuid.UUID(request.self_person_id)
+
+    if request.memory_questions_enabled is not None:
+        current_user.memory_questions_enabled = request.memory_questions_enabled
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "id": str(current_user.id),
+        "email": current_user.email,
+        "self_person_id": str(current_user.self_person_id) if current_user.self_person_id else None,
+        "memory_questions_enabled": getattr(current_user, 'memory_questions_enabled', False),
+    }
 
 
 # ============================================================================
@@ -270,7 +312,7 @@ async def analysis_worker():
                 # Clear the queue
                 while not analysis_queue.empty():
                     try:
-                        photo_id, file_path, model, _fc, _cp = analysis_queue.get_nowait()
+                        photo_id, file_path, model, _fc, _fn, _cp = analysis_queue.get_nowait()
                         analysis_queue.task_done()
                         # Reset photo state in DB
                         db = SessionLocal()
@@ -290,10 +332,10 @@ async def analysis_worker():
                 current_analyzing_photo_id = None
                 continue
 
-            photo_id, file_path, model, faces_context, custom_prompt = await analysis_queue.get()
+            photo_id, file_path, model, faces_context, faces_names, custom_prompt = await analysis_queue.get()
             current_analyzing_photo_id = photo_id  # Set current photo
             print(f"Processing analysis for photo {photo_id} (queue size: {analysis_queue.qsize()})")
-            await analyze_photo_background(photo_id, file_path, model, faces_context=faces_context, custom_prompt=custom_prompt)
+            await analyze_photo_background(photo_id, file_path, model, faces_context=faces_context, faces_names=faces_names, custom_prompt=custom_prompt)
             current_analyzing_photo_id = None  # Reset after completion
             analysis_queue.task_done()
         except Exception as e:
@@ -347,6 +389,7 @@ async def face_detection_worker():
             # Se richiesto, accoda analisi LLM con contesto volti
             if then_analyze_model:
                 faces_context = None
+                faces_names_str = None
                 total_faces = len(faces or [])
                 if face_names:
                     unique_names = list(dict.fromkeys(face_names))
@@ -355,9 +398,19 @@ async def face_detection_worker():
                         faces_context = f"Nella foto sono presenti: {', '.join(unique_names)} e {unnamed} altra/e persona/e."
                     else:
                         faces_context = f"Nella foto sono presenti: {', '.join(unique_names)}."
+                    # Costruisci faces_names per {faces_names} nel template
+                    if len(unique_names) == 1 and unnamed == 0:
+                        faces_names_str = unique_names[0]
+                    elif len(unique_names) == 2 and unnamed == 0:
+                        faces_names_str = f"{unique_names[0]} e {unique_names[1]}"
+                    elif unnamed > 0:
+                        faces_names_str = f"{', '.join(unique_names)} e {'l\\'altra persona' if unnamed == 1 else f'le altre {unnamed} persone'}"
+                    else:
+                        faces_names_str = f"{', '.join(unique_names[:-1])} e {unique_names[-1]}"
                 elif total_faces > 0:
                     faces_context = f"Nella foto sono state rilevate {total_faces} persone."
-                enqueue_analysis(photo_id, file_path, then_analyze_model, faces_context=faces_context)
+                    faces_names_str = f"le {total_faces} persone presenti"
+                enqueue_analysis(photo_id, file_path, then_analyze_model, faces_context=faces_context, faces_names=faces_names_str)
 
             face_detection_queue.task_done()
         except Exception as e:
@@ -384,7 +437,7 @@ def enqueue_face_detection(photo_id: uuid.UUID, file_path: str, then_analyze_mod
         print(f"Face detection queue full! Skipping photo {photo_id}")
 
 
-def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None, custom_prompt: str = None):
+def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None, faces_names: str = None, custom_prompt: str = None):
     """Add photo to analysis queue"""
     global analysis_worker_started
 
@@ -395,9 +448,10 @@ def enqueue_analysis(photo_id: uuid.UUID, file_path: str, model: str = None, fac
 
     # Add to queue (non-blocking)
     try:
-        analysis_queue.put_nowait((photo_id, file_path, model, faces_context, custom_prompt))
+        analysis_queue.put_nowait((photo_id, file_path, model, faces_context, faces_names, custom_prompt))
         print(f"Added photo {photo_id} to analysis queue (position: {analysis_queue.qsize()})"
               + (f" [faces: {faces_context[:60]}]" if faces_context else "")
+              + (f" [names: {faces_names}]" if faces_names else "")
               + (" [custom_prompt]" if custom_prompt else ""))
     except asyncio.QueueFull:
         print(f"Analysis queue full! Skipping photo {photo_id}")
@@ -644,12 +698,13 @@ def calculate_elapsed_time(photo: Photo) -> Optional[int]:
 # BACKGROUND TASKS
 # ============================================================================
 
-async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None, custom_prompt: str = None):
+async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: str = None, faces_context: str = None, faces_names: str = None, custom_prompt: str = None):
     """Analyze photo in background with Vision AI"""
     try:
         model_name = model or "llama3.2-vision"
         print(f"[ANALYSIS] Starting for photo {photo_id}, model={model_name}"
-              + (f", faces_context={faces_context}" if faces_context else ""))
+              + (f", faces_context={faces_context}" if faces_context else "")
+              + (f", faces_names={faces_names}" if faces_names else ""))
 
         # Mark analysis start time immediately and get user preferences
         db = SessionLocal()
@@ -670,7 +725,9 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 user_config = {
                     "remote_enabled": user.remote_ollama_enabled,
                     "remote_url": user.remote_ollama_url,
-                    "remote_model": user.remote_ollama_model
+                    "remote_model": user.remote_ollama_model,
+                    "text_model": getattr(user, 'text_model', None) or "llama3.2:latest",
+                    "text_use_remote": getattr(user, 'text_use_remote', False),
                 }
 
             # Save analysis start timestamp
@@ -696,6 +753,7 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 location_name=location_name,
                 allow_fallback=False,
                 faces_context=faces_context,
+                faces_names=faces_names,
                 custom_prompt=custom_prompt
             )
         elif model == "remote" and (not user_config or not user_config["remote_enabled"]):
@@ -706,6 +764,7 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 model=None,
                 location_name=location_name,
                 faces_context=faces_context,
+                faces_names=faces_names,
                 custom_prompt=custom_prompt
             )
         else:
@@ -718,6 +777,7 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 model=model,
                 location_name=location_name,
                 faces_context=faces_context,
+                faces_names=faces_names,
                 custom_prompt=custom_prompt
             )
 
@@ -784,6 +844,33 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             db.commit()
             print(f"Analysis completed for photo {photo_id}")
 
+            # === POST-ANALISI: aggiornamento physical_description Person ===
+            try:
+                raw_response = analysis_result.get("raw_response", "")
+                # Recupera nomi delle persone nella foto
+                faces_info_post = _build_faces_context(db, photo_id)
+                names_in_photo = faces_info_post.get("names_list", [])
+
+                if names_in_photo and raw_response:
+                    _update_persons_physical_description(
+                        db, photo_id, photo, names_in_photo, raw_response,
+                        user_config, location_name
+                    )
+            except Exception as pd_err:
+                print(f"[POST-ANALYSIS] Errore aggiornamento physical_description: {pd_err}")
+
+            # === POST-ANALISI: generazione domande memoria ===
+            try:
+                user = db.query(User).filter(User.id == photo.user_id).first()
+                if user and getattr(user, 'memory_questions_enabled', False):
+                    _generate_memory_questions_sync(
+                        db, photo_id, photo, user, analysis_result,
+                        faces_info_post if names_in_photo else {"faces_context": faces_context, "names_list": []},
+                        location_name, user_config
+                    )
+            except Exception as mq_err:
+                print(f"[POST-ANALYSIS] Errore generazione domande memoria: {mq_err}")
+
             # Face detection ora avviene PRIMA dell'analisi LLM (nel flusso upload).
             # Per reanalyze manuali dove face detection non è stato fatto, accodalo dopo.
             if FACE_RECOGNITION_AVAILABLE and photo.face_detection_status not in ("completed", "processing"):
@@ -824,6 +911,207 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             print(f"Failed to reset photo state: {reset_error}")
         finally:
             db.close()
+
+
+# ============================================================================
+# POST-ANALYSIS HELPERS
+# ============================================================================
+
+def _call_text_llm_sync(prompt: str, user_config: dict, ollama_url_default: str = "http://ollama:11434") -> Optional[str]:
+    """Chiamata sincrona a LLM text model. Ritorna la risposta o None."""
+    import requests as req
+    try:
+        # Determina URL e modello
+        url = ollama_url_default
+        model = "llama3.2:latest"
+        if user_config:
+            # Usa text_model se disponibile
+            if user_config.get("text_model"):
+                model = user_config["text_model"]
+            # Usa server remoto se text_use_remote è abilitato
+            if user_config.get("text_use_remote") and user_config.get("remote_url"):
+                url = user_config["remote_url"]
+            elif user_config.get("remote_enabled") and user_config.get("remote_url"):
+                url = user_config["remote_url"]
+
+        resp = req.post(
+            f"{url}/api/generate",
+            json={"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0.3, "num_predict": 500}},
+            timeout=(10, 60)
+        )
+        resp.raise_for_status()
+        return resp.json().get("response", "").strip()
+    except Exception as e:
+        print(f"[TEXT_LLM] Errore: {e}")
+        return None
+
+
+def merge_physical_description(existing: dict, new_data: dict, photo_date: str, photo_id: str) -> dict:
+    """Aggiorna tratti fisici preservando la history"""
+    result = existing.copy() if existing else {}
+
+    for key, value in new_data.items():
+        if value and key not in ("history", "last_updated", "photo_count_at_update"):
+            result[key] = value
+
+    history = result.get("history", [])
+    history.append({"date": photo_date, "photo_id": str(photo_id), "traits": new_data})
+    result["history"] = history[-10:]  # mantieni ultime 10
+    result["last_updated"] = photo_date
+
+    return result
+
+
+def _update_persons_physical_description(db: Session, photo_id, photo, names_list: list, raw_response: str, user_config: dict, location_name: str):
+    """Post-analisi: estrae tratti fisici dalla risposta e aggiorna Person.physical_description"""
+    import json as json_mod
+
+    photo_date = photo.taken_at.strftime("%Y-%m-%d") if photo.taken_at else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    for name in names_list:
+        try:
+            person = db.query(Person).filter(
+                Person.user_id == photo.user_id,
+                Person.name == name
+            ).first()
+            if not person:
+                continue
+
+            # Cerca nel raw_response la parte relativa a questa persona
+            # Prendi un estratto attorno al nome (max 500 char)
+            import re
+            pattern = re.compile(re.escape(name), re.IGNORECASE)
+            match = pattern.search(raw_response)
+            if not match:
+                continue
+
+            start = max(0, match.start() - 50)
+            end = min(len(raw_response), match.end() + 400)
+            excerpt = raw_response[start:end]
+
+            # Chiama LLM per estrarre tratti fisici
+            extract_prompt = f"""Dalla seguente descrizione di {name}, estrai SOLO i tratti fisici in JSON:
+"{excerpt}"
+
+Rispondi SOLO con JSON valido:
+{{"sesso": "...", "eta_approssimativa": "...", "corporatura": "...", "capelli": "...", "occhi": "...", "tratti_distintivi": "..."}}
+Ometti campi non menzionati. Non aggiungere commenti."""
+
+            llm_response = _call_text_llm_sync(extract_prompt, user_config)
+            if not llm_response:
+                continue
+
+            # Parse JSON dalla risposta
+            # Cerca il primo { e l'ultimo }
+            json_start = llm_response.find('{')
+            json_end = llm_response.rfind('}')
+            if json_start == -1 or json_end == -1:
+                continue
+
+            try:
+                new_traits = json_mod.loads(llm_response[json_start:json_end + 1])
+            except json_mod.JSONDecodeError:
+                print(f"[PHYS_DESC] JSON non valido per {name}: {llm_response[:100]}")
+                continue
+
+            # Filtra campi vuoti/null
+            new_traits = {k: v for k, v in new_traits.items() if v and v != "..."}
+
+            if not new_traits:
+                continue
+
+            # Merge con descrizione esistente
+            existing = person.physical_description or {}
+            updated = merge_physical_description(existing, new_traits, photo_date, str(photo_id))
+
+            person.physical_description = updated
+            db.commit()
+            print(f"[PHYS_DESC] Aggiornata descrizione fisica di {name}: {list(new_traits.keys())}")
+
+        except Exception as e:
+            print(f"[PHYS_DESC] Errore per persona {name}: {e}")
+
+
+def _generate_memory_questions_sync(db: Session, photo_id, photo, user, analysis_result: dict, faces_info: dict, location_name: str, user_config: dict):
+    """Genera domande memoria post-analisi usando LLM text model"""
+    import re
+
+    analysis_text = analysis_result.get("raw_response", "") or analysis_result.get("description_full", "")
+    if not analysis_text or len(analysis_text) < 50:
+        return
+
+    # Determina se l'utente appare nella foto
+    user_is_in_photo = False
+    user_name = None
+    if getattr(user, 'self_person_id', None) and faces_info.get("names_list"):
+        self_person = db.query(Person).filter(Person.id == user.self_person_id).first()
+        if self_person and self_person.name and self_person.name in faces_info["names_list"]:
+            user_is_in_photo = True
+            user_name = self_person.name
+
+    # Costruisci prompt
+    context_parts = []
+    if location_name:
+        context_parts.append(f"Luogo: {location_name}")
+    if faces_info.get("faces_context"):
+        context_parts.append(f"Persone: {faces_info['faces_context']}")
+    context_str = "\n".join(context_parts)
+
+    user_instruction = ""
+    if user_is_in_photo:
+        user_instruction = f"\nL'utente si chiama {user_name} e appare in questa foto. Rivolgi le domande in seconda persona singolare (tu).\nChiedi all'utente cosa stava facendo, con chi era, come si sentiva, ecc."
+
+    prompt = f"""Sei un assistente che arricchisce la memoria fotografica dell'utente.
+
+Analisi della foto:
+---
+{analysis_text[:1500]}
+---
+{context_str}
+{user_instruction}
+
+Genera 2-3 domande BREVI e SPECIFICHE per QUESTA foto.
+NON chiedere cose già descritte nell'analisi.
+Concentrati su: chi sono le persone, occasione/evento, contesto, dettagli sul luogo.
+
+Formato (una per riga):
+[tipo] Domanda?
+
+Tipi validi: persone, occasione, luogo, attivita, oggetto, contesto"""
+
+    llm_response = _call_text_llm_sync(prompt, user_config)
+    if not llm_response:
+        return
+
+    # Parse domande
+    questions = []
+    for line in llm_response.split('\n'):
+        line = line.strip()
+        match = re.match(r'^\[(\w+)\]\s+(.+)$', line)
+        if match:
+            q_type = match.group(1).lower()
+            q_text = match.group(2).strip()
+            valid_types = {"persone", "occasione", "luogo", "attivita", "oggetto", "contesto"}
+            if q_type in valid_types and len(q_text) > 10:
+                questions.append((q_type, q_text))
+
+    if not questions:
+        print(f"[MEM_QUESTIONS] Nessuna domanda valida generata per foto {photo_id}")
+        return
+
+    # Salva domande nel DB
+    for q_type, q_text in questions[:3]:
+        mq = MemoryQuestion(
+            user_id=user.id,
+            photo_id=photo_id,
+            question=q_text,
+            question_type=q_type,
+            status="pending"
+        )
+        db.add(mq)
+
+    db.commit()
+    print(f"[MEM_QUESTIONS] Generate {len(questions[:3])} domande per foto {photo_id}")
 
 
 # ============================================================================
@@ -878,6 +1166,8 @@ async def get_user_profile(
         "remote_ollama_model": current_user.remote_ollama_model,
         "text_model": current_user.text_model or "llama3.2:latest",
         "text_use_remote": getattr(current_user, 'text_use_remote', False),
+        "memory_questions_enabled": getattr(current_user, 'memory_questions_enabled', False),
+        "self_person_id": str(current_user.self_person_id) if current_user.self_person_id else None,
         "created_at": current_user.created_at.isoformat()
     }
 
@@ -954,7 +1244,9 @@ async def update_user_preferences(
         "remote_ollama_url": current_user.remote_ollama_url,
         "remote_ollama_model": current_user.remote_ollama_model,
         "text_model": current_user.text_model or "llama3.2:latest",
-        "text_use_remote": getattr(current_user, 'text_use_remote', False)
+        "text_use_remote": getattr(current_user, 'text_use_remote', False),
+        "memory_questions_enabled": getattr(current_user, 'memory_questions_enabled', False),
+        "self_person_id": str(current_user.self_person_id) if current_user.self_person_id else None,
     }
 
 
@@ -1279,17 +1571,25 @@ class ReanalyzeRequest(schemas.BaseModel):
     custom_prompt: Optional[str] = None
 
 
-def _build_faces_context(db: Session, photo_id: uuid.UUID) -> Optional[str]:
-    """Costruisce contesto volti per una foto (named + unnamed count)"""
+def _build_faces_context(db: Session, photo_id: uuid.UUID) -> dict:
+    """Costruisce contesto volti per una foto.
+    Ritorna dict con:
+      faces_context: frase completa per {faces_hint}
+      faces_names: solo nomi per {faces_names} nel template
+      names_list: lista nomi (per aggiornamento Person)
+      total_faces: numero totale volti
+    """
+    result = {"faces_context": None, "faces_names": None, "names_list": [], "total_faces": 0}
     if not FACE_RECOGNITION_AVAILABLE:
-        return None
+        return result
     try:
         all_faces = db.query(Face).filter(
             Face.photo_id == photo_id,
             Face.deleted_at.is_(None)
         ).all()
         if not all_faces:
-            return None
+            return result
+        result["total_faces"] = len(all_faces)
         named_faces = []
         for f in all_faces:
             if f.person_id:
@@ -1300,16 +1600,37 @@ def _build_faces_context(db: Session, photo_id: uuid.UUID) -> Optional[str]:
                 except Exception:
                     pass
         names = list(dict.fromkeys(named_faces))
+        result["names_list"] = names
         unnamed_count = len(all_faces) - len(names)
+
+        # faces_context: frase completa per {faces_hint}
         if names and unnamed_count > 0:
-            return f"Nella foto sono presenti: {', '.join(names)} e {unnamed_count} altra/e persona/e."
+            result["faces_context"] = f"Nella foto sono presenti: {', '.join(names)} e {unnamed_count} altra/e persona/e."
         elif names:
-            return f"Nella foto sono presenti: {', '.join(names)}."
+            result["faces_context"] = f"Nella foto sono presenti: {', '.join(names)}."
         else:
-            return f"Nella foto sono state rilevate {len(all_faces)} persone."
+            result["faces_context"] = f"Nella foto sono state rilevate {len(all_faces)} persone."
+
+        # faces_names: solo nomi per {faces_names} nel template
+        if names and unnamed_count > 0:
+            if len(names) == 1:
+                result["faces_names"] = f"{names[0]} e l'altra persona"
+            else:
+                result["faces_names"] = f"{', '.join(names[:-1])}, {names[-1]} e {'l\\'altra persona' if unnamed_count == 1 else f'le altre {unnamed_count} persone'}"
+        elif names:
+            if len(names) == 1:
+                result["faces_names"] = names[0]
+            elif len(names) == 2:
+                result["faces_names"] = f"{names[0]} e {names[1]}"
+            else:
+                result["faces_names"] = f"{', '.join(names[:-1])} e {names[-1]}"
+        else:
+            result["faces_names"] = f"le {len(all_faces)} persone presenti"
+
+        return result
     except Exception as e:
         print(f"[FACES_CONTEXT] Errore: {e}")
-        return None
+        return result
 
 
 @app.get("/api/photos/{photo_id}/prompt-preview")
@@ -1328,18 +1649,20 @@ async def get_prompt_preview(
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
 
-    faces_context = _build_faces_context(db, photo_id)
+    faces_info = _build_faces_context(db, photo_id)
     location_name = photo.location_name
 
     prompt = vision_client._get_analysis_prompt(
         location_name=location_name,
         model=model,
-        faces_context=faces_context
+        faces_context=faces_info["faces_context"],
+        faces_names=faces_info["faces_names"]
     )
 
     return {
         "prompt": prompt,
-        "faces_context": faces_context,
+        "faces_context": faces_info["faces_context"],
+        "faces_names": faces_info["faces_names"],
         "location_name": location_name,
         "model": model
     }
@@ -1375,12 +1698,12 @@ async def reanalyze_photo(
     db.commit()
 
     # Recupera contesto volti (tutti, non solo named)
-    faces_context = _build_faces_context(db, photo_id)
-    if faces_context:
-        print(f"[REANALYZE] Contesto volti: {faces_context}")
+    faces_info = _build_faces_context(db, photo_id)
+    if faces_info["faces_context"]:
+        print(f"[REANALYZE] Contesto volti: {faces_info['faces_context']}, nomi: {faces_info['faces_names']}")
 
     # Add to analysis queue with specified model, faces context, and custom prompt
-    enqueue_analysis(photo.id, str(file_path), model, faces_context=faces_context, custom_prompt=custom_prompt)
+    enqueue_analysis(photo.id, str(file_path), model, faces_context=faces_info["faces_context"], faces_names=faces_info["faces_names"], custom_prompt=custom_prompt)
 
     return {
         "message": "Reanalysis started",

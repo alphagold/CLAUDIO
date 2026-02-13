@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import Layout from '../components/Layout';
-import apiClient, { ollamaApi, remoteOllamaApi, facesApi } from '../api/client';
-import type { ConsentResponse } from '../types';
-import { Settings, Sparkles, Save, Loader, Wifi, WifiOff, RefreshCw, User, Shield, AlertCircle, Eye, MessageSquareText } from 'lucide-react';
+import apiClient, { ollamaApi, remoteOllamaApi, facesApi, authApi } from '../api/client';
+import type { ConsentResponse, Person } from '../types';
+import { Settings, Sparkles, Save, Loader, Wifi, WifiOff, RefreshCw, User, Shield, AlertCircle, Eye, MessageSquareText, Brain, UserCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface UserProfile {
@@ -19,6 +19,8 @@ interface UserProfile {
   remote_ollama_model: string;
   text_model: string;
   text_use_remote: boolean;
+  memory_questions_enabled: boolean;
+  self_person_id: string | null;
   created_at: string;
 }
 
@@ -40,6 +42,8 @@ export default function SettingsPage() {
   const [remoteModel, setRemoteModel] = useState(profile?.remote_ollama_model || 'moondream');
   const [textModel, setTextModel] = useState(profile?.text_model || 'llama3.2:latest');
   const [textUseRemote, setTextUseRemote] = useState(profile?.text_use_remote ?? false);
+  const [memoryQuestionsEnabled, setMemoryQuestionsEnabled] = useState(profile?.memory_questions_enabled ?? false);
+  const [selfPersonId, setSelfPersonId] = useState(profile?.self_person_id || '');
 
   // Modelli locali dal server Ollama
   const [localModels, setLocalModels] = useState<Array<{ name: string; size: number }>>([]);
@@ -62,6 +66,8 @@ export default function SettingsPage() {
       setRemoteModel(profile.remote_ollama_model || 'moondream');
       setTextModel(profile.text_model || 'llama3.2:latest');
       setTextUseRemote(profile.text_use_remote ?? false);
+      setMemoryQuestionsEnabled(profile.memory_questions_enabled ?? false);
+      setSelfPersonId(profile.self_person_id || '');
     }
   }, [profile]);
 
@@ -109,6 +115,22 @@ export default function SettingsPage() {
       });
     }
   }, [localModels, remoteEnabled, textUseRemote]);
+
+  // Persons list for "Chi sei tu?" dropdown
+  const { data: persons } = useQuery<Person[]>({
+    queryKey: ['persons'],
+    queryFn: () => facesApi.listPersons(),
+    retry: false,
+  });
+
+  // Mutation per self_person_id e memory_questions_enabled
+  const updateMeMutation = useMutation({
+    mutationFn: (data: { self_person_id?: string | null; memory_questions_enabled?: boolean }) =>
+      authApi.updateMe(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
+    },
+  });
 
   // Face Recognition Consent (optional - may not be available)
   const { data: consentData, error: consentError } = useQuery<ConsentResponse>({
@@ -252,6 +274,11 @@ export default function SettingsPage() {
       remote_ollama_model: remoteModel,
       text_model: textModel,
       text_use_remote: textUseRemote,
+    });
+    // Salva anche self_person_id e memory_questions_enabled
+    updateMeMutation.mutate({
+      self_person_id: selfPersonId || null,
+      memory_questions_enabled: memoryQuestionsEnabled,
     });
   };
 
@@ -571,6 +598,64 @@ export default function SettingsPage() {
               )}
             </>
           )}
+        </div>
+
+        {/* Memoria e Domande */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center space-x-3 mb-6">
+            <Brain className="w-6 h-6 text-emerald-600" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Memoria e Domande</h2>
+              <p className="text-sm text-gray-600">Arricchisci la memoria con domande contestuali sulle foto</p>
+            </div>
+          </div>
+
+          {/* Toggle domande memoria */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex-1">
+              <p className="text-gray-700 font-medium mb-1">Genera domande dopo l'analisi</p>
+              <p className="text-sm text-gray-500">
+                Dopo ogni analisi, il sistema genera 2-3 domande contestuali per arricchire i tuoi ricordi.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer ml-6">
+              <input
+                type="checkbox"
+                checked={memoryQuestionsEnabled}
+                onChange={(e) => setMemoryQuestionsEnabled(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+
+          {/* Chi sei tu? */}
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <UserCheck className="w-5 h-5 text-emerald-600" />
+              <label className="block text-sm font-medium text-gray-700">Chi sei tu?</label>
+            </div>
+            <p className="text-sm text-gray-500 mb-3">
+              Collega il tuo account a una persona riconosciuta. Le domande saranno personalizzate in seconda persona quando appari nelle foto.
+            </p>
+            <select
+              value={selfPersonId}
+              onChange={(e) => setSelfPersonId(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+            >
+              <option value="">Nessuna (non collegato)</option>
+              {persons?.filter(p => p.name).map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name} ({person.photo_count} foto)
+                </option>
+              ))}
+            </select>
+            {(!persons || persons.filter(p => p.name).length === 0) && (
+              <p className="text-xs text-gray-400 mt-2">
+                Nessuna persona con nome trovata. Etichetta prima i volti nelle foto.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Face Recognition Consent */}

@@ -27,6 +27,8 @@ class User(Base):
     remote_ollama_model = Column(String(50), default="moondream")
     text_model = Column(String(100), default="llama3.2:latest")
     text_use_remote = Column(Boolean, default=False, nullable=False)
+    memory_questions_enabled = Column(Boolean, default=False, nullable=False)
+    self_person_id = Column(UUID(as_uuid=True), ForeignKey("persons.id", ondelete="SET NULL", use_alter=True, name="fk_users_self_person"), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -199,6 +201,7 @@ class Person(Base):
     # Person information
     name = Column(String(255))  # NULL if not yet labeled
     notes = Column(Text)
+    physical_description = Column(JSONB)  # Auto-aggiornato dall'analisi LLM
 
     # Representative face for display
     representative_face_id = Column(UUID(as_uuid=True), ForeignKey("faces.id", ondelete="SET NULL"))
@@ -366,6 +369,24 @@ class MemoryDirective(Base):
     # Timestamps
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class MemoryQuestion(Base):
+    """Domande memoria generate post-analisi per arricchire la memoria"""
+    __tablename__ = "memory_questions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    photo_id = Column(UUID(as_uuid=True), ForeignKey("photos.id", ondelete="CASCADE"), nullable=False)
+
+    question = Column(Text, nullable=False)
+    answer = Column(Text)
+    question_type = Column(String(50), nullable=False)  # persone, occasione, luogo, attivita, oggetto, contesto
+    status = Column(String(20), default="pending", nullable=False)  # pending, answered, skipped
+    memory_indexed = Column(Boolean, default=False, nullable=False)
+
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    answered_at = Column(TIMESTAMP(timezone=True))
 
 
 class PromptTemplate(Base):

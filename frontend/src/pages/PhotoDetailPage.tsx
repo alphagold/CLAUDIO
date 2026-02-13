@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { photosApi, facesApi } from '../api/client';
+import { photosApi, facesApi, memoryApi } from '../api/client';
 import apiClient from '../api/client';
 import Layout from '../components/Layout';
 import PhotoMap from '../components/PhotoMap';
 import FaceOverlay from '../components/FaceOverlay';
-import type { Face, Person } from '../types';
+import type { Face, Person, MemoryQuestion } from '../types';
 import {
   ArrowLeft,
   Loader,
@@ -29,6 +29,9 @@ import {
   ChevronRight,
   Info,
   Image as ImageIcon,
+  HelpCircle,
+  Send,
+  SkipForward,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -51,7 +54,8 @@ export default function PhotoDetailPage() {
   const [faceRefreshKey, setFaceRefreshKey] = useState(0);
   const [showLightbox, setShowLightbox] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<'info' | 'faces'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'faces' | 'questions'>('info');
+  const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
 
   // Reset scroll all'apertura
   useEffect(() => {
@@ -104,6 +108,39 @@ export default function PhotoDetailPage() {
       const response = await apiClient.get('/api/user/profile');
       return response.data;
     },
+  });
+
+  // Memory questions per questa foto
+  const { data: questionsData, refetch: refetchQuestions } = useQuery({
+    queryKey: ['memoryQuestions', photoId],
+    queryFn: () => memoryApi.getQuestions(photoId!, undefined),
+    enabled: !!photoId,
+  });
+
+  const answerQuestionMutation = useMutation({
+    mutationFn: ({ questionId, answer }: { questionId: string; answer: string }) =>
+      memoryApi.answerQuestion(questionId, answer),
+    onSuccess: () => {
+      toast.success('Risposta salvata e indicizzata');
+      refetchQuestions();
+    },
+    onError: () => toast.error('Errore nel salvataggio della risposta'),
+  });
+
+  const skipQuestionMutation = useMutation({
+    mutationFn: (questionId: string) => memoryApi.skipQuestion(questionId),
+    onSuccess: () => {
+      refetchQuestions();
+    },
+  });
+
+  const generateQuestionsMutation = useMutation({
+    mutationFn: () => memoryApi.generateQuestions(photoId!),
+    onSuccess: () => {
+      toast.success('Domande generate');
+      refetchQuestions();
+    },
+    onError: () => toast.error('Errore nella generazione domande'),
   });
 
   const formatElapsedTime = (seconds: number) => {
@@ -393,6 +430,22 @@ export default function PhotoDetailPage() {
                   {photoFaces.length > 0 && (
                     <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
                       {photoFaces.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab('questions')}
+                  className={`flex-1 flex items-center justify-center space-x-1.5 px-4 py-3 text-sm font-medium transition-colors ${
+                    activeTab === 'questions'
+                      ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  <span>Domande</span>
+                  {questionsData && questionsData.questions.filter(q => q.status === 'pending').length > 0 && (
+                    <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                      {questionsData.questions.filter(q => q.status === 'pending').length}
                     </span>
                   )}
                 </button>
@@ -710,6 +763,111 @@ export default function PhotoDetailPage() {
                            photo.face_detection_status === 'pending' ? 'In attesa di analisi' :
                            photo.face_detection_status === 'failed' ? 'Rilevamento fallito' :
                            'Premi il pulsante "+" per aggiungere manualmente'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'questions' && (
+                  <div>
+                    {/* Header domande */}
+                    <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                      <span className="text-sm font-medium text-gray-700">
+                        Domande memoria
+                      </span>
+                      <button
+                        onClick={() => generateQuestionsMutation.mutate()}
+                        disabled={generateQuestionsMutation.isPending || !photo.analyzed_at}
+                        className="flex items-center space-x-1 px-2.5 py-1.5 text-xs bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                        title={!photo.analyzed_at ? 'Foto non ancora analizzata' : 'Genera domande'}
+                      >
+                        {generateQuestionsMutation.isPending ? (
+                          <Loader className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5" />
+                        )}
+                        <span>Genera</span>
+                      </button>
+                    </div>
+
+                    {/* Questions list */}
+                    {questionsData && questionsData.questions.length > 0 ? (
+                      <div className="divide-y divide-gray-50">
+                        {questionsData.questions.map((q) => (
+                          <div key={q.id} className="p-4">
+                            <div className="flex items-start space-x-2 mb-2">
+                              <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${
+                                q.status === 'answered' ? 'bg-green-100 text-green-700' :
+                                q.status === 'skipped' ? 'bg-gray-100 text-gray-500' :
+                                'bg-amber-100 text-amber-700'
+                              }`}>
+                                {q.question_type}
+                              </span>
+                              <p className="text-sm text-gray-900">{q.question}</p>
+                            </div>
+
+                            {q.status === 'answered' && q.answer && (
+                              <div className="ml-7 flex items-start space-x-2">
+                                <CheckCircle className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" />
+                                <p className="text-sm text-gray-600">{q.answer}</p>
+                              </div>
+                            )}
+
+                            {q.status === 'skipped' && (
+                              <div className="ml-7 text-xs text-gray-400 italic">Saltata</div>
+                            )}
+
+                            {q.status === 'pending' && (
+                              <div className="ml-7 mt-2">
+                                <div className="flex items-center space-x-2">
+                                  <input
+                                    type="text"
+                                    value={questionAnswers[q.id] || ''}
+                                    onChange={(e) => setQuestionAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                                    placeholder="La tua risposta..."
+                                    className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-transparent"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && questionAnswers[q.id]?.trim()) {
+                                        answerQuestionMutation.mutate({ questionId: q.id, answer: questionAnswers[q.id].trim() });
+                                        setQuestionAnswers(prev => { const n = { ...prev }; delete n[q.id]; return n; });
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      if (questionAnswers[q.id]?.trim()) {
+                                        answerQuestionMutation.mutate({ questionId: q.id, answer: questionAnswers[q.id].trim() });
+                                        setQuestionAnswers(prev => { const n = { ...prev }; delete n[q.id]; return n; });
+                                      }
+                                    }}
+                                    disabled={!questionAnswers[q.id]?.trim() || answerQuestionMutation.isPending}
+                                    className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg disabled:opacity-30 transition-colors"
+                                    title="Rispondi"
+                                  >
+                                    <Send className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => skipQuestionMutation.mutate(q.id)}
+                                    disabled={skipQuestionMutation.isPending}
+                                    className="p-1.5 text-gray-400 hover:bg-gray-50 rounded-lg disabled:opacity-30 transition-colors"
+                                    title="Salta"
+                                  >
+                                    <SkipForward className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center text-gray-400">
+                        <HelpCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">
+                          {!photo.analyzed_at
+                            ? 'Foto non ancora analizzata'
+                            : 'Nessuna domanda. Premi "Genera" per crearne.'}
                         </p>
                       </div>
                     )}

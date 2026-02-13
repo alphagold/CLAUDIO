@@ -25,6 +25,8 @@ import type {
   MemoryReindexResult,
   MemoryDirective,
   MemoryDirectivesResponse,
+  MemoryQuestion,
+  MemoryQuestionsResponse,
 } from '../types';
 
 // API base URL - change this to your backend URL
@@ -73,6 +75,11 @@ export const authApi = {
 
   me: async (): Promise<User> => {
     const response = await apiClient.get<User>('/api/auth/me');
+    return response.data;
+  },
+
+  updateMe: async (data: { self_person_id?: string | null; memory_questions_enabled?: boolean }): Promise<any> => {
+    const response = await apiClient.patch('/api/auth/me', data);
     return response.data;
   },
 };
@@ -386,6 +393,36 @@ export const memoryApi = {
 
   deleteDirective: async (directiveId: string): Promise<void> => {
     await apiClient.delete(`/api/memory/directives/${directiveId}`);
+  },
+
+  // Memory Questions
+  getQuestions: async (photoId?: string, status?: string): Promise<MemoryQuestionsResponse> => {
+    const params: Record<string, string> = {};
+    if (photoId) params.photo_id = photoId;
+    if (status) params.status = status;
+    const response = await apiClient.get<MemoryQuestionsResponse>('/api/memory/questions', { params });
+    return response.data;
+  },
+
+  getPendingCount: async (): Promise<{ pending_count: number }> => {
+    const response = await apiClient.get('/api/memory/questions/count');
+    return response.data;
+  },
+
+  answerQuestion: async (questionId: string, answer: string): Promise<MemoryQuestion> => {
+    const response = await apiClient.post<MemoryQuestion>(`/api/memory/questions/${questionId}/answer`, { answer });
+    return response.data;
+  },
+
+  skipQuestion: async (questionId: string): Promise<void> => {
+    await apiClient.post(`/api/memory/questions/${questionId}/skip`);
+  },
+
+  generateQuestions: async (photoId: string): Promise<MemoryQuestionsResponse> => {
+    const response = await apiClient.post<MemoryQuestionsResponse>(`/api/memory/questions/generate/${photoId}`, null, {
+      timeout: 120000,
+    });
+    return response.data;
   },
 };
 

@@ -16,7 +16,7 @@ from sqlalchemy import text, func
 import httpx
 
 from models import (
-    MemoryIndex, MemoryConversation, MemoryDirective,
+    MemoryIndex, MemoryConversation, MemoryDirective, MemoryQuestion,
     Photo, PhotoAnalysis, Person, Face, User
 )
 
@@ -42,7 +42,7 @@ class MemoryService:
         self.db.query(MemoryIndex).filter(MemoryIndex.user_id == user_id).delete()
         self.db.flush()
 
-        counts = {"faces": 0, "places": 0, "objects": 0, "texts": 0, "descriptions": 0}
+        counts = {"faces": 0, "places": 0, "objects": 0, "texts": 0, "descriptions": 0, "user_answers": 0}
 
         # 1. Indicizza persone (volti)
         persons = self.db.query(Person).filter(Person.user_id == user_id).all()
@@ -113,6 +113,22 @@ class MemoryService:
                 content = f"Testo in foto: \"{extracted_text.strip()[:500]}\""
                 self._add_index_entry(user_id, "text", photo_id, content)
                 counts["texts"] += 1
+
+        # 3. Indicizza risposte utente (memory_questions answered)
+        answered_questions = self.db.query(MemoryQuestion).filter(
+            MemoryQuestion.user_id == user_id,
+            MemoryQuestion.status == "answered",
+            MemoryQuestion.answer.isnot(None),
+        ).all()
+        for q in answered_questions:
+            photo = self.db.query(Photo).filter(Photo.id == q.photo_id).first()
+            date_str = photo.taken_at.strftime("%d/%m/%Y") if photo and photo.taken_at else "data sconosciuta"
+            location = photo.location_name if photo else ""
+            loc_str = f" a {location}" if location else ""
+            content = f"Nota utente - {q.question}: {q.answer} (foto del {date_str}{loc_str})"
+            self._add_index_entry(user_id, "user_answer", q.photo_id, content)
+            q.memory_indexed = True
+            counts["user_answers"] += 1
 
         self.db.commit()
         return counts
@@ -358,5 +374,88 @@ Se i dati forniti non contengono informazioni sufficienti, dillo chiaramente."""
             return False
 
         self.db.delete(directive)
+        self.db.commit()
+        return True
+
+    # ========================================================================
+    # MEMORY QUESTIONS
+    # ========================================================================
+
+    def get_questions(self, user_id: UUID, photo_id: UUID = None, status: str = None) -> List[Dict]:
+        """Recupera domande memoria, opzionalmente filtrate per foto e/o status."""
+        query = self.db.query(MemoryQuestion).filter(
+            MemoryQuestion.user_id == user_id,
+        )
+        if photo_id:
+            query = query.filter(MemoryQuestion.photo_id == photo_id)
+        if status:
+            query = query.filter(MemoryQuestion.status == status)
+
+        questions = query.order_by(MemoryQuestion.created_at.asc()).all()
+        return [
+            {
+                "id": str(q.id),
+                "photo_id": str(q.photo_id),
+                "question": q.question,
+                "answer": q.answer,
+                "question_type": q.question_type,
+                "status": q.status,
+                "memory_indexed": q.memory_indexed,
+                "created_at": q.created_at.isoformat() if q.created_at else None,
+                "answered_at": q.answered_at.isoformat() if q.answered_at else None,
+            }
+            for q in questions
+        ]
+
+    def get_pending_count(self, user_id: UUID) -> int:
+        """Conteggio domande pending per l'utente."""
+        return self.db.query(func.count(MemoryQuestion.id)).filter(
+            MemoryQuestion.user_id == user_id,
+            MemoryQuestion.status == "pending",
+        ).scalar() or 0
+
+    def answer_question(self, question_id: UUID, user_id: UUID, answer: str) -> Optional[Dict]:
+        """Salva risposta a una domanda e indicizza in memoria."""
+        question = self.db.query(MemoryQuestion).filter(
+            MemoryQuestion.id == question_id,
+            MemoryQuestion.user_id == user_id,
+        ).first()
+        if not question:
+            return None
+
+        question.answer = answer
+        question.status = "answered"
+        question.answered_at = datetime.now(timezone.utc)
+
+        # Indicizza la risposta in memory_index
+        photo = self.db.query(Photo).filter(Photo.id == question.photo_id).first()
+        date_str = photo.taken_at.strftime("%d/%m/%Y") if photo and photo.taken_at else "data sconosciuta"
+        location = photo.location_name if photo else ""
+        loc_str = f" a {location}" if location else ""
+
+        content = f"Nota utente - {question.question}: {answer} (foto del {date_str}{loc_str})"
+        self._add_index_entry(user_id, "user_answer", question.photo_id, content)
+
+        question.memory_indexed = True
+        self.db.commit()
+
+        return {
+            "id": str(question.id),
+            "question": question.question,
+            "answer": question.answer,
+            "status": question.status,
+            "memory_indexed": question.memory_indexed,
+        }
+
+    def skip_question(self, question_id: UUID, user_id: UUID) -> bool:
+        """Salta una domanda."""
+        question = self.db.query(MemoryQuestion).filter(
+            MemoryQuestion.id == question_id,
+            MemoryQuestion.user_id == user_id,
+        ).first()
+        if not question:
+            return False
+
+        question.status = "skipped"
         self.db.commit()
         return True

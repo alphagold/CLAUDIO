@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS users (
     remote_ollama_model VARCHAR(50) DEFAULT 'moondream',
     text_model VARCHAR(100) DEFAULT 'llama3.2:latest',
     text_use_remote BOOLEAN DEFAULT FALSE NOT NULL,
+    memory_questions_enabled BOOLEAN DEFAULT FALSE NOT NULL,
+    self_person_id UUID,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -132,6 +134,7 @@ CREATE TABLE IF NOT EXISTS persons (
     user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
     name VARCHAR(255),
     notes TEXT,
+    physical_description JSONB,
     representative_face_id UUID,
     photo_count INTEGER DEFAULT 0,
     first_seen_at TIMESTAMPTZ,
@@ -164,6 +167,10 @@ CREATE TABLE IF NOT EXISTS faces (
 ALTER TABLE persons ADD CONSTRAINT fk_persons_representative_face
     FOREIGN KEY (representative_face_id) REFERENCES faces(id) ON DELETE SET NULL
     DEFERRABLE INITIALLY DEFERRED;
+
+-- FK self_person_id su users (aggiunto dopo persons)
+ALTER TABLE users ADD CONSTRAINT fk_users_self_person
+    FOREIGN KEY (self_person_id) REFERENCES persons(id) ON DELETE SET NULL;
 
 -- Face Labels
 CREATE TABLE IF NOT EXISTS face_labels (
@@ -211,6 +218,20 @@ CREATE TABLE IF NOT EXISTS memory_directives (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Memory Questions (domande post-analisi per arricchire la memoria)
+CREATE TABLE IF NOT EXISTS memory_questions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+    photo_id UUID REFERENCES photos(id) ON DELETE CASCADE NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT,
+    question_type VARCHAR(50) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' NOT NULL,
+    memory_indexed BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    answered_at TIMESTAMPTZ
+);
+
 -- Prompt Templates
 CREATE TABLE IF NOT EXISTS prompt_templates (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -252,43 +273,54 @@ CREATE INDEX IF NOT EXISTS idx_memory_conversations_user_id ON memory_conversati
 CREATE INDEX IF NOT EXISTS idx_memory_directives_user_id ON memory_directives(user_id);
 CREATE INDEX IF NOT EXISTS idx_memory_directives_active ON memory_directives(user_id) WHERE is_active = TRUE;
 
+-- Memory questions indexes
+CREATE INDEX IF NOT EXISTS idx_memory_questions_user_id ON memory_questions(user_id);
+CREATE INDEX IF NOT EXISTS idx_memory_questions_photo_id ON memory_questions(photo_id);
+CREATE INDEX IF NOT EXISTS idx_memory_questions_pending ON memory_questions(user_id, status) WHERE status = 'pending';
+
 -- Default prompt templates
 INSERT INTO prompt_templates (name, description, prompt_text, is_default, is_active)
 VALUES
 (
     'completo',
-    'Analisi completa: persone, oggetti, ambiente, colori, testo (default)',
-    'Descrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint}
+    'Analisi completa: oggetti, ambiente, colori, testo (default senza volti)',
+    'Analizza questa immagine estraendo il massimo di informazioni possibili.{location_hint}{faces_hint}
 
-Persone: Descrivi ogni persona nel dettaglio. Cosa indossano? Quali sono le loro espressioni, la postura, l''aspetto fisico (capelli, occhi, etc.)? Cosa stanno facendo esattamente?
+Descrivi la scena generale: cosa sta succedendo, dove ci troviamo, qual è il contesto.
 
-Oggetti principali: Elenca e descrivi gli oggetti chiave visibili nell''immagine.
+Oggetti: Elenca e descrivi ogni oggetto visibile — colore, materiale, dimensione, posizione. Includi anche dettagli piccoli o sullo sfondo.
 
-Ambiente: Specifica se la scena è in interni o esterni e descrivi lo sfondo.
+Ambiente: Interno o esterno? Tipo di luogo. Descrivi pavimento, pareti, soffitto o terreno, vegetazione, cielo se visibili.
 
-Colori e atmosfera: Definisci la tavolozza dei colori dominante e l''atmosfera generale dell''immagine (allegra, malinconica, formale, etc.).
+Se la posizione geografica è disponibile, verifica se si tratta di un luogo famoso o un punto di interesse riconoscibile e descrivilo.
 
-Testo: Se è presente testo leggibile (come scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.
+Luce e colori: Tipo di illuminazione, colori dominanti e contrasti.
 
-Fondamentale: Descrivi solo ciò che è chiaramente visibile, senza fare ipotesi o supposizioni. Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.',
+Atmosfera: Che sensazione trasmette la scena?
+
+Testo: Se è presente testo leggibile, trascrivilo ESATTAMENTE tra virgolette.
+
+Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano.',
     TRUE,
     TRUE
 ),
 (
     'focus_persone',
-    'Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni',
+    'Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni (auto con volti)',
     'Analizza questa foto concentrandoti sulle persone presenti.{location_hint}{faces_hint}
 
-Per ogni persona visibile descrivi in dettaglio:
+Per {faces_names} descrivi in dettaglio:
 - Aspetto fisico: sesso, età approssimativa, corporatura, colore e stile dei capelli, colore degli occhi se visibile
 - Abbigliamento: cosa indossano, colori, stile (casual, elegante, sportivo, etc.)
 - Espressione del viso: emozioni, direzione dello sguardo
 - Postura e azione: cosa stanno facendo, come sono posizionati
 - Relazioni: se interagiscono tra loro, distanza reciproca, linguaggio corporeo
 
-Se non ci sono persone, descrivi brevemente la scena.
+Se la posizione geografica è disponibile, verifica se si tratta di un luogo famoso o locale pubblico e descrivilo.
 
-Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in italiano.',
+Basandoti sul contesto visivo, descrivi cosa {faces_names} stanno facendo e in quale occasione si trovano.
+
+Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano.',
     FALSE,
     TRUE
 ),
@@ -297,17 +329,21 @@ Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in itali
     'Focus su ambiente e oggetti: luogo, arredi, dettagli, atmosfera',
     'Analizza questa foto concentrandoti sull''ambiente e sugli oggetti.{location_hint}{faces_hint}
 
-Ambiente: È un luogo interno o esterno? Descrivi il tipo di luogo (casa, ufficio, ristorante, parco, strada, spiaggia, etc.) con il maggior dettaglio possibile.
+Ambiente: Interno o esterno? Tipo di luogo, architettura, materiali, stile.
 
-Oggetti: Elenca e descrivi tutti gli oggetti visibili, dal più importante al meno rilevante. Per ciascuno indica colore, materiale, dimensione, posizione nella scena.
+Se la posizione geografica è disponibile, verifica se si tratta di un luogo famoso o punto di interesse e descrivilo.
 
-Luce e colori: Descrivi il tipo di illuminazione (naturale, artificiale, calda, fredda), i colori dominanti, i contrasti.
+Oggetti: Elenca TUTTI gli oggetti visibili — colore, materiale, dimensione, posizione, stato.
 
-Atmosfera: Che sensazione trasmette la scena? (accogliente, fredda, caotica, ordinata, lussuosa, spartana, etc.)
+Luce: Tipo di illuminazione, ora approssimativa se deducibile.
 
-Testo: Se è presente testo leggibile (scritte, etichette, insegne), trascrivilo ESATTAMENTE tra virgolette.
+Colori: Palette dominante, contrasti, armonia cromatica.
 
-Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in italiano.',
+Testo: Se presente testo leggibile, trascrivilo ESATTAMENTE tra virgolette.
+
+Atmosfera: Che sensazione trasmette la scena?
+
+Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano.',
     FALSE,
     TRUE
 )

@@ -140,6 +140,7 @@ export interface Person {
   id: string;
   name: string | null;
   notes: string | null;
+  physical_description: Record<string, any> | null;
   photo_count: number;
   first_seen_at: string | null;
   last_seen_at: string | null;
@@ -268,5 +269,23 @@ export interface MemoryDirective {
 
 export interface MemoryDirectivesResponse {
   directives: MemoryDirective[];
+  count: number;
+}
+
+// Memory Questions
+export interface MemoryQuestion {
+  id: string;
+  photo_id: string;
+  question: string;
+  answer: string | null;
+  question_type: string;
+  status: 'pending' | 'answered' | 'skipped';
+  memory_indexed: boolean;
+  created_at: string | null;
+  answered_at: string | null;
+}
+
+export interface MemoryQuestionsResponse {
+  questions: MemoryQuestion[];
   count: number;
 }

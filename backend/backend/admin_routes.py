@@ -1076,38 +1076,44 @@ async def reset_prompt_templates(
     default_templates = [
         {
             "name": "completo",
-            "description": "Analisi completa: persone, oggetti, ambiente, colori, testo (default)",
-            "prompt_text": """Descrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint}
+            "description": "Analisi completa: oggetti, ambiente, colori, testo (default senza volti)",
+            "prompt_text": """Analizza questa immagine estraendo il massimo di informazioni possibili.{location_hint}{faces_hint}
 
-Persone: Descrivi ogni persona nel dettaglio. Cosa indossano? Quali sono le loro espressioni, la postura, l'aspetto fisico (capelli, occhi, etc.)? Cosa stanno facendo esattamente?
+Descrivi la scena generale: cosa sta succedendo, dove ci troviamo, qual è il contesto.
 
-Oggetti principali: Elenca e descrivi gli oggetti chiave visibili nell'immagine.
+Oggetti: Elenca e descrivi ogni oggetto visibile — colore, materiale, dimensione, posizione. Includi anche dettagli piccoli o sullo sfondo.
 
-Ambiente: Specifica se la scena è in interni o esterni e descrivi lo sfondo.
+Ambiente: Interno o esterno? Tipo di luogo. Descrivi pavimento, pareti, soffitto o terreno, vegetazione, cielo se visibili.
 
-Colori e atmosfera: Definisci la tavolozza dei colori dominante e l'atmosfera generale dell'immagine (allegra, malinconica, formale, etc.).
+Se la posizione geografica è disponibile, verifica se si tratta di un luogo famoso o un punto di interesse riconoscibile e descrivilo.
 
-Testo: Se è presente testo leggibile (come scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.
+Luce e colori: Tipo di illuminazione, colori dominanti e contrasti.
 
-Fondamentale: Descrivi solo ciò che è chiaramente visibile, senza fare ipotesi o supposizioni. Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.""",
+Atmosfera: Che sensazione trasmette la scena?
+
+Testo: Se è presente testo leggibile, trascrivilo ESATTAMENTE tra virgolette.
+
+Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano.""",
             "is_default": True,
             "is_active": True
         },
         {
             "name": "focus_persone",
-            "description": "Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni",
+            "description": "Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni (auto con volti)",
             "prompt_text": """Analizza questa foto concentrandoti sulle persone presenti.{location_hint}{faces_hint}
 
-Per ogni persona visibile descrivi in dettaglio:
+Per {faces_names} descrivi in dettaglio:
 - Aspetto fisico: sesso, età approssimativa, corporatura, colore e stile dei capelli, colore degli occhi se visibile
 - Abbigliamento: cosa indossano, colori, stile (casual, elegante, sportivo, etc.)
 - Espressione del viso: emozioni, direzione dello sguardo
 - Postura e azione: cosa stanno facendo, come sono posizionati
 - Relazioni: se interagiscono tra loro, distanza reciproca, linguaggio corporeo
 
-Se non ci sono persone, descrivi brevemente la scena.
+Se la posizione geografica è disponibile, verifica se si tratta di un luogo famoso o locale pubblico e descrivilo.
 
-Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in italiano.""",
+Basandoti sul contesto visivo, descrivi cosa {faces_names} stanno facendo e in quale occasione si trovano.
+
+Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano.""",
             "is_default": False,
             "is_active": True
         },
@@ -1116,17 +1122,21 @@ Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in itali
             "description": "Focus su ambiente e oggetti: luogo, arredi, dettagli, atmosfera",
             "prompt_text": """Analizza questa foto concentrandoti sull'ambiente e sugli oggetti.{location_hint}{faces_hint}
 
-Ambiente: È un luogo interno o esterno? Descrivi il tipo di luogo (casa, ufficio, ristorante, parco, strada, spiaggia, etc.) con il maggior dettaglio possibile.
+Ambiente: Interno o esterno? Tipo di luogo, architettura, materiali, stile.
 
-Oggetti: Elenca e descrivi tutti gli oggetti visibili, dal più importante al meno rilevante. Per ciascuno indica colore, materiale, dimensione, posizione nella scena.
+Se la posizione geografica è disponibile, verifica se si tratta di un luogo famoso o punto di interesse e descrivilo.
 
-Luce e colori: Descrivi il tipo di illuminazione (naturale, artificiale, calda, fredda), i colori dominanti, i contrasti.
+Oggetti: Elenca TUTTI gli oggetti visibili — colore, materiale, dimensione, posizione, stato.
 
-Atmosfera: Che sensazione trasmette la scena? (accogliente, fredda, caotica, ordinata, lussuosa, spartana, etc.)
+Luce: Tipo di illuminazione, ora approssimativa se deducibile.
 
-Testo: Se è presente testo leggibile (scritte, etichette, insegne), trascrivilo ESATTAMENTE tra virgolette.
+Colori: Palette dominante, contrasti, armonia cromatica.
 
-Descrivi solo ciò che è chiaramente visibile. Rispondi ESCLUSIVAMENTE in italiano.""",
+Testo: Se presente testo leggibile, trascrivilo ESATTAMENTE tra virgolette.
+
+Atmosfera: Che sensazione trasmette la scena?
+
+Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano.""",
             "is_default": False,
             "is_active": True
         },
