@@ -215,9 +215,22 @@ class OllamaVisionClient:
 
                 if template:
                     print(f"[VISION] Using prompt template: {template.name}")
-                    prompt_text = template.prompt_text.replace("{location_hint}", location_hint)
+                    prompt_text = template.prompt_text
+
+                    # Sostituisci placeholder se presenti nel template
+                    prompt_text = prompt_text.replace("{location_hint}", location_hint)
                     prompt_text = prompt_text.replace("{model}", model or "default")
                     prompt_text = prompt_text.replace("{faces_hint}", faces_hint)
+
+                    # Se il template non conteneva i placeholder, aggiungi contesto alla fine
+                    if location_hint and location_hint not in prompt_text:
+                        prompt_text += location_hint
+                    if faces_hint and faces_hint not in prompt_text:
+                        prompt_text += faces_hint
+
+                    if faces_hint or location_hint:
+                        print(f"[VISION] Prompt context: location='{location_hint.strip()}', faces='{faces_hint.strip()}'")
+
                     return prompt_text
                 else:
                     print(f"[VISION] No default template found, using hardcoded prompt")
@@ -227,6 +240,7 @@ class OllamaVisionClient:
             print(f"[VISION] Failed to load prompt from database: {e}, using hardcoded fallback")
 
         # Fallback hardcoded - descrizione libera in italiano
+        print(f"[VISION] Using hardcoded fallback prompt, location='{location_hint.strip()}', faces='{faces_hint.strip()}'")
         return f"IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.\n\nDescrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint} Descrivi tutto ciò che vedi: oggetti principali, persone (quante e cosa fanno), colori, atmosfera, ambiente (interno o esterno). Se nell'immagine è presente testo leggibile (scritte, etichette, insegne), trascrivilo esattamente tra virgolette."
 
     def _validate_analysis_quality(self, analysis: Dict) -> tuple[bool, List[str]]:

@@ -257,7 +257,7 @@ VALUES
     'Descrizione libera dettagliata in italiano - il parsing lo fa il backend (default)',
     'IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.
 
-Descrivi questa immagine nel modo più dettagliato possibile.{location_hint} Descrivi solo ciò che è chiaramente visibile, senza ipotesi o supposizioni. Includi: oggetti principali, persone (quante sono e cosa fanno), colori, atmosfera, ambiente (interno o esterno). Se nell''immagine è presente testo leggibile (scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.',
+Descrivi questa immagine nel modo più dettagliato possibile.{location_hint}{faces_hint} Descrivi solo ciò che è chiaramente visibile, senza ipotesi o supposizioni. Includi: oggetti principali, persone (quante sono e cosa fanno), colori, atmosfera, ambiente (interno o esterno). Se nell''immagine è presente testo leggibile (scritte, etichette, insegne, documenti), trascrivilo ESATTAMENTE mettendolo tra virgolette.',
     TRUE,
     TRUE
 ),
@@ -266,7 +266,7 @@ Descrivi questa immagine nel modo più dettagliato possibile.{location_hint} Des
     'Prompt semplice e naturale per descrizioni fluide in italiano',
     'IMPORTANTE: Rispondi ESCLUSIVAMENTE in lingua italiana. Non usare inglese.
 
-Descrivi questa immagine in modo naturale e dettagliato.{location_hint}
+Descrivi questa immagine in modo naturale e dettagliato.{location_hint}{faces_hint}
 
 Includi nella tua descrizione:
 - Cosa vedi nell''immagine (scena generale, oggetti principali, persone se presenti e quante sono)
@@ -281,7 +281,7 @@ Scrivi in modo discorsivo e completo, sempre in italiano.',
 (
     'compact_json',
     'Prompt compatto per output JSON strutturato (italiano)',
-    'IMPORTANTE: Rispondi in italiano. Analizza questa immagine e fornisci una risposta JSON con: description (2-3 frasi in italiano), objects (array di 5-8 oggetti in italiano), category (indoor/outdoor/food/document/people/nature/urban/vehicle/other), tags (array di 3-5 parole chiave in italiano).{location_hint}',
+    'IMPORTANTE: Rispondi in italiano. Analizza questa immagine e fornisci una risposta JSON con: description (2-3 frasi in italiano), objects (array di 5-8 oggetti in italiano), category (indoor/outdoor/food/document/people/nature/urban/vehicle/other), tags (array di 3-5 parole chiave in italiano).{location_hint}{faces_hint}',
     FALSE,
     TRUE
 )

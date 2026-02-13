@@ -678,7 +678,9 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             from vision import OllamaVisionClient
             remote_url = user_config["remote_url"]
             actual_model = user_config["remote_model"]
-            print(f"[ANALYSIS] Using REMOTE server: {remote_url}, model={actual_model}")
+            print(f"[ANALYSIS] Using REMOTE server: {remote_url}, model={actual_model}"
+                  + (f", location={location_name}" if location_name else "")
+                  + (f", faces={faces_context}" if faces_context else ""))
             remote_client = OllamaVisionClient(host=remote_url)
             analysis_result = await remote_client.analyze_photo(
                 file_path,
@@ -687,8 +689,19 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 allow_fallback=False,
                 faces_context=faces_context
             )
+        elif model == "remote" and (not user_config or not user_config["remote_enabled"]):
+            print(f"[ANALYSIS] WARNING: model='remote' but remote not enabled! user_config={user_config}")
+            print(f"[ANALYSIS] Falling back to local default model")
+            analysis_result = await vision_client.analyze_photo(
+                file_path,
+                model=None,
+                location_name=location_name,
+                faces_context=faces_context
+            )
         else:
-            print(f"[ANALYSIS] Using LOCAL server, model={model}")
+            print(f"[ANALYSIS] Using LOCAL server, model={model}"
+                  + (f", location={location_name}" if location_name else "")
+                  + (f", faces={faces_context}" if faces_context else ""))
             analysis_result = await vision_client.analyze_photo(
                 file_path,
                 model=model,
@@ -1027,11 +1040,14 @@ async def upload_photo(
     # Refresh user from DB to get latest preferences
     db.refresh(current_user)
 
-    print(f"[UPLOAD] User {current_user.email} - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}")
+    print(f"[UPLOAD] User {current_user.email} - auto_analyze: {current_user.auto_analyze}, preferred_model: {current_user.preferred_model}, remote_enabled: {current_user.remote_ollama_enabled}")
 
     if current_user.auto_analyze:
         model = current_user.preferred_model or "moondream"
-        print(f"[UPLOAD] Auto-analysis enabled, using model: {model}")
+        if model == "remote":
+            print(f"[UPLOAD] Auto-analysis enabled, using REMOTE server (url={current_user.remote_ollama_url}, model={current_user.remote_ollama_model})")
+        else:
+            print(f"[UPLOAD] Auto-analysis enabled, using LOCAL model: {model}")
 
         # Face detection prima dell'analisi LLM (se disponibile e consenso dato)
         face_first = False
