@@ -51,8 +51,8 @@ _insightface_app = None
 
 # Soglie configurabili
 DET_THRESH = 0.5       # Soglia minima detection confidence
-MATCH_THRESH = 0.4     # Soglia cosine distance per match persona
-CLUSTER_THRESH = 0.4   # Soglia cosine distance per DBSCAN clustering
+MATCH_THRESH = 0.6     # Soglia cosine distance per match persona (InsightFace L2-normalized)
+CLUSTER_THRESH = 0.6   # Soglia cosine distance per DBSCAN clustering
 
 
 def get_insightface_app() -> Optional['FaceAnalysis']:

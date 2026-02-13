@@ -249,6 +249,11 @@ export const facesApi = {
     return response.data;
   },
 
+  // Face Deletion
+  deleteFace: async (faceId: string): Promise<void> => {
+    await apiClient.delete(`/api/faces/${faceId}`);
+  },
+
   // Person Management
   listPersons: async (): Promise<Person[]> => {
     const response = await apiClient.get<Person[]>('/api/faces/persons');

@@ -594,10 +594,50 @@ async def label_face(
         raise HTTPException(status_code=500, detail=f"Errore etichettatura: {str(e)}")
 
 
+@router.delete("/{face_id}")
+async def delete_face(
+    face_id: UUID,
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db)
+):
+    """
+    Soft delete di un volto singolo.
+    Imposta deleted_at = now() (GDPR compliant, reversibile).
+    """
+    from datetime import datetime, timezone
+
+    face = db.query(Face).join(Photo).filter(
+        Face.id == face_id,
+        Photo.user_id == current_user.id,
+        Face.deleted_at.is_(None)
+    ).first()
+
+    if not face:
+        raise HTTPException(status_code=404, detail="Face not found")
+
+    face.deleted_at = datetime.now(timezone.utc)
+
+    # Aggiorna photo_count della persona se associata
+    if face.person_id:
+        from sqlalchemy import func, distinct
+        person = db.query(Person).filter(Person.id == face.person_id).first()
+        if person:
+            pc = db.query(func.count(distinct(Face.photo_id))).filter(
+                Face.person_id == face.person_id,
+                Face.deleted_at.is_(None),
+                Face.id != face_id
+            ).scalar() or 0
+            person.photo_count = pc
+
+    db.commit()
+    logger.info(f"Soft-deleted face {face_id}")
+    return {"message": "Face deleted successfully"}
+
+
 @router.get("/similar/{face_id}", response_model=List[SimilarFaceResponse])
 async def get_similar_faces(
     face_id: UUID,
-    threshold: float = 0.4,
+    threshold: float = 0.6,
     limit: int = 10,
     current_user: User = Depends(get_current_user_wrapper),
     db: Session = Depends(get_db)
