@@ -968,12 +968,11 @@ def _call_text_llm_sync(prompt: str, user_config: dict, ollama_url_default: str 
             # Usa text_model se disponibile
             if user_config.get("text_model"):
                 model = user_config["text_model"]
-            # Usa server remoto se text_use_remote è abilitato
+            # Usa server remoto SOLO se text_use_remote è esplicitamente abilitato
             if user_config.get("text_use_remote") and user_config.get("remote_url"):
                 url = user_config["remote_url"]
-            elif user_config.get("remote_enabled") and user_config.get("remote_url"):
-                url = user_config["remote_url"]
 
+        print(f"[TEXT_LLM] url={url}, model={model}, text_use_remote={user_config.get('text_use_remote') if user_config else None}")
         resp = req.post(
             f"{url}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0.3, "num_predict": 500}},
