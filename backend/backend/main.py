@@ -369,6 +369,7 @@ async def face_detection_worker():
             # Run face detection in thread pool (CPU-intensive)
             db = SessionLocal()
             face_names = []
+            faces = []  # inizializza per evitare NameError se detect_faces lancia eccezione
             try:
                 service = FaceRecognitionService(db)
                 faces = await asyncio.to_thread(
@@ -385,10 +386,12 @@ async def face_detection_worker():
                                 face_names.append(face.person.name)
                         except Exception:
                             pass
-                print(f"Face detection completed for photo {photo_id}: {len(faces or [])} volti"
-                      + (f", riconosciuti: {face_names}" if face_names else ""))
+                print(f"[FACE_DETECT] photo={photo_id}: {len(faces or [])} volti rilevati, "
+                      f"{len(face_names)} auto-matched: {face_names}")
             except Exception as e:
-                print(f"Face detection error for photo {photo_id}: {e}")
+                import traceback
+                print(f"[FACE_DETECT] ERRORE photo={photo_id}: {e}")
+                traceback.print_exc()
             finally:
                 db.close()
 
@@ -401,8 +404,12 @@ async def face_detection_worker():
                     unique_names = list(dict.fromkeys(face_names))
                     unnamed = total_faces - len(unique_names)
                     cert_suffix = (
-                        " I nomi sono stati verificati tramite riconoscimento facciale: "
-                        "usali come fatti certi, NON usare espressioni dubitative come 'sembra essere' o 'potrebbe essere'."
+                        "\n\nIMPORTANTE - ISTRUZIONE OBBLIGATORIA: "
+                        "I nomi sopra indicati sono CERTI e VERIFICATI dal sistema di riconoscimento facciale. "
+                        "DEVI usare questi nomi nella descrizione. "
+                        "NON usare 'individuo', 'persona', 'soggetto'. "
+                        "NON menzionare privacy. "
+                        "NON usare espressioni dubitative come 'sembra essere' o 'potrebbe essere'."
                     )
                     if unnamed > 0:
                         faces_context = f"Nella foto sono presenti: {', '.join(unique_names)} e {unnamed} altra/e persona/e." + cert_suffix
@@ -421,6 +428,8 @@ async def face_detection_worker():
                 elif total_faces > 0:
                     faces_context = f"Nella foto sono state rilevate {total_faces} persone."
                     faces_names_str = f"le {total_faces} persone presenti"
+                print(f"[FACE_DETECT] ANALYSIS enqueue photo={photo_id}: "
+                      f"faces_context={faces_context!r}, faces_names={faces_names_str!r}")
                 enqueue_analysis(photo_id, file_path, then_analyze_model, faces_context=faces_context, faces_names=faces_names_str)
 
             face_detection_queue.task_done()
@@ -1714,8 +1723,12 @@ def _build_faces_context(db: Session, photo_id: uuid.UUID) -> dict:
 
         # faces_context: frase completa per {faces_hint}
         cert_suffix = (
-            " I nomi sono stati verificati tramite riconoscimento facciale: "
-            "usali come fatti certi, NON usare espressioni dubitative come 'sembra essere' o 'potrebbe essere'."
+            "\n\nIMPORTANTE - ISTRUZIONE OBBLIGATORIA: "
+            "I nomi sopra indicati sono CERTI e VERIFICATI dal sistema di riconoscimento facciale. "
+            "DEVI usare questi nomi nella descrizione. "
+            "NON usare 'individuo', 'persona', 'soggetto'. "
+            "NON menzionare privacy. "
+            "NON usare espressioni dubitative come 'sembra essere' o 'potrebbe essere'."
         )
         if names and unnamed_count > 0:
             result["faces_context"] = f"Nella foto sono presenti: {', '.join(names)} e {unnamed_count} altra/e persona/e." + cert_suffix

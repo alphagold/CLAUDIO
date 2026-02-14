@@ -310,7 +310,7 @@ Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAM
     'Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni (auto con volti)',
     'Analizza questa foto concentrandoti sulle persone presenti.{location_hint}{faces_hint}
 
-IMPORTANTE: I nomi delle persone sono stati verificati tramite riconoscimento facciale. Riferisciti a loro con certezza, senza espressioni dubitative.
+REGOLA FONDAMENTALE: Usa i nomi delle persone forniti. NON riferirti a loro come ''individuo'' o ''persona''. NON menzionare questioni di privacy. I nomi sono gia'' stati verificati dal sistema di riconoscimento facciale.
 Se è indicato che l''utente appare nella foto, scrivi la descrizione in prima persona dal suo punto di vista.
 
 Per {faces_names} descrivi in dettaglio:
