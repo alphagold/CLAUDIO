@@ -128,7 +128,7 @@ export default function SettingsPage() {
 
   // Mutation per self_person_id e memory_questions_enabled
   const updateMeMutation = useMutation({
-    mutationFn: (data: { self_person_id?: string | null; memory_questions_enabled?: boolean }) =>
+    mutationFn: (data: { self_person_id?: string | null; memory_questions_enabled?: boolean; auto_rewrite_enabled?: boolean }) =>
       authApi.updateMe(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user', 'profile'] });
