@@ -79,7 +79,7 @@ export const authApi = {
     return response.data;
   },
 
-  updateMe: async (data: { self_person_id?: string | null; memory_questions_enabled?: boolean }): Promise<any> => {
+  updateMe: async (data: { self_person_id?: string | null; memory_questions_enabled?: boolean; auto_rewrite_enabled?: boolean }): Promise<any> => {
     const response = await apiClient.patch('/api/auth/me', data);
     return response.data;
   },
