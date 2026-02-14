@@ -28,6 +28,7 @@ class User(Base):
     text_model = Column(String(100), default="llama3.2:latest")
     text_use_remote = Column(Boolean, default=False, nullable=False)
     memory_questions_enabled = Column(Boolean, default=False, nullable=False)
+    auto_rewrite_enabled = Column(Boolean, default=False, nullable=False)
     self_person_id = Column(UUID(as_uuid=True), ForeignKey("persons.id", ondelete="SET NULL", use_alter=True, name="fk_users_self_person"), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())

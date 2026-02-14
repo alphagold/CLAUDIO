@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
     text_model VARCHAR(100) DEFAULT 'llama3.2:latest',
     text_use_remote BOOLEAN DEFAULT FALSE NOT NULL,
     memory_questions_enabled BOOLEAN DEFAULT FALSE NOT NULL,
+    auto_rewrite_enabled BOOLEAN DEFAULT FALSE NOT NULL,
     self_person_id UUID,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -308,6 +309,9 @@ Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAM
     'focus_persone',
     'Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni (auto con volti)',
     'Analizza questa foto concentrandoti sulle persone presenti.{location_hint}{faces_hint}
+
+IMPORTANTE: I nomi delle persone sono stati verificati tramite riconoscimento facciale. Riferisciti a loro con certezza, senza espressioni dubitative.
+Se è indicato che l''utente appare nella foto, scrivi la descrizione in prima persona dal suo punto di vista.
 
 Per {faces_names} descrivi in dettaglio:
 - Aspetto fisico: sesso, età approssimativa, corporatura, colore e stile dei capelli, colore degli occhi se visibile

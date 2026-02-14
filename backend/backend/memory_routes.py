@@ -114,6 +114,36 @@ async def ask_question_post(
 
 
 # ============================================================================
+# ROUTES - CONVERSATIONS
+# ============================================================================
+
+@router.get("/conversations")
+async def list_conversations(
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db),
+):
+    """Recupera cronologia conversazioni."""
+    service = MemoryService(db)
+    conversations, total = service.get_conversations(
+        user_id=current_user.id, limit=limit, offset=offset,
+    )
+    return {"conversations": conversations, "total": total}
+
+
+@router.delete("/conversations")
+async def clear_conversations(
+    current_user: User = Depends(get_current_user_wrapper),
+    db: Session = Depends(get_db),
+):
+    """Cancella tutte le conversazioni dell'utente."""
+    service = MemoryService(db)
+    deleted = service.clear_conversations(user_id=current_user.id)
+    return {"message": f"{deleted} conversazioni eliminate", "deleted": deleted}
+
+
+# ============================================================================
 # ROUTES - FEEDBACK
 # ============================================================================
 

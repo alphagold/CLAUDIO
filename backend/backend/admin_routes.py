@@ -1102,6 +1102,9 @@ Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAM
             "description": "Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni (auto con volti)",
             "prompt_text": """Analizza questa foto concentrandoti sulle persone presenti.{location_hint}{faces_hint}
 
+IMPORTANTE: I nomi delle persone sono stati verificati tramite riconoscimento facciale. Riferisciti a loro con certezza, senza espressioni dubitative.
+Se è indicato che l'utente appare nella foto, scrivi la descrizione in prima persona dal suo punto di vista.
+
 Per {faces_names} descrivi in dettaglio:
 - Aspetto fisico: sesso, età approssimativa, corporatura, colore e stile dei capelli, colore degli occhi se visibile
 - Abbigliamento: cosa indossano, colori, stile (casual, elegante, sportivo, etc.)

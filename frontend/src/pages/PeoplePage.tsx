@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Trash2, Edit2, Check, X, BookOpen } from 'lucide-react';
 import Layout from '../components/Layout';
-import { facesApi, photosApi } from '../api/client';
+import { facesApi } from '../api/client';
 import type { Person } from '../types';
 import toast from 'react-hot-toast';
 
@@ -159,26 +159,14 @@ export const PeoplePage: React.FC = () => {
             className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
           >
             {/* Representative face photo */}
-            {person.representative_photo_id && person.representative_bbox ? (
-              <div
-                className="h-48 bg-gray-200 relative"
-                style={(() => {
-                  const bbox = person.representative_bbox;
-                  const containerW = 384; // approximate card width
-                  const containerH = 192;
-                  const scaleX = containerW / bbox.width;
-                  const scaleY = containerH / bbox.height;
-                  const scale = Math.max(scaleX, scaleY) * 0.7;
-                  const centerX = bbox.x + bbox.width / 2;
-                  const centerY = bbox.y + bbox.height / 2;
-                  return {
-                    backgroundImage: `url(${photosApi.getThumbnailUrl(person.representative_photo_id!, 512)})`,
-                    backgroundSize: `${scale * 100}%`,
-                    backgroundPosition: `${50 - (centerX / bbox.width) * 10}% ${50 - (centerY / bbox.height) * 10}%`,
-                  };
-                })()}
-              >
-                {/* gradient overlay for readability */}
+            {person.representative_face_id ? (
+              <div className="h-48 bg-gray-200 relative overflow-hidden">
+                <img
+                  src={facesApi.getFaceThumbnailUrl(person.representative_face_id, 384)}
+                  alt={person.name || '?'}
+                  className="h-48 w-full object-cover"
+                  loading="lazy"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
               </div>
             ) : (

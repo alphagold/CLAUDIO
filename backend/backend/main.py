@@ -247,6 +247,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "is_admin": current_user.is_admin,
         "self_person_id": str(current_user.self_person_id) if current_user.self_person_id else None,
         "memory_questions_enabled": getattr(current_user, 'memory_questions_enabled', False),
+        "auto_rewrite_enabled": getattr(current_user, 'auto_rewrite_enabled', False),
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None
     }
 
@@ -256,6 +257,7 @@ from pydantic import BaseModel as PydanticBaseModel
 class UpdateMeRequest(PydanticBaseModel):
     self_person_id: Optional[str] = None
     memory_questions_enabled: Optional[bool] = None
+    auto_rewrite_enabled: Optional[bool] = None
 
 
 @app.patch("/api/auth/me")
@@ -274,6 +276,9 @@ async def update_me(
     if request.memory_questions_enabled is not None:
         current_user.memory_questions_enabled = request.memory_questions_enabled
 
+    if request.auto_rewrite_enabled is not None:
+        current_user.auto_rewrite_enabled = request.auto_rewrite_enabled
+
     db.commit()
     db.refresh(current_user)
 
@@ -282,6 +287,7 @@ async def update_me(
         "email": current_user.email,
         "self_person_id": str(current_user.self_person_id) if current_user.self_person_id else None,
         "memory_questions_enabled": getattr(current_user, 'memory_questions_enabled', False),
+        "auto_rewrite_enabled": getattr(current_user, 'auto_rewrite_enabled', False),
     }
 
 
@@ -394,10 +400,14 @@ async def face_detection_worker():
                 if face_names:
                     unique_names = list(dict.fromkeys(face_names))
                     unnamed = total_faces - len(unique_names)
+                    cert_suffix = (
+                        " I nomi sono stati verificati tramite riconoscimento facciale: "
+                        "usali come fatti certi, NON usare espressioni dubitative come 'sembra essere' o 'potrebbe essere'."
+                    )
                     if unnamed > 0:
-                        faces_context = f"Nella foto sono presenti: {', '.join(unique_names)} e {unnamed} altra/e persona/e."
+                        faces_context = f"Nella foto sono presenti: {', '.join(unique_names)} e {unnamed} altra/e persona/e." + cert_suffix
                     else:
-                        faces_context = f"Nella foto sono presenti: {', '.join(unique_names)}."
+                        faces_context = f"Nella foto sono presenti: {', '.join(unique_names)}." + cert_suffix
                     # Costruisci faces_names per {faces_names} nel template
                     if len(unique_names) == 1 and unnamed == 0:
                         faces_names_str = unique_names[0]
@@ -845,13 +855,34 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             db.commit()
             print(f"Analysis completed for photo {photo_id}")
 
-            # === POST-ANALISI: aggiornamento physical_description Person ===
+            # Recupera info utente e volti per post-analisi
+            user = db.query(User).filter(User.id == photo.user_id).first()
+            faces_info_post = _build_faces_context(db, photo_id)
+            names_in_photo = faces_info_post.get("names_list", [])
+
+            # === POST-ANALISI 1: riscrittura testo (se auto_rewrite_enabled) ===
+            try:
+                if user and getattr(user, 'auto_rewrite_enabled', False):
+                    user_is_in_photo = False
+                    user_name = None
+                    if getattr(user, 'self_person_id', None) and names_in_photo:
+                        self_person = db.query(Person).filter(Person.id == user.self_person_id).first()
+                        if self_person and self_person.name and self_person.name in names_in_photo:
+                            user_is_in_photo = True
+                            user_name = self_person.name
+                    rewritten = _rewrite_description_with_context(
+                        db, photo_id, photo, analysis, faces_info_post, location_name,
+                        user_config, user_is_in_photo, user_name
+                    )
+                    if rewritten:
+                        analysis_result["description_full"] = analysis.description_full
+                        analysis_result["description_short"] = analysis.description_short
+            except Exception as rw_err:
+                print(f"[POST-ANALYSIS] Errore riscrittura testo: {rw_err}")
+
+            # === POST-ANALISI 2: aggiornamento physical_description Person ===
             try:
                 raw_response = analysis_result.get("raw_response", "")
-                # Recupera nomi delle persone nella foto
-                faces_info_post = _build_faces_context(db, photo_id)
-                names_in_photo = faces_info_post.get("names_list", [])
-
                 if names_in_photo and raw_response:
                     _update_persons_physical_description(
                         db, photo_id, photo, names_in_photo, raw_response,
@@ -860,9 +891,8 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             except Exception as pd_err:
                 print(f"[POST-ANALYSIS] Errore aggiornamento physical_description: {pd_err}")
 
-            # === POST-ANALISI: generazione domande memoria ===
+            # === POST-ANALISI 3: generazione domande memoria ===
             try:
-                user = db.query(User).filter(User.id == photo.user_id).first()
                 if user and getattr(user, 'memory_questions_enabled', False):
                     _generate_memory_questions_sync(
                         db, photo_id, photo, user, analysis_result,
@@ -938,13 +968,89 @@ def _call_text_llm_sync(prompt: str, user_config: dict, ollama_url_default: str 
         resp = req.post(
             f"{url}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0.3, "num_predict": 500}},
-            timeout=(10, 60)
+            timeout=(30, 180)
         )
         resp.raise_for_status()
         return resp.json().get("response", "").strip()
     except Exception as e:
         print(f"[TEXT_LLM] Errore: {e}")
         return None
+
+
+def _rewrite_description_with_context(
+    db, photo_id, photo, analysis, faces_info, location_name,
+    user_config, user_is_in_photo, user_name, user_answers=None
+):
+    """Riscrive description_full con modello testo aggiungendo contesto."""
+    raw_desc = analysis.description_full
+    if not raw_desc or len(raw_desc) < 50:
+        return None
+
+    context_parts = []
+
+    # Nomi persone (certi)
+    names_list = faces_info.get("names_list", [])
+    if names_list:
+        context_parts.append(
+            f"Le persone nella foto sono state IDENTIFICATE con certezza: {', '.join(names_list)}. "
+            "Usa i loro nomi come fatti certi, MAI espressioni dubitative."
+        )
+
+    # Prima persona
+    if user_is_in_photo and user_name:
+        other_names = [n for n in names_list if n != user_name]
+        if other_names:
+            context_parts.append(
+                f"L'utente si chiama {user_name}. Riscrivi in PRIMA PERSONA. "
+                f"'Sono con {', '.join(other_names)}...' NON '{user_name} e ...sono...'"
+            )
+        else:
+            context_parts.append(
+                f"L'utente si chiama {user_name}. Riscrivi in PRIMA PERSONA."
+            )
+
+    # Posizione
+    if location_name:
+        context_parts.append(f"Posizione: {location_name}.")
+
+    # Testo estratto
+    if analysis.extracted_text:
+        context_parts.append(f"Testo nella foto: \"{analysis.extracted_text}\"")
+
+    # Risposte utente alle domande
+    if user_answers:
+        for qa in user_answers:
+            context_parts.append(f"Info dall'utente - {qa['question']}: {qa['answer']}")
+
+    if not context_parts:
+        return None
+
+    prompt = f"""Riscrivi questa descrizione di una foto applicando le istruzioni.
+
+DESCRIZIONE ORIGINALE:
+---
+{raw_desc}
+---
+
+ISTRUZIONI:
+{chr(10).join(f'- {p}' for p in context_parts)}
+
+REGOLE:
+- Mantieni TUTTI i dettagli della descrizione originale
+- Correggi errori evidenti del modello vision
+- NON inventare dettagli
+- Rispondi SOLO con la descrizione riscritta, in italiano"""
+
+    rewritten = _call_text_llm_sync(prompt, user_config)
+    if rewritten and len(rewritten) > 50:
+        analysis.description_full = rewritten
+        first_sentence = rewritten.split('.')[0].strip()
+        if first_sentence and len(first_sentence) > 10:
+            analysis.description_short = first_sentence + "."
+        db.commit()
+        print(f"[REWRITE] Descrizione riscritta per foto {photo_id}")
+        return rewritten
+    return None
 
 
 def merge_physical_description(existing: dict, new_data: dict, photo_date: str, photo_id: str) -> dict:
@@ -1168,6 +1274,7 @@ async def get_user_profile(
         "text_model": current_user.text_model or "llama3.2:latest",
         "text_use_remote": getattr(current_user, 'text_use_remote', False),
         "memory_questions_enabled": getattr(current_user, 'memory_questions_enabled', False),
+        "auto_rewrite_enabled": getattr(current_user, 'auto_rewrite_enabled', False),
         "self_person_id": str(current_user.self_person_id) if current_user.self_person_id else None,
         "created_at": current_user.created_at.isoformat()
     }
@@ -1247,6 +1354,7 @@ async def update_user_preferences(
         "text_model": current_user.text_model or "llama3.2:latest",
         "text_use_remote": getattr(current_user, 'text_use_remote', False),
         "memory_questions_enabled": getattr(current_user, 'memory_questions_enabled', False),
+        "auto_rewrite_enabled": getattr(current_user, 'auto_rewrite_enabled', False),
         "self_person_id": str(current_user.self_person_id) if current_user.self_person_id else None,
     }
 
@@ -1605,10 +1713,14 @@ def _build_faces_context(db: Session, photo_id: uuid.UUID) -> dict:
         unnamed_count = len(all_faces) - len(names)
 
         # faces_context: frase completa per {faces_hint}
+        cert_suffix = (
+            " I nomi sono stati verificati tramite riconoscimento facciale: "
+            "usali come fatti certi, NON usare espressioni dubitative come 'sembra essere' o 'potrebbe essere'."
+        )
         if names and unnamed_count > 0:
-            result["faces_context"] = f"Nella foto sono presenti: {', '.join(names)} e {unnamed_count} altra/e persona/e."
+            result["faces_context"] = f"Nella foto sono presenti: {', '.join(names)} e {unnamed_count} altra/e persona/e." + cert_suffix
         elif names:
-            result["faces_context"] = f"Nella foto sono presenti: {', '.join(names)}."
+            result["faces_context"] = f"Nella foto sono presenti: {', '.join(names)}." + cert_suffix
         else:
             result["faces_context"] = f"Nella foto sono state rilevate {len(all_faces)} persone."
 
@@ -1714,6 +1826,137 @@ async def reanalyze_photo(
         "custom_prompt": bool(custom_prompt),
         "queue_position": analysis_queue.qsize()
     }
+
+
+@app.post("/api/photos/{photo_id}/rewrite")
+async def rewrite_photo_description(
+    photo_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Riscrive la descrizione della foto con contesto (nomi certi, prima persona, location)"""
+    photo = (
+        db.query(Photo)
+        .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
+        .first()
+    )
+    if not photo:
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+    analysis = db.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == photo_id).first()
+    if not analysis:
+        raise HTTPException(status_code=400, detail="Foto non ancora analizzata")
+
+    # Costruisci contesto
+    faces_info = _build_faces_context(db, photo_id)
+    location_name = photo.location_name
+
+    # Determina se utente appare nella foto
+    user_is_in_photo = False
+    user_name = None
+    if getattr(current_user, 'self_person_id', None) and faces_info.get("names_list"):
+        self_person = db.query(Person).filter(Person.id == current_user.self_person_id).first()
+        if self_person and self_person.name and self_person.name in faces_info["names_list"]:
+            user_is_in_photo = True
+            user_name = self_person.name
+
+    # Carica risposte domande memoria (se presenti)
+    user_answers = []
+    answered_questions = db.query(MemoryQuestion).filter(
+        MemoryQuestion.photo_id == photo_id,
+        MemoryQuestion.user_id == current_user.id,
+        MemoryQuestion.status == "answered",
+        MemoryQuestion.answer.isnot(None),
+    ).all()
+    for q in answered_questions:
+        user_answers.append({"question": q.question, "answer": q.answer})
+
+    user_config = {
+        "remote_enabled": current_user.remote_ollama_enabled,
+        "remote_url": current_user.remote_ollama_url,
+        "remote_model": current_user.remote_ollama_model,
+        "text_model": getattr(current_user, 'text_model', None) or "llama3.2:latest",
+        "text_use_remote": getattr(current_user, 'text_use_remote', False),
+    }
+
+    result = _rewrite_description_with_context(
+        db, photo_id, photo, analysis, faces_info, location_name,
+        user_config, user_is_in_photo, user_name, user_answers or None
+    )
+
+    if result:
+        return {
+            "message": "Descrizione riscritta",
+            "description_full": analysis.description_full,
+            "description_short": analysis.description_short,
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Nessun contesto disponibile per la riscrittura")
+
+
+# ============================================================================
+# FACE THUMBNAIL - crop esatto del volto
+# ============================================================================
+
+@app.get("/api/faces/{face_id}/thumbnail")
+async def get_face_thumbnail(
+    face_id: uuid.UUID,
+    size: int = 256,
+    padding: float = 0.3,
+    db: Session = Depends(get_db),
+):
+    """Ritorna crop del volto dalla foto originale."""
+    from fastapi.responses import StreamingResponse
+    import io
+
+    size = max(64, min(size, 512))
+    padding = max(0.0, min(padding, 1.0))
+
+    face = db.query(Face).filter(Face.id == face_id, Face.deleted_at.is_(None)).first()
+    if not face:
+        raise HTTPException(status_code=404, detail="Volto non trovato")
+
+    photo = db.query(Photo).filter(Photo.id == face.photo_id, Photo.deleted_at.is_(None)).first()
+    if not photo:
+        raise HTTPException(status_code=404, detail="Foto non trovata")
+
+    file_path = Path(photo.original_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File foto non trovato")
+
+    try:
+        img = Image.open(file_path)
+        img_w, img_h = img.size
+
+        # Bbox con padding
+        pad_x = int(face.bbox_width * padding)
+        pad_y = int(face.bbox_height * padding)
+        x1 = max(0, face.bbox_x - pad_x)
+        y1 = max(0, face.bbox_y - pad_y)
+        x2 = min(img_w, face.bbox_x + face.bbox_width + pad_x)
+        y2 = min(img_h, face.bbox_y + face.bbox_height + pad_y)
+
+        crop = img.crop((x1, y1, x2, y2))
+
+        # Rendi quadrato centrando
+        w, h = crop.size
+        side = max(w, h)
+        square = Image.new('RGB', (side, side), (200, 200, 200))
+        square.paste(crop, ((side - w) // 2, (side - h) // 2))
+        square = square.resize((size, size), Image.LANCZOS)
+
+        buf = io.BytesIO()
+        square.save(buf, format='JPEG', quality=85)
+        buf.seek(0)
+
+        return StreamingResponse(
+            buf,
+            media_type='image/jpeg',
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+    except Exception as e:
+        logger.error(f"Errore crop volto {face_id}: {e}")
+        raise HTTPException(status_code=500, detail="Errore nel crop del volto")
 
 
 @app.post("/api/photos/bulk-analyze")

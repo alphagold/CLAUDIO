@@ -289,3 +289,18 @@ export interface MemoryQuestionsResponse {
   questions: MemoryQuestion[];
   count: number;
 }
+
+// Memory Conversations
+export interface MemoryConversation {
+  id: string;
+  question: string;
+  answer: string;
+  context: { items_found?: number; directives_used?: number; model?: string } | null;
+  feedback: 'positive' | 'negative' | null;
+  created_at: string | null;
+}
+
+export interface MemoryConversationsResponse {
+  conversations: MemoryConversation[];
+  total: number;
+}

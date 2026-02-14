@@ -447,6 +447,37 @@ Se i dati forniti non contengono informazioni sufficienti, dillo chiaramente."""
             "memory_indexed": question.memory_indexed,
         }
 
+    # ========================================================================
+    # CONVERSAZIONI
+    # ========================================================================
+
+    def get_conversations(self, user_id: UUID, limit: int = 50, offset: int = 0):
+        """Recupera cronologia conversazioni."""
+        total = self.db.query(func.count(MemoryConversation.id)).filter(
+            MemoryConversation.user_id == user_id
+        ).scalar() or 0
+
+        conversations = self.db.query(MemoryConversation).filter(
+            MemoryConversation.user_id == user_id
+        ).order_by(MemoryConversation.created_at.asc()).offset(offset).limit(limit).all()
+
+        return [{
+            "id": str(c.id),
+            "question": c.question,
+            "answer": c.answer,
+            "context": c.context,
+            "feedback": c.feedback,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        } for c in conversations], total
+
+    def clear_conversations(self, user_id: UUID) -> int:
+        """Cancella tutte le conversazioni dell'utente."""
+        deleted = self.db.query(MemoryConversation).filter(
+            MemoryConversation.user_id == user_id
+        ).delete()
+        self.db.commit()
+        return deleted
+
     def skip_question(self, question_id: UUID, user_id: UUID) -> bool:
         """Salta una domanda."""
         question = self.db.query(MemoryQuestion).filter(

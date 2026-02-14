@@ -32,6 +32,7 @@ import {
   HelpCircle,
   Send,
   SkipForward,
+  Wand2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -141,6 +142,15 @@ export default function PhotoDetailPage() {
       refetchQuestions();
     },
     onError: () => toast.error('Errore nella generazione domande'),
+  });
+
+  const rewriteMutation = useMutation({
+    mutationFn: () => photosApi.rewritePhoto(photoId!),
+    onSuccess: () => {
+      toast.success('Descrizione riscritta con contesto');
+      queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.detail || 'Errore riscrittura'),
   });
 
   const formatElapsedTime = (seconds: number) => {
@@ -505,9 +515,24 @@ export default function PhotoDetailPage() {
                     {/* Descrizione AI */}
                     {photo.analysis?.description_full && (
                       <div className="p-4">
-                        <div className="flex items-center space-x-1.5 mb-2">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Descrizione AI</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Descrizione AI</span>
+                          </div>
+                          <button
+                            onClick={() => rewriteMutation.mutate()}
+                            disabled={rewriteMutation.isPending}
+                            className="flex items-center space-x-1 px-2 py-1 text-xs bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                            title="Riscrivi la descrizione con nomi certi, prima persona e contesto"
+                          >
+                            {rewriteMutation.isPending ? (
+                              <Loader className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Wand2 className="w-3 h-3" />
+                            )}
+                            <span>Riscrivi</span>
+                          </button>
                         </div>
                         <p className="text-sm text-gray-700 leading-relaxed">{photo.analysis.description_full}</p>
                       </div>

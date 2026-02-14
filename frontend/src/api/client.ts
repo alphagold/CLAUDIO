@@ -27,6 +27,7 @@ import type {
   MemoryDirectivesResponse,
   MemoryQuestion,
   MemoryQuestionsResponse,
+  MemoryConversationsResponse,
 } from '../types';
 
 // API base URL - change this to your backend URL
@@ -119,6 +120,11 @@ export const photosApi = {
       model,
       custom_prompt: customPrompt || null,
     });
+    return response.data;
+  },
+
+  rewritePhoto: async (photoId: string): Promise<{ message: string; description_full: string; description_short: string }> => {
+    const response = await apiClient.post(`/api/photos/${photoId}/rewrite`, null, { timeout: 180000 });
     return response.data;
   },
 
@@ -328,6 +334,10 @@ export const facesApi = {
     });
     return response.data;
   },
+
+  getFaceThumbnailUrl: (faceId: string, size: number = 256): string => {
+    return `${API_BASE_URL}/api/faces/${faceId}/thumbnail?size=${size}`;
+  },
 };
 
 // Diary API
@@ -349,11 +359,23 @@ export const diaryApi = {
 
 // Memory API
 export const memoryApi = {
-  ask: async (question: string, model?: string): Promise<MemoryAnswer> => {
+  ask: async (question: string, model?: string, signal?: AbortSignal): Promise<MemoryAnswer> => {
     const response = await apiClient.post<MemoryAnswer>('/api/memory/ask', {
       question,
       model,
-    }, { timeout: 60000 });
+    }, { timeout: 180000, signal });
+    return response.data;
+  },
+
+  getConversations: async (limit = 50, offset = 0): Promise<MemoryConversationsResponse> => {
+    const response = await apiClient.get<MemoryConversationsResponse>('/api/memory/conversations', {
+      params: { limit, offset },
+    });
+    return response.data;
+  },
+
+  clearConversations: async (): Promise<{ message: string; deleted: number }> => {
+    const response = await apiClient.delete('/api/memory/conversations');
     return response.data;
   },
 

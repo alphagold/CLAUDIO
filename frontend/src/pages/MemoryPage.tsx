@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, RefreshCw, ThumbsUp, ThumbsDown, Plus, Trash2, Loader, Bot } from 'lucide-react';
+import { MessageCircle, Send, RefreshCw, ThumbsUp, ThumbsDown, Plus, Trash2, Loader, Bot, StopCircle } from 'lucide-react';
 import Layout from '../components/Layout';
 import { memoryApi } from '../api/client';
 import type { MemoryAnswer, MemoryDirective } from '../types';
@@ -18,20 +18,47 @@ export default function MemoryPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [asking, setAsking] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [reindexing, setReindexing] = useState(false);
   const [directives, setDirectives] = useState<MemoryDirective[]>([]);
   const [loadingDirectives, setLoadingDirectives] = useState(true);
   const [newDirective, setNewDirective] = useState('');
   const [creatingDirective, setCreatingDirective] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetchDirectives();
+    fetchHistory();
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const fetchHistory = async () => {
+    try {
+      setLoadingHistory(true);
+      const data = await memoryApi.getConversations(100);
+      const historyMessages: ChatMessage[] = [];
+      for (const c of data.conversations) {
+        historyMessages.push({ role: 'user', content: c.question });
+        historyMessages.push({
+          role: 'assistant',
+          content: c.answer,
+          conversationId: c.id,
+          model: c.context?.model || undefined,
+          contextItems: c.context?.items_found,
+          feedback: c.feedback as 'positive' | 'negative' | null,
+        });
+      }
+      setMessages(historyMessages);
+    } catch {
+      // Cronologia non disponibile, inizia con chat vuota
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const fetchDirectives = async () => {
     try {
@@ -53,8 +80,11 @@ export default function MemoryPage() {
     setMessages(prev => [...prev, { role: 'user', content: question }]);
     setAsking(true);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const result: MemoryAnswer = await memoryApi.ask(question);
+      const result: MemoryAnswer = await memoryApi.ask(question, undefined, controller.signal);
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: result.answer,
@@ -63,13 +93,39 @@ export default function MemoryPage() {
         contextItems: result.context_items,
         feedback: null,
       }]);
-    } catch {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Errore nella comunicazione con il server. Riprova.',
-      }]);
+    } catch (error: any) {
+      if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'Risposta interrotta.',
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: 'Errore nella comunicazione con il server. Riprova.',
+        }]);
+      }
     } finally {
       setAsking(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleAbort = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!window.confirm('Cancellare tutta la cronologia della chat?')) return;
+    try {
+      await memoryApi.clearConversations();
+      setMessages([]);
+      toast.success('Cronologia cancellata');
+    } catch {
+      toast.error('Errore nella cancellazione');
     }
   };
 
@@ -146,14 +202,25 @@ export default function MemoryPage() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Memoria</h1>
           </div>
-          <button
-            onClick={handleReindex}
-            disabled={reindexing}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${reindexing ? 'animate-spin' : ''}`} />
-            {reindexing ? 'Reindicizzazione...' : 'Reindicizza'}
-          </button>
+          <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <button
+                onClick={handleClearHistory}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Cancella cronologia
+              </button>
+            )}
+            <button
+              onClick={handleReindex}
+              disabled={reindexing}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${reindexing ? 'animate-spin' : ''}`} />
+              {reindexing ? 'Reindicizzazione...' : 'Reindicizza'}
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -161,15 +228,20 @@ export default function MemoryPage() {
           <div className="lg:col-span-2 flex flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" style={{ height: 'calc(100vh - 180px)' }}>
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.length === 0 && (
+              {loadingHistory ? (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                  <Loader className="w-8 h-8 animate-spin mb-4" />
+                  <p className="text-sm">Caricamento cronologia...</p>
+                </div>
+              ) : messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-gray-400">
                   <Bot className="w-16 h-16 mb-4 opacity-50" />
                   <p className="text-lg font-medium">Chiedi qualcosa sulle tue foto</p>
                   <p className="text-sm mt-1">Es: "Dove sono andato in vacanza?" o "Quante foto ho con Marco?"</p>
                 </div>
-              )}
+              ) : null}
 
-              {messages.map((msg, i) => (
+              {!loadingHistory && messages.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                     msg.role === 'user'
@@ -210,8 +282,15 @@ export default function MemoryPage() {
 
               {asking && (
                 <div className="flex justify-start">
-                  <div className="bg-gray-100 rounded-2xl px-4 py-3">
+                  <div className="bg-gray-100 rounded-2xl px-4 py-3 flex items-center gap-3">
                     <Loader className="w-5 h-5 animate-spin text-gray-500" />
+                    <button
+                      onClick={handleAbort}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                    >
+                      <StopCircle className="w-3.5 h-3.5" />
+                      Interrompi
+                    </button>
                   </div>
                 </div>
               )}

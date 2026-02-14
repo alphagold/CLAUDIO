@@ -20,6 +20,7 @@ interface UserProfile {
   text_model: string;
   text_use_remote: boolean;
   memory_questions_enabled: boolean;
+  auto_rewrite_enabled: boolean;
   self_person_id: string | null;
   created_at: string;
 }
@@ -43,6 +44,7 @@ export default function SettingsPage() {
   const [textModel, setTextModel] = useState(profile?.text_model || 'llama3.2:latest');
   const [textUseRemote, setTextUseRemote] = useState(profile?.text_use_remote ?? false);
   const [memoryQuestionsEnabled, setMemoryQuestionsEnabled] = useState(profile?.memory_questions_enabled ?? false);
+  const [autoRewriteEnabled, setAutoRewriteEnabled] = useState(profile?.auto_rewrite_enabled ?? false);
   const [selfPersonId, setSelfPersonId] = useState(profile?.self_person_id || '');
 
   // Modelli locali dal server Ollama
@@ -67,6 +69,7 @@ export default function SettingsPage() {
       setTextModel(profile.text_model || 'llama3.2:latest');
       setTextUseRemote(profile.text_use_remote ?? false);
       setMemoryQuestionsEnabled(profile.memory_questions_enabled ?? false);
+      setAutoRewriteEnabled(profile.auto_rewrite_enabled ?? false);
       setSelfPersonId(profile.self_person_id || '');
     }
   }, [profile]);
@@ -275,10 +278,11 @@ export default function SettingsPage() {
       text_model: textModel,
       text_use_remote: textUseRemote,
     });
-    // Salva anche self_person_id e memory_questions_enabled
+    // Salva anche self_person_id, memory_questions_enabled, auto_rewrite_enabled
     updateMeMutation.mutate({
       self_person_id: selfPersonId || null,
       memory_questions_enabled: memoryQuestionsEnabled,
+      auto_rewrite_enabled: autoRewriteEnabled,
     });
   };
 
@@ -629,6 +633,25 @@ export default function SettingsPage() {
             </label>
           </div>
 
+          {/* Toggle riscrittura automatica */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex-1">
+              <p className="text-gray-700 font-medium mb-1">Riscrittura automatica post-analisi</p>
+              <p className="text-sm text-gray-500">
+                Dopo l'analisi vision, il modello testo riscrive la descrizione con nomi certi e prospettiva corretta.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer ml-6">
+              <input
+                type="checkbox"
+                checked={autoRewriteEnabled}
+                onChange={(e) => setAutoRewriteEnabled(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+
           {/* Chi sei tu? */}
           <div>
             <div className="flex items-center space-x-2 mb-2">
@@ -638,18 +661,43 @@ export default function SettingsPage() {
             <p className="text-sm text-gray-500 mb-3">
               Collega il tuo account a una persona riconosciuta. Le domande saranno personalizzate in seconda persona quando appari nelle foto.
             </p>
-            <select
-              value={selfPersonId}
-              onChange={(e) => setSelfPersonId(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
-            >
-              <option value="">Nessuna (non collegato)</option>
+            <div className="space-y-1.5 max-h-60 overflow-y-auto border border-gray-300 rounded-lg p-2">
+              <button
+                type="button"
+                onClick={() => setSelfPersonId('')}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  selfPersonId === '' ? 'bg-emerald-50 border border-emerald-300 text-emerald-800' : 'hover:bg-gray-50 text-gray-600'
+                }`}
+              >
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                  <User className="w-4 h-4 text-gray-400" />
+                </div>
+                <span>Nessuna (non collegato)</span>
+              </button>
               {persons?.filter(p => p.name).map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.name} ({person.photo_count} foto)
-                </option>
+                <button
+                  key={person.id}
+                  type="button"
+                  onClick={() => setSelfPersonId(person.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    selfPersonId === person.id ? 'bg-emerald-50 border border-emerald-300 text-emerald-800' : 'hover:bg-gray-50 text-gray-700'
+                  }`}
+                >
+                  {person.representative_face_id ? (
+                    <img
+                      src={facesApi.getFaceThumbnailUrl(person.representative_face_id, 64)}
+                      alt={person.name || '?'}
+                      className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                      <User className="w-4 h-4 text-gray-400" />
+                    </div>
+                  )}
+                  <span>{person.name} ({person.photo_count} foto)</span>
+                </button>
               ))}
-            </select>
+            </div>
             {(!persons || persons.filter(p => p.name).length === 0) && (
               <p className="text-xs text-gray-400 mt-2">
                 Nessuna persona con nome trovata. Etichetta prima i volti nelle foto.
