@@ -1023,7 +1023,7 @@ def _rewrite_description_with_context(
             context_parts.append(f"Info dall'utente - {qa['question']}: {qa['answer']}")
 
     if not context_parts:
-        return None
+        context_parts.append("Riscrivi in italiano fluente e naturale, correggendo eventuali errori grammaticali o di traduzione.")
 
     prompt = f"""Riscrivi questa descrizione di una foto applicando le istruzioni.
 
