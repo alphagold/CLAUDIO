@@ -218,17 +218,18 @@ export default function SettingsPage() {
         setLoadingModels(true);
         try {
           const modelsData = await remoteOllamaApi.fetchModels(remoteUrl);
-          setAvailableModels(modelsData.models);
+          setAvailableModels(modelsData.all_models);
           setAllRemoteModels(modelsData.all_models);
 
           if (modelsData.all_models.length === 0) {
             toast.error('Nessun modello disponibile sul server remoto');
           } else {
-            toast.success(`Trovati ${modelsData.all_models.length} modelli (${modelsData.models.length} vision)`);
-            // Auto-select first vision model if current not in list
-            const currentVisionExists = modelsData.models.some((m) => m.name === remoteModel);
-            if (!currentVisionExists && modelsData.models.length > 0) {
-              setRemoteModel(modelsData.models[0].name);
+            const visionCount = modelsData.models.length;
+            toast.success(`Trovati ${modelsData.all_models.length} modelli` + (visionCount > 0 ? ` (${visionCount} vision)` : ''));
+            // Auto-select first model if current not in list
+            const currentVisionExists = modelsData.all_models.some((m) => m.name === remoteModel);
+            if (!currentVisionExists && modelsData.all_models.length > 0) {
+              setRemoteModel(modelsData.all_models[0].name);
             }
             // Auto-select first text model if current not in list
             const currentTextExists = modelsData.all_models.some((m) => m.name === textModel);
