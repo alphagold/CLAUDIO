@@ -11,11 +11,14 @@ from pathlib import Path
 from config import settings
 import time
 
-# Blacklist tag troppo generici
+# Blacklist tag troppo generici (IT + EN)
 GENERIC_TAGS_BLACKLIST = {
     "oggetto", "cosa", "elemento", "foto", "immagine", "scena",
     "ambiente", "spazio", "luogo", "area", "zona", "parte",
-    "vista", "dettaglio", "sezione", "componente"
+    "vista", "dettaglio", "sezione", "componente",
+    "object", "thing", "element", "photo", "image", "scene",
+    "environment", "space", "place", "area", "zone", "part",
+    "view", "detail", "section", "component"
 }
 
 
@@ -41,7 +44,8 @@ class OllamaVisionClient:
         allow_fallback: bool = True,
         faces_context: Optional[str] = None,
         faces_names: Optional[str] = None,
-        custom_prompt: Optional[str] = None
+        custom_prompt: Optional[str] = None,
+        taken_at: Optional[str] = None
     ) -> Dict:
         """
         Analyze photo with Vision AI
@@ -70,7 +74,7 @@ class OllamaVisionClient:
             prompt = custom_prompt
             print(f"[VISION] Using custom prompt ({len(prompt)} chars)")
         else:
-            prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model, faces_context=faces_context, faces_names=faces_names)
+            prompt = self._get_analysis_prompt(location_name=location_name, model=selected_model, faces_context=faces_context, faces_names=faces_names, taken_at=taken_at)
 
         # Adjust parameters based on model
         is_qwen = "qwen" in selected_model.lower()
@@ -158,7 +162,8 @@ class OllamaVisionClient:
                 if not analysis_text and "thinking" in result:
                     thinking_text = result.get("thinking", "")
                     has_structured_format = any(kw in thinking_text for kw in [
-                        "DESCRIZIONE COMPLETA:", "CATEGORIA SCENA:", "OGGETTI IDENTIFICATI:", "TAG CHIAVE:"
+                        "DESCRIZIONE COMPLETA:", "CATEGORIA SCENA:", "OGGETTI IDENTIFICATI:", "TAG CHIAVE:",
+                        "SCENE:", "OBJECTS:", "ENVIRONMENT:", "ATMOSPHERE:", "Objects:", "Environment:"
                     ])
                     if has_structured_format:
                         analysis_text = thinking_text
@@ -167,7 +172,7 @@ class OllamaVisionClient:
                     break
 
             if not analysis_text or len(analysis_text) < MIN_RESPONSE_LEN:
-                analysis_text = "Immagine analizzata (dettagli non disponibili da questo modello)"
+                analysis_text = "Image analyzed (details not available from this model)"
 
             processing_time = int((time.time() - start_time) * 1000)
             print(f"[VISION] Completed in {processing_time}ms, response={len(analysis_text)} chars")
@@ -203,17 +208,18 @@ class OllamaVisionClient:
                 raise
             return self._get_fallback_analysis(processing_time)
 
-    def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None, faces_context: Optional[str] = None, faces_names: Optional[str] = None) -> str:
+    def _get_analysis_prompt(self, location_name: Optional[str] = None, model: str = None, faces_context: Optional[str] = None, faces_names: Optional[str] = None, taken_at: Optional[str] = None) -> str:
         """Get prompt from database or fallback to hardcoded default.
-        faces_context: frase completa es. "Nella foto sono presenti: Andrea, Silvia."
-        faces_names: solo nomi es. "Andrea e Silvia" (per {faces_names} nel template)
+        faces_context: frase completa es. "In the photo are present: Andrea, Silvia."
+        faces_names: solo nomi es. "Andrea and Silvia" (per {faces_names} nel template)
         """
 
-        location_hint = f" La foto è stata scattata a {location_name}." if location_name else ""
+        location_hint = f" The photo was taken in {location_name}." if location_name else ""
+        datetime_hint = f" The photo was taken on {taken_at}." if taken_at else ""
         faces_hint = f" {faces_context}" if faces_context else ""
-        # Default faces_names per template: "ogni persona" se nessun nome disponibile
+        # Default faces_names per template: "each person" se nessun nome disponibile
         if not faces_names:
-            faces_names = "ogni persona"
+            faces_names = "each person"
 
         # Try to load prompt from database
         # Se ci sono persone → usa template "focus_persone", altrimenti → default
@@ -248,6 +254,7 @@ class OllamaVisionClient:
 
                     # Sostituisci placeholder se presenti nel template
                     prompt_text = prompt_text.replace("{location_hint}", location_hint)
+                    prompt_text = prompt_text.replace("{datetime_hint}", datetime_hint)
                     prompt_text = prompt_text.replace("{model}", model or "default")
                     prompt_text = prompt_text.replace("{faces_hint}", faces_hint)
                     prompt_text = prompt_text.replace("{faces_names}", faces_names)
@@ -255,11 +262,13 @@ class OllamaVisionClient:
                     # Se il template non conteneva i placeholder, aggiungi contesto alla fine
                     if location_hint and location_hint not in prompt_text:
                         prompt_text += location_hint
+                    if datetime_hint and datetime_hint not in prompt_text:
+                        prompt_text += datetime_hint
                     if faces_hint and faces_hint not in prompt_text:
                         prompt_text += faces_hint
 
-                    if faces_hint or location_hint:
-                        print(f"[VISION] Prompt context: location='{location_hint.strip()}', faces='{faces_hint.strip()}', names='{faces_names}'")
+                    if faces_hint or location_hint or datetime_hint:
+                        print(f"[VISION] Prompt context: location='{location_hint.strip()}', datetime='{datetime_hint.strip()}', faces='{faces_hint.strip()}', names='{faces_names}'")
 
                     return prompt_text
                 else:
@@ -270,8 +279,8 @@ class OllamaVisionClient:
             print(f"[VISION] Failed to load prompt from database: {e}, using hardcoded fallback")
 
         # Fallback hardcoded
-        print(f"[VISION] Using hardcoded fallback prompt, location='{location_hint.strip()}', faces='{faces_hint.strip()}'")
-        return f"Analizza questa immagine estraendo il massimo di informazioni possibili.{location_hint}{faces_hint}\n\nDescrivi la scena generale: cosa sta succedendo, dove ci troviamo, qual è il contesto.\n\nOggetti: Elenca e descrivi ogni oggetto visibile — colore, materiale, dimensione, posizione.\n\nAmbiente: Interno o esterno? Tipo di luogo. Descrivi pavimento, pareti, soffitto o terreno, vegetazione, cielo se visibili.\n\nLuce e colori: Tipo di illuminazione, colori dominanti e contrasti.\n\nAtmosfera: Che sensazione trasmette la scena?\n\nTesto: Se è presente testo leggibile, trascrivilo ESATTAMENTE tra virgolette.\n\nRiporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano."
+        print(f"[VISION] Using hardcoded fallback prompt, location='{location_hint.strip()}', datetime='{datetime_hint.strip()}', faces='{faces_hint.strip()}'")
+        return f"Analyze this image extracting as much information as possible.{location_hint}{datetime_hint}{faces_hint}\n\nDescribe the general scene: what is happening, where we are, what is the context.\n\nObjects: List and describe every visible object — color, material, size, position.\n\nEnvironment: Indoor or outdoor? Type of place. Describe floor, walls, ceiling or ground, vegetation, sky if visible.\n\nLight and colors: Type of lighting, dominant colors and contrasts.\n\nAtmosphere: What feeling does the scene convey?\n\nText: If readable text is present, transcribe it EXACTLY in quotes.\n\nReport only visible and certain facts. Do not invent details. Reply EXCLUSIVELY in English."
 
     def _validate_analysis_quality(self, analysis: Dict) -> tuple[bool, List[str]]:
         """Valida qualità analisi e restituisce warnings"""
@@ -476,7 +485,7 @@ class OllamaVisionClient:
                     extracted_texts.append(t)
 
         # Se il modello dice esplicitamente che non c'è testo visibile, svuota
-        no_text_keywords = ["nessun testo", "non è presente testo", "non ci sono scritte", "no text visible", "no visible text"]
+        no_text_keywords = ["nessun testo", "non è presente testo", "non ci sono scritte", "no text visible", "no visible text", "no readable text", "no text present", "no text is visible"]
         if any(kw in text_lower for kw in no_text_keywords):
             extracted_texts = []
 
@@ -584,14 +593,18 @@ class OllamaVisionClient:
                     break
 
         # Rilevamento persone/volti
-        # Supporta sia cifre ("2 persone") che parole italiane ("due persone")
+        # Supporta cifre ("2 persone"/"2 people") e parole italiane/inglesi
         italian_numbers = {
             'una': 1, 'un': 1, 'due': 2, 'tre': 3, 'quattro': 4,
             'cinque': 5, 'sei': 6, 'sette': 7, 'otto': 8, 'nove': 9, 'dieci': 10
         }
+        english_numbers = {
+            'a': 1, 'one': 1, 'two': 2, 'three': 3, 'four': 4,
+            'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
+        }
         detected_faces = 0
-        # Pattern con cifre: "2 persone", "3 volti"
-        digit_match = re.search(r'(\d+)\s*(?:persone|persona|volti|volto)', text_lower)
+        # Pattern con cifre: "2 persone", "3 volti", "2 people", "3 faces"
+        digit_match = re.search(r'(\d+)\s*(?:persone|persona|volti|volto|people|persons?|faces?|men|women|children)', text_lower)
         if digit_match:
             detected_faces = int(digit_match.group(1))
         else:
@@ -603,7 +616,16 @@ class OllamaVisionClient:
             )
             if word_match:
                 detected_faces = italian_numbers.get(word_match.group(1), 1)
-        if re.search(r'\b(?:nessuna persona|nessun volto|non ci sono persone|nessuna persona visibile)\b', text_lower):
+            else:
+                # Pattern con parole inglesi: "two people", "three men", "a woman"
+                en_word_match = re.search(
+                    r'\b(a|one|two|three|four|five|six|seven|eight|nine|ten)\s+'
+                    r'(?:people|persons?|faces?|men|man|women|woman|children|child|boys?|girls?)\b',
+                    text_lower
+                )
+                if en_word_match:
+                    detected_faces = english_numbers.get(en_word_match.group(1), 1)
+        if re.search(r'\b(?:nessuna persona|nessun volto|non ci sono persone|nessuna persona visibile|no people|no person|nobody)\b', text_lower):
             detected_faces = 0
 
         # Tag semantici
@@ -616,7 +638,10 @@ class OllamaVisionClient:
         semantic_keywords = [
             "moderno", "antico", "luminoso", "scuro", "grande", "piccolo",
             "industriale", "professionale", "naturale", "artificiale",
-            "tecnologia", "lavoro", "viaggio", "sport", "arte"
+            "tecnologia", "lavoro", "viaggio", "sport", "arte",
+            "modern", "ancient", "bright", "dark", "large", "small",
+            "industrial", "professional", "natural", "artificial",
+            "technology", "work", "travel", "sport", "art"
         ]
         for kw in semantic_keywords:
             if re.search(rf'\b{re.escape(kw)}\b', text_lower) and kw not in tags:

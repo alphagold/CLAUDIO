@@ -404,30 +404,30 @@ async def face_detection_worker():
                     unique_names = list(dict.fromkeys(face_names))
                     unnamed = total_faces - len(unique_names)
                     cert_suffix = (
-                        "\n\nIMPORTANTE - ISTRUZIONE OBBLIGATORIA: "
-                        "I nomi sopra indicati sono CERTI e VERIFICATI dal sistema di riconoscimento facciale. "
-                        "DEVI usare questi nomi nella descrizione. "
-                        "NON usare 'individuo', 'persona', 'soggetto'. "
-                        "NON menzionare privacy. "
-                        "NON usare espressioni dubitative come 'sembra essere' o 'potrebbe essere'."
+                        "\n\nIMPORTANT - MANDATORY INSTRUCTION: "
+                        "The names above are CERTAIN and VERIFIED by the facial recognition system. "
+                        "You MUST use these names in the description. "
+                        "Do NOT use 'individual', 'person', 'subject'. "
+                        "Do NOT mention privacy. "
+                        "Do NOT use doubtful expressions like 'seems to be' or 'could be'."
                     )
                     if unnamed > 0:
-                        faces_context = f"Nella foto sono presenti: {', '.join(unique_names)} e {unnamed} altra/e persona/e." + cert_suffix
+                        faces_context = f"In the photo are present: {', '.join(unique_names)} and {unnamed} other person(s)." + cert_suffix
                     else:
-                        faces_context = f"Nella foto sono presenti: {', '.join(unique_names)}." + cert_suffix
+                        faces_context = f"In the photo are present: {', '.join(unique_names)}." + cert_suffix
                     # Costruisci faces_names per {faces_names} nel template
                     if len(unique_names) == 1 and unnamed == 0:
                         faces_names_str = unique_names[0]
                     elif len(unique_names) == 2 and unnamed == 0:
-                        faces_names_str = f"{unique_names[0]} e {unique_names[1]}"
+                        faces_names_str = f"{unique_names[0]} and {unique_names[1]}"
                     elif unnamed > 0:
-                        other_part = "l'altra persona" if unnamed == 1 else f"le altre {unnamed} persone"
-                        faces_names_str = f"{', '.join(unique_names)} e {other_part}"
+                        other_part = "the other person" if unnamed == 1 else f"the other {unnamed} people"
+                        faces_names_str = f"{', '.join(unique_names)} and {other_part}"
                     else:
-                        faces_names_str = f"{', '.join(unique_names[:-1])} e {unique_names[-1]}"
+                        faces_names_str = f"{', '.join(unique_names[:-1])} and {unique_names[-1]}"
                 elif total_faces > 0:
-                    faces_context = f"Nella foto sono state rilevate {total_faces} persone."
-                    faces_names_str = f"le {total_faces} persone presenti"
+                    faces_context = f"{total_faces} people were detected in the photo."
+                    faces_names_str = f"the {total_faces} people present"
                 print(f"[FACE_DETECT] ANALYSIS enqueue photo={photo_id}: "
                       f"faces_context={faces_context!r}, faces_names={faces_names_str!r}")
                 enqueue_analysis(photo_id, file_path, then_analyze_model, faces_context=faces_context, faces_names=faces_names_str)
@@ -736,8 +736,9 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 print(f"Photo {photo_id} not found")
                 return
 
-            # Get location name for AI context
+            # Get location name and taken_at for AI context
             location_name = photo.location_name
+            taken_at_str = photo.taken_at.strftime("%Y-%m-%d %H:%M") if photo.taken_at else None
 
             # Get user preferences for remote server
             user = db.query(User).filter(User.id == photo.user_id).first()
@@ -774,7 +775,8 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 allow_fallback=False,
                 faces_context=faces_context,
                 faces_names=faces_names,
-                custom_prompt=custom_prompt
+                custom_prompt=custom_prompt,
+                taken_at=taken_at_str
             )
         elif model == "remote" and (not user_config or not user_config["remote_enabled"]):
             print(f"[ANALYSIS] WARNING: model='remote' but remote not enabled! user_config={user_config}")
@@ -785,7 +787,8 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 location_name=location_name,
                 faces_context=faces_context,
                 faces_names=faces_names,
-                custom_prompt=custom_prompt
+                custom_prompt=custom_prompt,
+                taken_at=taken_at_str
             )
         else:
             print(f"[ANALYSIS] Using LOCAL server, model={model}"
@@ -798,7 +801,8 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 location_name=location_name,
                 faces_context=faces_context,
                 faces_names=faces_names,
-                custom_prompt=custom_prompt
+                custom_prompt=custom_prompt,
+                taken_at=taken_at_str
             )
 
         # Create new DB session for background task
@@ -975,7 +979,7 @@ def _call_text_llm_sync(prompt: str, user_config: dict, ollama_url_default: str 
         print(f"[TEXT_LLM] url={url}, model={model}, text_use_remote={user_config.get('text_use_remote') if user_config else None}")
         resp = req.post(
             f"{url}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0.3, "num_predict": 500}},
+            json={"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0.3, "num_predict": 800}},
             timeout=(30, 180)
         )
         resp.raise_for_status()
@@ -1031,23 +1035,28 @@ def _rewrite_description_with_context(
             context_parts.append(f"Info dall'utente - {qa['question']}: {qa['answer']}")
 
     if not context_parts:
-        context_parts.append("Riscrivi in italiano fluente e naturale, correggendo eventuali errori grammaticali o di traduzione.")
+        context_parts.append("Translate to fluent, natural Italian.")
 
-    prompt = f"""Riscrivi questa descrizione di una foto applicando le istruzioni.
+    prompt = f"""You are processing an English photo description from a vision AI model.
 
-DESCRIZIONE ORIGINALE:
+STEP 1 - UNDERSTAND: Read the English description and apply the instructions below.
+STEP 2 - TRANSLATE: Produce the final text in fluent, natural Italian.
+
+ENGLISH DESCRIPTION:
 ---
 {raw_desc}
 ---
 
-ISTRUZIONI:
+INSTRUCTIONS:
 {chr(10).join(f'- {p}' for p in context_parts)}
 
-REGOLE:
-- Mantieni TUTTI i dettagli della descrizione originale
-- Correggi errori evidenti del modello vision
-- NON inventare dettagli
-- Rispondi SOLO con la descrizione riscritta, in italiano"""
+RULES:
+- Keep ALL details from the original description
+- Fix obvious vision model errors (wrong objects, contradictions)
+- Translate to fluent, natural Italian prose
+- Do NOT invent details not present in the original
+- Do NOT leave English words (except proper nouns and brand names)
+- Reply ONLY with the final Italian description, nothing else"""
 
     rewritten = _call_text_llm_sync(prompt, user_config)
     if rewritten and len(rewritten) > 50:
@@ -1104,13 +1113,13 @@ def _update_persons_physical_description(db: Session, photo_id, photo, names_lis
             end = min(len(raw_response), match.end() + 400)
             excerpt = raw_response[start:end]
 
-            # Chiama LLM per estrarre tratti fisici
-            extract_prompt = f"""Dalla seguente descrizione di {name}, estrai SOLO i tratti fisici in JSON:
+            # Chiama LLM per estrarre tratti fisici (input in inglese dal vision model)
+            extract_prompt = f"""From the following English description of {name}, extract ONLY physical traits as JSON:
 "{excerpt}"
 
-Rispondi SOLO con JSON valido:
+Reply ONLY with valid JSON:
 {{"sesso": "...", "eta_approssimativa": "...", "corporatura": "...", "capelli": "...", "occhi": "...", "tratti_distintivi": "..."}}
-Ometti campi non menzionati. Non aggiungere commenti."""
+Omit unmentioned fields. No comments."""
 
             llm_response = _call_text_llm_sync(extract_prompt, user_config)
             if not llm_response:
@@ -1178,7 +1187,7 @@ def _generate_memory_questions_sync(db: Session, photo_id, photo, user, analysis
 
     prompt = f"""Sei un assistente che arricchisce la memoria fotografica dell'utente.
 
-Analisi della foto:
+Analisi della foto (in inglese):
 ---
 {analysis_text[:1500]}
 ---
@@ -1722,36 +1731,36 @@ def _build_faces_context(db: Session, photo_id: uuid.UUID) -> dict:
 
         # faces_context: frase completa per {faces_hint}
         cert_suffix = (
-            "\n\nIMPORTANTE - ISTRUZIONE OBBLIGATORIA: "
-            "I nomi sopra indicati sono CERTI e VERIFICATI dal sistema di riconoscimento facciale. "
-            "DEVI usare questi nomi nella descrizione. "
-            "NON usare 'individuo', 'persona', 'soggetto'. "
-            "NON menzionare privacy. "
-            "NON usare espressioni dubitative come 'sembra essere' o 'potrebbe essere'."
+            "\n\nIMPORTANT - MANDATORY INSTRUCTION: "
+            "The names above are CERTAIN and VERIFIED by the facial recognition system. "
+            "You MUST use these names in the description. "
+            "Do NOT use 'individual', 'person', 'subject'. "
+            "Do NOT mention privacy. "
+            "Do NOT use doubtful expressions like 'seems to be' or 'could be'."
         )
         if names and unnamed_count > 0:
-            result["faces_context"] = f"Nella foto sono presenti: {', '.join(names)} e {unnamed_count} altra/e persona/e." + cert_suffix
+            result["faces_context"] = f"In the photo are present: {', '.join(names)} and {unnamed_count} other person(s)." + cert_suffix
         elif names:
-            result["faces_context"] = f"Nella foto sono presenti: {', '.join(names)}." + cert_suffix
+            result["faces_context"] = f"In the photo are present: {', '.join(names)}." + cert_suffix
         else:
-            result["faces_context"] = f"Nella foto sono state rilevate {len(all_faces)} persone."
+            result["faces_context"] = f"{len(all_faces)} people were detected in the photo."
 
         # faces_names: solo nomi per {faces_names} nel template
         if names and unnamed_count > 0:
             if len(names) == 1:
-                result["faces_names"] = f"{names[0]} e l'altra persona"
+                result["faces_names"] = f"{names[0]} and the other person"
             else:
-                other_label = "l'altra persona" if unnamed_count == 1 else f"le altre {unnamed_count} persone"
-                result["faces_names"] = f"{', '.join(names[:-1])}, {names[-1]} e {other_label}"
+                other_label = "the other person" if unnamed_count == 1 else f"the other {unnamed_count} people"
+                result["faces_names"] = f"{', '.join(names[:-1])}, {names[-1]} and {other_label}"
         elif names:
             if len(names) == 1:
                 result["faces_names"] = names[0]
             elif len(names) == 2:
-                result["faces_names"] = f"{names[0]} e {names[1]}"
+                result["faces_names"] = f"{names[0]} and {names[1]}"
             else:
-                result["faces_names"] = f"{', '.join(names[:-1])} e {names[-1]}"
+                result["faces_names"] = f"{', '.join(names[:-1])} and {names[-1]}"
         else:
-            result["faces_names"] = f"le {len(all_faces)} persone presenti"
+            result["faces_names"] = f"the {len(all_faces)} people present"
 
         return result
     except Exception as e:
@@ -1777,12 +1786,14 @@ async def get_prompt_preview(
 
     faces_info = _build_faces_context(db, photo_id)
     location_name = photo.location_name
+    taken_at_str = photo.taken_at.strftime("%Y-%m-%d %H:%M") if photo.taken_at else None
 
     prompt = vision_client._get_analysis_prompt(
         location_name=location_name,
         model=model,
         faces_context=faces_info["faces_context"],
-        faces_names=faces_info["faces_names"]
+        faces_names=faces_info["faces_names"],
+        taken_at=taken_at_str
     )
 
     return {
@@ -1790,6 +1801,7 @@ async def get_prompt_preview(
         "faces_context": faces_info["faces_context"],
         "faces_names": faces_info["faces_names"],
         "location_name": location_name,
+        "taken_at": taken_at_str,
         "model": model
     }
 
@@ -1840,13 +1852,35 @@ async def reanalyze_photo(
     }
 
 
+async def _rewrite_in_background(photo_id, faces_info, location_name,
+                                  user_config, user_is_in_photo, user_name, user_answers):
+    """Esegue rewrite in background senza bloccare la API"""
+    db = SessionLocal()
+    try:
+        photo = db.query(Photo).filter(Photo.id == photo_id).first()
+        analysis = db.query(PhotoAnalysis).filter(PhotoAnalysis.photo_id == photo_id).first()
+        if not photo or not analysis:
+            return
+        result = await asyncio.to_thread(
+            _rewrite_description_with_context,
+            db, photo_id, photo, analysis, faces_info, location_name,
+            user_config, user_is_in_photo, user_name, user_answers
+        )
+        if result:
+            print(f"[REWRITE] Background rewrite completato per foto {photo_id}")
+    except Exception as e:
+        print(f"[REWRITE] Errore background rewrite: {e}")
+    finally:
+        db.close()
+
+
 @app.post("/api/photos/{photo_id}/rewrite")
 async def rewrite_photo_description(
     photo_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Riscrive la descrizione della foto con contesto (nomi certi, prima persona, location)"""
+    """Riscrive la descrizione della foto con contesto (nomi certi, prima persona, location) in background"""
     photo = (
         db.query(Photo)
         .filter(Photo.id == photo_id, Photo.user_id == current_user.id, Photo.deleted_at.is_(None))
@@ -1859,7 +1893,7 @@ async def rewrite_photo_description(
     if not analysis:
         raise HTTPException(status_code=400, detail="Foto non ancora analizzata")
 
-    # Costruisci contesto
+    # Raccogli tutti i dati necessari PRIMA del background task
     faces_info = _build_faces_context(db, photo_id)
     location_name = photo.location_name
 
@@ -1891,19 +1925,13 @@ async def rewrite_photo_description(
         "text_use_remote": getattr(current_user, 'text_use_remote', False),
     }
 
-    result = _rewrite_description_with_context(
-        db, photo_id, photo, analysis, faces_info, location_name,
+    # Lancia in background con asyncio.create_task
+    asyncio.create_task(_rewrite_in_background(
+        photo_id, faces_info, location_name,
         user_config, user_is_in_photo, user_name, user_answers or None
-    )
+    ))
 
-    if result:
-        return {
-            "message": "Descrizione riscritta",
-            "description_full": analysis.description_full,
-            "description_short": analysis.description_short,
-        }
-    else:
-        raise HTTPException(status_code=400, detail="Nessun contesto disponibile per la riscrittura")
+    return {"message": "Riscrittura in corso", "status": "processing"}
 
 
 # ============================================================================

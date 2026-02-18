@@ -1076,70 +1076,76 @@ async def reset_prompt_templates(
     default_templates = [
         {
             "name": "completo",
-            "description": "Analisi completa: oggetti, ambiente, colori, testo (default senza volti)",
-            "prompt_text": """Analizza questa immagine estraendo il massimo di informazioni possibili.{location_hint}{faces_hint}
+            "description": "Full analysis: objects, environment, colors, text (default without faces)",
+            "prompt_text": """Analyze this image extracting as much information as possible.{location_hint}{datetime_hint}{faces_hint}
 
-Descrivi la scena generale: cosa sta succedendo, dove ci troviamo, qual è il contesto.
+Use the location and date/time information to contextualize the scene: consider what event, occasion, time of day, or season this could be.
 
-Oggetti: Elenca e descrivi ogni oggetto visibile — colore, materiale, dimensione, posizione. Includi anche dettagli piccoli o sullo sfondo.
+Describe the general scene: what is happening, where we are, what is the context.
 
-Ambiente: Interno o esterno? Tipo di luogo. Descrivi pavimento, pareti, soffitto o terreno, vegetazione, cielo se visibili.
+Objects: List and describe every visible object — color, material, size, position. Include small or background details.
 
-Se la posizione geografica è disponibile, verifica se si tratta di un luogo famoso o un punto di interesse riconoscibile e descrivilo.
+Environment: Indoor or outdoor? Type of place. Describe floor, walls, ceiling or ground, vegetation, sky if visible.
 
-Luce e colori: Tipo di illuminazione, colori dominanti e contrasti.
+If geographic location is available, check if it is a famous place or recognizable landmark and describe it.
 
-Atmosfera: Che sensazione trasmette la scena?
+Light and colors: Type of lighting, dominant colors and contrasts.
 
-Testo: Se è presente testo leggibile, trascrivilo ESATTAMENTE tra virgolette.
+Atmosphere: What feeling does the scene convey?
 
-Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano.""",
+Text: If readable text is present, transcribe it EXACTLY in quotes.
+
+Report only visible and certain facts. Do not invent details. Reply EXCLUSIVELY in English.""",
             "is_default": True,
             "is_active": True
         },
         {
             "name": "focus_persone",
-            "description": "Focus su persone: aspetto fisico, espressioni, abbigliamento, azioni (auto con volti)",
-            "prompt_text": """Analizza questa foto concentrandoti sulle persone presenti.{location_hint}{faces_hint}
+            "description": "Focus on people: physical appearance, expressions, clothing, actions (auto with faces)",
+            "prompt_text": """Analyze this photo focusing on the people present.{location_hint}{datetime_hint}{faces_hint}
 
-REGOLA FONDAMENTALE: Usa i nomi delle persone forniti. NON riferirti a loro come 'individuo' o 'persona'. NON menzionare questioni di privacy. I nomi sono gia' stati verificati dal sistema di riconoscimento facciale.
-Se è indicato che l'utente appare nella foto, scrivi la descrizione in prima persona dal suo punto di vista.
+FUNDAMENTAL RULE: Use the people's names provided. Do NOT refer to them as 'individual' or 'person'. Do NOT mention privacy concerns. The names have already been verified by the facial recognition system.
+If it is indicated that the user appears in the photo, write the description from their first-person perspective.
 
-Per {faces_names} descrivi in dettaglio:
-- Aspetto fisico: sesso, età approssimativa, corporatura, colore e stile dei capelli, colore degli occhi se visibile
-- Abbigliamento: cosa indossano, colori, stile (casual, elegante, sportivo, etc.)
-- Espressione del viso: emozioni, direzione dello sguardo
-- Postura e azione: cosa stanno facendo, come sono posizionati
-- Relazioni: se interagiscono tra loro, distanza reciproca, linguaggio corporeo
+Use the location and date/time information to contextualize the scene: consider what event, occasion, or activity this could be.
 
-Se la posizione geografica è disponibile, verifica se si tratta di un luogo famoso o locale pubblico e descrivilo.
+For {faces_names} describe in detail:
+- Physical appearance: sex, approximate age, build, hair color and style, eye color if visible
+- Clothing: what they are wearing, colors, style (casual, elegant, sporty, etc.)
+- Facial expression: emotions, gaze direction
+- Posture and action: what they are doing, how they are positioned
+- Relationships: if they are interacting, mutual distance, body language
 
-Basandoti sul contesto visivo, descrivi cosa {faces_names} stanno facendo e in quale occasione si trovano.
+If geographic location is available, check if it is a famous place or public venue and describe it.
 
-Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano.""",
+Based on the visual context, describe what {faces_names} are doing and on what occasion.
+
+Report only visible and certain facts. Do not invent details. Reply EXCLUSIVELY in English.""",
             "is_default": False,
             "is_active": True
         },
         {
             "name": "focus_scena",
-            "description": "Focus su ambiente e oggetti: luogo, arredi, dettagli, atmosfera",
-            "prompt_text": """Analizza questa foto concentrandoti sull'ambiente e sugli oggetti.{location_hint}{faces_hint}
+            "description": "Focus on environment and objects: place, furnishings, details, atmosphere",
+            "prompt_text": """Analyze this photo focusing on the environment and objects.{location_hint}{datetime_hint}{faces_hint}
 
-Ambiente: Interno o esterno? Tipo di luogo, architettura, materiali, stile.
+Use the location and date/time information to contextualize the scene: consider what type of place, event, time of day, or season this could be.
 
-Se la posizione geografica è disponibile, verifica se si tratta di un luogo famoso o punto di interesse e descrivilo.
+Environment: Indoor or outdoor? Type of place, architecture, materials, style.
 
-Oggetti: Elenca TUTTI gli oggetti visibili — colore, materiale, dimensione, posizione, stato.
+If geographic location is available, check if it is a famous place or point of interest and describe it.
 
-Luce: Tipo di illuminazione, ora approssimativa se deducibile.
+Objects: List ALL visible objects — color, material, size, position, condition.
 
-Colori: Palette dominante, contrasti, armonia cromatica.
+Light: Type of lighting, approximate time if deducible.
 
-Testo: Se presente testo leggibile, trascrivilo ESATTAMENTE tra virgolette.
+Colors: Dominant palette, contrasts, chromatic harmony.
 
-Atmosfera: Che sensazione trasmette la scena?
+Text: If readable text is present, transcribe it EXACTLY in quotes.
 
-Riporta solo fatti visibili e certi. Non inventare dettagli. Rispondi ESCLUSIVAMENTE in italiano.""",
+Atmosphere: What feeling does the scene convey?
+
+Report only visible and certain facts. Do not invent details. Reply EXCLUSIVELY in English.""",
             "is_default": False,
             "is_active": True
         },
