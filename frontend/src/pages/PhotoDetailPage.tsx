@@ -57,6 +57,8 @@ export default function PhotoDetailPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'info' | 'faces' | 'questions'>('info');
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
+  const [rewritePending, setRewritePending] = useState(false);
+  const [preRewriteDesc, setPreRewriteDesc] = useState('');
 
   // Reset scroll all'apertura
   useEffect(() => {
@@ -99,7 +101,7 @@ export default function PhotoDetailPage() {
       const photo = query.state.data;
       const llmInProgress = photo && !photo.analyzed_at && photo.analysis_started_at;
       const faceInProgress = photo?.face_detection_status === 'processing' || photo?.face_detection_status === 'pending';
-      return (llmInProgress || faceInProgress) ? 1000 : false;
+      return (llmInProgress || faceInProgress || rewritePending) ? 2000 : false;
     },
   });
 
@@ -146,12 +148,42 @@ export default function PhotoDetailPage() {
 
   const rewriteMutation = useMutation({
     mutationFn: () => photosApi.rewritePhoto(photoId!),
-    onSuccess: () => {
-      toast.success('Descrizione riscritta con contesto');
-      queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
+    onSuccess: (data: any) => {
+      if (data?.status === 'processing') {
+        // Background rewrite: salva descrizione attuale e attiva polling
+        setPreRewriteDesc(photo?.analysis?.description_full || '');
+        setRewritePending(true);
+        toast.loading('Traduzione e riscrittura in corso...', { id: 'rewrite-pending', duration: 60000 });
+      } else {
+        toast.success('Descrizione riscritta con contesto');
+        queryClient.invalidateQueries({ queryKey: ['photo', photoId] });
+      }
     },
     onError: (error: any) => toast.error(error?.response?.data?.detail || 'Errore riscrittura'),
   });
+
+  // Rileva completamento rewrite in background
+  useEffect(() => {
+    if (!rewritePending || !photo?.analysis?.description_full) return;
+    if (photo.analysis.description_full !== preRewriteDesc) {
+      setRewritePending(false);
+      setPreRewriteDesc('');
+      toast.dismiss('rewrite-pending');
+      toast.success('Descrizione tradotta e riscritta in italiano');
+    }
+  }, [rewritePending, photo?.analysis?.description_full, preRewriteDesc]);
+
+  // Timeout rewrite: dopo 90s assume errore
+  useEffect(() => {
+    if (!rewritePending) return;
+    const timeout = setTimeout(() => {
+      setRewritePending(false);
+      setPreRewriteDesc('');
+      toast.dismiss('rewrite-pending');
+      toast.error('Riscrittura: timeout, controlla i log del server');
+    }, 90000);
+    return () => clearTimeout(timeout);
+  }, [rewritePending]);
 
   const formatElapsedTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -522,16 +554,16 @@ export default function PhotoDetailPage() {
                           </div>
                           <button
                             onClick={() => rewriteMutation.mutate()}
-                            disabled={rewriteMutation.isPending}
+                            disabled={rewriteMutation.isPending || rewritePending}
                             className="flex items-center space-x-1 px-2 py-1 text-xs bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 disabled:opacity-50 transition-colors"
-                            title="Riscrivi la descrizione con nomi certi, prima persona e contesto"
+                            title="Traduci e riscrivi la descrizione in italiano con nomi certi e contesto"
                           >
-                            {rewriteMutation.isPending ? (
+                            {rewriteMutation.isPending || rewritePending ? (
                               <Loader className="w-3 h-3 animate-spin" />
                             ) : (
                               <Wand2 className="w-3 h-3" />
                             )}
-                            <span>Riscrivi</span>
+                            <span>{rewritePending ? 'Traduzione...' : 'Riscrivi'}</span>
                           </button>
                         </div>
                         <p className="text-sm text-gray-700 leading-relaxed">{photo.analysis.description_full}</p>
