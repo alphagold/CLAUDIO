@@ -1010,43 +1010,45 @@ def _rewrite_description_with_context(
     names_list = faces_info.get("names_list", [])
     if names_list:
         context_parts.append(
-            f"Le persone nella foto sono state IDENTIFICATE con certezza: {', '.join(names_list)}. "
-            "Usa i loro nomi come fatti certi, MAI espressioni dubitative."
+            f"The people in this photo have been IDENTIFIED with certainty: {', '.join(names_list)}. "
+            "Use their names as established facts. NEVER use doubtful expressions like 'appears to be' or 'could be'."
         )
 
-    # Prima persona
+    # Prospettiva: prima persona (utente nella foto) o terza persona
     if user_is_in_photo and user_name:
         other_names = [n for n in names_list if n != user_name]
         if other_names:
             context_parts.append(
-                f"L'utente si chiama {user_name}. Riscrivi in PRIMA PERSONA. "
-                f"'Sono con {', '.join(other_names)}...' NON '{user_name} e ...sono...'"
+                f"PERSPECTIVE: The user is {user_name}. Write the ENTIRE description in FIRST PERSON (io/mi/mio). "
+                f"Example: 'Sono con {', '.join(other_names)}...' — NEVER '{user_name} è con...'"
             )
         else:
             context_parts.append(
-                f"L'utente si chiama {user_name}. Riscrivi in PRIMA PERSONA."
+                f"PERSPECTIVE: The user is {user_name}. Write the ENTIRE description in FIRST PERSON (io/mi/mio). "
+                f"Example: 'Mi trovo a...' — NEVER '{user_name} si trova a...'"
             )
+    elif names_list:
+        context_parts.append(
+            f"PERSPECTIVE: Write in THIRD PERSON, using the names: {', '.join(names_list)}."
+        )
 
     # Posizione
     if location_name:
-        context_parts.append(f"Posizione: {location_name}.")
+        context_parts.append(f"Location: {location_name}.")
 
     # Testo estratto
     if analysis.extracted_text:
-        context_parts.append(f"Testo nella foto: \"{analysis.extracted_text}\"")
+        context_parts.append(f"Visible text in the photo: \"{analysis.extracted_text}\"")
 
     # Risposte utente alle domande
     if user_answers:
         for qa in user_answers:
-            context_parts.append(f"Info dall'utente - {qa['question']}: {qa['answer']}")
+            context_parts.append(f"User-provided info — {qa['question']}: {qa['answer']}")
 
     if not context_parts:
         context_parts.append("Translate to fluent, natural Italian.")
 
-    prompt = f"""You are processing an English photo description from a vision AI model.
-
-STEP 1 - UNDERSTAND: Read the English description and apply the instructions below.
-STEP 2 - TRANSLATE: Produce the final text in fluent, natural Italian.
+    prompt = f"""You are translating an English photo description into Italian, applying context instructions.
 
 ENGLISH DESCRIPTION:
 ---
@@ -1060,6 +1062,7 @@ RULES:
 - Keep ALL details from the original description
 - Fix obvious vision model errors (wrong objects, contradictions)
 - Translate to fluent, natural Italian prose
+- STRICTLY follow the PERSPECTIVE instruction (first person or third person)
 - Do NOT invent details not present in the original
 - Do NOT leave English words (except proper nouns and brand names)
 - Reply ONLY with the final Italian description, nothing else"""
