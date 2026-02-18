@@ -91,6 +91,7 @@ export interface QueueStatus {
     elapsed_seconds: number;
   } | null;
   total_in_progress: number;
+  rewrite_pending: number;
 }
 
 // Album types

@@ -300,6 +300,7 @@ analysis_queue = asyncio.Queue()
 analysis_worker_started = False
 stop_all_requested = False
 current_analyzing_photo_id = None  # Track current photo being analyzed
+active_rewrites = 0  # Counter for background rewrite tasks in progress
 
 # Global queue for face detection tasks
 face_detection_queue = asyncio.Queue()
@@ -876,20 +877,25 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             # === POST-ANALISI 1: riscrittura testo (se auto_rewrite_enabled) ===
             try:
                 if user and getattr(user, 'auto_rewrite_enabled', False):
-                    user_is_in_photo = False
-                    user_name = None
-                    if getattr(user, 'self_person_id', None) and names_in_photo:
-                        self_person = db.query(Person).filter(Person.id == user.self_person_id).first()
-                        if self_person and self_person.name and self_person.name in names_in_photo:
-                            user_is_in_photo = True
-                            user_name = self_person.name
-                    rewritten = _rewrite_description_with_context(
-                        db, photo_id, photo, analysis, faces_info_post, location_name,
-                        user_config, user_is_in_photo, user_name
-                    )
-                    if rewritten:
-                        analysis_result["description_full"] = analysis.description_full
-                        analysis_result["description_short"] = analysis.description_short
+                    global active_rewrites
+                    active_rewrites += 1
+                    try:
+                        user_is_in_photo = False
+                        user_name = None
+                        if getattr(user, 'self_person_id', None) and names_in_photo:
+                            self_person = db.query(Person).filter(Person.id == user.self_person_id).first()
+                            if self_person and self_person.name and self_person.name in names_in_photo:
+                                user_is_in_photo = True
+                                user_name = self_person.name
+                        rewritten = _rewrite_description_with_context(
+                            db, photo_id, photo, analysis, faces_info_post, location_name,
+                            user_config, user_is_in_photo, user_name
+                        )
+                        if rewritten:
+                            analysis_result["description_full"] = analysis.description_full
+                            analysis_result["description_short"] = analysis.description_short
+                    finally:
+                        active_rewrites = max(0, active_rewrites - 1)
             except Exception as rw_err:
                 print(f"[POST-ANALYSIS] Errore riscrittura testo: {rw_err}")
 
@@ -1525,7 +1531,8 @@ async def get_queue_status(
         "queue_size": analysis_queue.qsize(),
         "worker_running": analysis_worker_started,
         "current_photo": current_photo,
-        "total_in_progress": 1 if current_analyzing_photo_id else 0
+        "total_in_progress": 1 if current_analyzing_photo_id else 0,
+        "rewrite_pending": active_rewrites
     }
 
 
@@ -1855,6 +1862,8 @@ async def reanalyze_photo(
 async def _rewrite_in_background(photo_id, faces_info, location_name,
                                   user_config, user_is_in_photo, user_name, user_answers):
     """Esegue rewrite in background senza bloccare la API"""
+    global active_rewrites
+    active_rewrites += 1
     db = SessionLocal()
     try:
         photo = db.query(Photo).filter(Photo.id == photo_id).first()
@@ -1868,9 +1877,12 @@ async def _rewrite_in_background(photo_id, faces_info, location_name,
         )
         if result:
             print(f"[REWRITE] Background rewrite completato per foto {photo_id}")
+        else:
+            print(f"[REWRITE] Background rewrite fallito per foto {photo_id} (nessun risultato)")
     except Exception as e:
         print(f"[REWRITE] Errore background rewrite: {e}")
     finally:
+        active_rewrites = max(0, active_rewrites - 1)
         db.close()
 
 
