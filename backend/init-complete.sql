@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS photos (
     faces_detected_at TIMESTAMPTZ,
     face_detection_status VARCHAR(20) DEFAULT 'pending',
 
+    analysis_error TEXT,
+
     deleted_at TIMESTAMPTZ
 );
 

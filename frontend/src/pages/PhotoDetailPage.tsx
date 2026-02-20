@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { photosApi, facesApi, memoryApi } from '../api/client';
+import { photosApi, facesApi, memoryApi, ollamaApi, remoteOllamaApi } from '../api/client';
 import apiClient from '../api/client';
 import Layout from '../components/Layout';
 import PhotoMap from '../components/PhotoMap';
@@ -33,6 +33,7 @@ import {
   Send,
   SkipForward,
   Wand2,
+  AlertCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -59,6 +60,9 @@ export default function PhotoDetailPage() {
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
   const [rewritePending, setRewritePending] = useState(false);
   const [preRewriteDesc, setPreRewriteDesc] = useState('');
+  const [localModels, setLocalModels] = useState<Array<{ name: string; size: number }>>([]);
+  const [remoteModels, setRemoteModels] = useState<Array<{ name: string; size: number }>>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   // Reset scroll all'apertura
   useEffect(() => {
@@ -71,7 +75,7 @@ export default function PhotoDetailPage() {
       if (e.key === 'Escape') {
         if (showLightbox) setShowLightbox(false);
         else if (showFaceLabelDialog) setShowFaceLabelDialog(false);
-        else if (showModelDialog) setShowModelDialog(false);
+        else if (showModelDialog) { setShowModelDialog(false); setReanalyzeStep('model'); setEditablePrompt(''); }
         else if (showEditDialog) setShowEditDialog(false);
       }
       if (e.key === 'i' && !showFaceLabelDialog && !showEditDialog && !showModelDialog) {
@@ -184,6 +188,26 @@ export default function PhotoDetailPage() {
     }, 90000);
     return () => clearTimeout(timeout);
   }, [rewritePending]);
+
+  // Fetch modelli quando il dialog si apre
+  useEffect(() => {
+    if (!showModelDialog) return;
+    setLoadingModels(true);
+    const fetchModels = async () => {
+      try {
+        const local = await ollamaApi.getLocalModels();
+        setLocalModels(local.models || []);
+      } catch { setLocalModels([]); }
+      try {
+        if (profile?.remote_ollama_enabled && profile?.remote_ollama_url) {
+          const remote = await remoteOllamaApi.fetchModels(profile.remote_ollama_url);
+          setRemoteModels(remote.all_models || []);
+        }
+      } catch { setRemoteModels([]); }
+      setLoadingModels(false);
+    };
+    fetchModels();
+  }, [showModelDialog]);
 
   const formatElapsedTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -369,6 +393,11 @@ export default function PhotoDetailPage() {
                 <Loader className="w-3 h-3 animate-spin" />
                 <span>Analisi {photo.elapsed_time_seconds ? formatElapsedTime(photo.elapsed_time_seconds) : '...'}</span>
               </span>
+            ) : photo.analysis_error ? (
+              <span className="flex items-center space-x-1.5 px-2.5 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-medium">
+                <AlertCircle className="w-3 h-3" />
+                <span>Analisi fallita</span>
+              </span>
             ) : photo.analyzed_at ? (
               <span className="px-2.5 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium">
                 {photo.analysis?.model_version || 'Analizzata'}
@@ -526,6 +555,19 @@ export default function PhotoDetailPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Errore analisi */}
+                    {photo.analysis_error && (
+                      <div className="p-4">
+                        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3">
+                          <div className="flex items-center space-x-2">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                            <span className="text-sm font-semibold">Analisi fallita</span>
+                          </div>
+                          <p className="text-xs mt-1 text-red-600">{photo.analysis_error}</p>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Tags */}
                     {photo.analysis?.tags && photo.analysis.tags.length > 0 && (
@@ -1096,7 +1138,7 @@ export default function PhotoDetailPage() {
                     {reanalyzeStep === 'model' ? 'Scegli Modello AI' : 'Modifica Prompt'}
                   </h3>
                 </div>
-                <button onClick={() => { setShowModelDialog(false); setReanalyzeStep('model'); }} className="text-white/70 hover:text-white rounded-lg p-1">
+                <button onClick={() => { setShowModelDialog(false); setReanalyzeStep('model'); setEditablePrompt(''); }} className="text-white/70 hover:text-white rounded-lg p-1">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -1109,40 +1151,74 @@ export default function PhotoDetailPage() {
 
             {reanalyzeStep === 'model' && (
               <div className="p-4 space-y-2">
-                {[
-                  { id: 'moondream', name: 'Moondream', desc: '1.7GB — ~10s', speed: 'Veloce' },
-                  { id: 'llava-phi3', name: 'LLaVA-Phi3', desc: '3.8GB — ~30s', speed: 'Medio' },
-                  { id: 'qwen3-vl:latest', name: 'Qwen3-VL', desc: '4GB — ~1min', speed: 'Italiano' },
-                  { id: 'llava:latest', name: 'LLaVA', desc: '4.5GB — ~45s', speed: 'Medio' },
-                  { id: 'llama3.2-vision', name: 'Llama 3.2 Vision', desc: '11B — ~10min', speed: 'Preciso' },
-                ].map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => handleSelectModel(m.id)}
-                    className="w-full p-3 text-left border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50/50 transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-semibold text-gray-900 text-sm">{m.name}</span>
-                        <span className="text-xs text-gray-400 ml-2">{m.desc}</span>
-                      </div>
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{m.speed}</span>
-                    </div>
-                  </button>
-                ))}
-                {profile?.remote_ollama_enabled && (
-                  <button
-                    onClick={() => handleSelectModel('remote')}
-                    className="w-full p-3 text-left border border-purple-200 rounded-xl hover:border-purple-400 hover:bg-purple-50/50 transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-semibold text-gray-900 text-sm">Server Remoto</span>
-                        <span className="text-xs text-gray-400 ml-2">{profile.remote_ollama_model}</span>
-                      </div>
-                      <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">Remoto</span>
-                    </div>
-                  </button>
+                {loadingModels ? (
+                  <div className="flex items-center justify-center py-8 space-x-2 text-gray-500">
+                    <Loader className="w-5 h-5 animate-spin" />
+                    <span className="text-sm">Caricamento modelli...</span>
+                  </div>
+                ) : (
+                  <>
+                    {localModels.length > 0 && (
+                      <>
+                        <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">Modelli Locali</div>
+                        {localModels.map(m => (
+                          <button
+                            key={m.name}
+                            onClick={() => handleSelectModel(m.name)}
+                            className="w-full p-3 text-left border border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50/50 transition-all"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-gray-900 text-sm">{m.name}</span>
+                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                {(m.size / 1e9).toFixed(1)} GB
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    {localModels.length === 0 && (
+                      <div className="text-sm text-gray-400 text-center py-4">Nessun modello locale disponibile</div>
+                    )}
+                    {profile?.remote_ollama_enabled && remoteModels.length > 0 && (
+                      <>
+                        <div className="text-xs font-semibold text-purple-400 uppercase tracking-wide px-1 mt-3">Modelli Remoti</div>
+                        {remoteModels.map(m => (
+                          <button
+                            key={`remote-${m.name}`}
+                            onClick={() => handleSelectModel('remote')}
+                            className="w-full p-3 text-left border border-purple-200 rounded-xl hover:border-purple-400 hover:bg-purple-50/50 transition-all"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-semibold text-gray-900 text-sm">{m.name}</span>
+                                {profile?.remote_ollama_model === m.name && (
+                                  <span className="text-xs text-purple-500 ml-2">configurato</span>
+                                )}
+                              </div>
+                              <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">
+                                {(m.size / 1e9).toFixed(1)} GB
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    {profile?.remote_ollama_enabled && remoteModels.length === 0 && !loadingModels && (
+                      <button
+                        onClick={() => handleSelectModel('remote')}
+                        className="w-full p-3 text-left border border-purple-200 rounded-xl hover:border-purple-400 hover:bg-purple-50/50 transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="font-semibold text-gray-900 text-sm">Server Remoto</span>
+                            <span className="text-xs text-gray-400 ml-2">{profile.remote_ollama_model}</span>
+                          </div>
+                          <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full">Remoto</span>
+                        </div>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}

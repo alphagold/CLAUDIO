@@ -88,6 +88,7 @@ class PhotoResponse(PhotoBase):
     height: Optional[int]
     face_detection_status: Optional[str] = None
     faces_detected_at: Optional[datetime] = None
+    analysis_error: Optional[str] = None
     analysis: Optional[PhotoAnalysisResponse] = None
 
     class Config:

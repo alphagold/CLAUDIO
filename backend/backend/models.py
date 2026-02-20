@@ -77,6 +77,9 @@ class Photo(Base):
     faces_detected_at = Column(TIMESTAMP(timezone=True))
     face_detection_status = Column(String(20), default="pending", index=True)  # pending, processing, completed, failed, no_faces, skipped
 
+    # Analysis error tracking
+    analysis_error = Column(Text)
+
     # Soft delete
     deleted_at = Column(TIMESTAMP(timezone=True), index=True)
 

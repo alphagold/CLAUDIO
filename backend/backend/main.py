@@ -860,6 +860,9 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
             analysis_end_time = datetime.now(timezone.utc)
             photo.analyzed_at = analysis_end_time
 
+            # Clear any previous error
+            photo.analysis_error = None
+
             # Calculate analysis duration if start time exists
             if photo.analysis_started_at:
                 duration = (analysis_end_time - photo.analysis_started_at).total_seconds()
@@ -947,7 +950,7 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
         import traceback
         traceback.print_exc()
 
-        # Reset photo state on failure
+        # Reset photo state on failure and save error
         db = SessionLocal()
         try:
             photo = db.query(Photo).filter(Photo.id == photo_id).first()
@@ -955,8 +958,9 @@ async def analyze_photo_background(photo_id: uuid.UUID, file_path: str, model: s
                 photo.analysis_started_at = None
                 photo.analyzed_at = None
                 photo.analysis_duration_seconds = None
+                photo.analysis_error = f"{type(e).__name__}: {str(e)[:500]}"
                 db.commit()
-                print(f"[ANALYSIS] ❌ Photo {photo_id} state reset after failure")
+                print(f"[ANALYSIS] Photo {photo_id} state reset after failure, error saved")
         except Exception as reset_error:
             print(f"Failed to reset photo state: {reset_error}")
         finally:
@@ -1798,6 +1802,9 @@ async def get_prompt_preview(
     location_name = photo.location_name
     taken_at_str = photo.taken_at.strftime("%Y-%m-%d %H:%M") if photo.taken_at else None
 
+    print(f"[PROMPT-PREVIEW] photo={photo_id}, model={model}, location={location_name}, taken_at={taken_at_str}")
+    print(f"[PROMPT-PREVIEW] faces_context={faces_info['faces_context']}, names={faces_info['faces_names']}")
+
     prompt = vision_client._get_analysis_prompt(
         location_name=location_name,
         model=model,
@@ -1805,6 +1812,8 @@ async def get_prompt_preview(
         faces_names=faces_info["faces_names"],
         taken_at=taken_at_str
     )
+
+    print(f"[PROMPT-PREVIEW] Generated prompt ({len(prompt)} chars)")
 
     return {
         "prompt": prompt,
@@ -1839,10 +1848,11 @@ async def reanalyze_photo(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Photo file not found")
 
-    # Reset analysis timestamps for reanalysis
+    # Reset analysis timestamps and error for reanalysis
     photo.analyzed_at = None
     photo.analysis_started_at = None
     photo.analysis_duration_seconds = None
+    photo.analysis_error = None
     db.commit()
 
     # Recupera contesto volti (tutti, non solo named)
@@ -1852,6 +1862,8 @@ async def reanalyze_photo(
 
     # Add to analysis queue with specified model, faces context, and custom prompt
     enqueue_analysis(photo.id, str(file_path), model, faces_context=faces_info["faces_context"], faces_names=faces_info["faces_names"], custom_prompt=custom_prompt)
+
+    print(f"[REANALYZE] photo={photo_id}, model={model}, custom_prompt={bool(custom_prompt)}, queue_pos={analysis_queue.qsize()}")
 
     return {
         "message": "Reanalysis started",
