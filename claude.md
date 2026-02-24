@@ -102,20 +102,26 @@ Poi configurare nelle Settings dell'app: abilita server remoto, inserisci URL e 
 
 ### Flusso analisi foto
 1. Upload foto → MinIO
-2. Trigger analisi → Ollama API (locale o remoto)
-3. Risposta → parsing strutturato (sezioni MAIUSCOLE) con fallback naturale
-4. Salva in `photo_analysis` (PostgreSQL)
-5. Genera embedding pgvector per ricerca semantica
+2. Face detection (InsightFace) → salva volti in `faces`
+3. Trigger analisi → Ollama API (locale o remoto), prompt in **inglese** con contesto volti/location
+4. Risposta → parsing strutturato (sezioni MAIUSCOLE) con fallback naturale
+5. Salva in `photo_analysis` (PostgreSQL)
+6. Post-analisi automatica: riscrittura IT (text model), aggiornamento physical_description persone, generazione domande memoria
+7. Se analisi fallisce → errore salvato in `photos.analysis_error`, visibile nel frontend
 
 ### Autenticazione
 - JWT in localStorage, header `Authorization: Bearer <token>`
 - Admin: `is_admin=True` nel DB
 
 ### Prompt AI
+- Prompt vision in **inglese** (migliore qualità su tutti i modelli)
+- Post-analisi: traduzione e riscrittura in italiano via text model (auto_rewrite_enabled)
 - Configurabili via UI: Admin → Configurazione Prompt
 - Template default: `structured_detailed` (sezioni MAIUSCOLE)
-- Variabili supportate: `{location_hint}`, `{model}`
+- Variabili supportate: `{location_hint}`, `{model}`, `{faces_context}`, `{faces_names}`, `{taken_at}`
 - Fallback hardcoded se DB non disponibile
+- **Rianalizza**: dialog 2-step (selezione modello dinamica → editing prompt) nel dettaglio foto
+- Lista modelli caricata dinamicamente da Ollama locale + remoto (non più hardcoded)
 
 ### Face Recognition (InsightFace buffalo_l)
 - **Motore**: InsightFace buffalo_l (ONNX Runtime CPU, 512-dim embeddings)
@@ -141,11 +147,15 @@ Poi configurare nelle Settings dell'app: abilita server remoto, inserisci URL e 
 - Usa server Ollama locale o remoto (configurazione utente)
 
 ### Memory API (Memoria Conversazionale)
-- **Tabelle**: `memory_index`, `memory_conversations`, `memory_directives`
+- **Tabelle**: `memory_index`, `memory_conversations`, `memory_directives`, `memory_questions`
 - `POST /api/memory/ask` - Q&A con contesto (ricerca indice + Ollama)
 - `POST /api/memory/learn` - Feedback su risposte (positive/negative/corrected)
 - `POST /api/memory/reindex` - Reindicizza foto, persone, luoghi, oggetti, testi
 - `GET/POST/PATCH/DELETE /api/memory/directives` - CRUD direttive personali
+- **Memory Questions**: domande generate post-analisi per arricchire la memoria
+  - `POST /api/memory/questions/generate/{photo_id}` - Genera domande per foto
+  - `POST /api/memory/questions/{id}/answer` - Rispondi a domanda
+  - Tab "Domande" nel dettaglio foto per rispondere inline
 - Ricerca testuale ILIKE come fallback (embeddings semantici futuri)
 
 ### qwen3-vl
@@ -160,7 +170,7 @@ Poi configurare nelle Settings dell'app: abilita server remoto, inserisci URL e 
 - Comunicare in **italiano**
 - Commit message in italiano, senza emoji
 - **Push su GitHub dopo ogni commit**
-- Includere `Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>` nei commit
+- Includere `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>` nei commit
 - Quando si modifica `models.py`, aggiornare **anche** `backend/init-complete.sql`
 
 ### MAI
@@ -214,7 +224,28 @@ Deve essere sempre allineato con `backend/backend/models.py`.
 ### Migrations pendenti
 - **InsightFace migration**: `backend/migration-insightface.sql` (128→512 dim, L2→cosine, reset embeddings)
 - **Memory tables**: `memory_index`, `memory_conversations`, `memory_directives` (nuove tabelle P4)
+- **analysis_error**: `ALTER TABLE photos ADD COLUMN IF NOT EXISTS analysis_error TEXT;`
+
+### Debug logging
+- `[ANALYSIS]` — flusso analisi foto (start, remote/local, completion, failure)
+- `[PROMPT-PREVIEW]` — anteprima prompt nel dialog rianalizza
+- `[REANALYZE]` — rianalisi avviata (model, custom_prompt, queue_pos)
+- `[TEXT_LLM]` — chiamate al text model (url, model, text_use_remote)
+- `[REWRITE]` — riscrittura descrizione in background
+- `[POST-ANALYSIS]` — errori post-analisi (rewrite, physical_description, domande)
+
+### Stato funzionalità
+| Feature | Stato | Note |
+|---------|-------|------|
+| Upload + analisi AI | Completa | Prompt EN, traduzione IT automatica |
+| Rianalizza foto | Completa | Dialog 2-step, modelli dinamici, errore visibile |
+| Face recognition | Completa | InsightFace buffalo_l, manuale + auto |
+| Diario persona | Completa | Timeline + storia narrativa |
+| Memoria Q&A | Completa | Ask, learn, directives, questions |
+| Memory questions | Completa | Generazione post-analisi, tab nel dettaglio |
+| Server Ollama remoto | Completa | Config in Settings, usato per vision + text |
+| Riscrittura IT | Completa | Background, polling frontend, timeout 90s |
 
 ---
 
-**Aggiornato**: 2026-02-13 | **Stato**: Production-ready
+**Aggiornato**: 2026-02-20 | **Stato**: Production-ready
